@@ -88,6 +88,29 @@ and retained log entries remain in backend metadata.
 Project containers remain active, including for archived projects. No automatic teardown
 or evidence deletion is implemented because the project-ending policy is not yet defined.
 
+## File workspace foundation
+
+The [file workspace contract](../file-workspace-contract.md) defines the additive API;
+[its implementation plan](file-workspace-plan.md) tracks the rollout. Existing scientific
+routes remain authoritative, while the file catalog provides shared organization.
+
+Each project has a backend-owned SQLite catalog at `/data/catalogs/<project_id>.sqlite3`
+on `stellaris-api-data`. `STELLARIS_CATALOG_DIR` can override the directory. This catalog
+is not mounted into the project or worker container. Original artifact bytes stay in the
+project volume. Structured records are downloadable JSON/CSV projections with stable IDs;
+notes and their retained text revisions live in the catalog. Agent scratch is excluded.
+
+Default tags mirror existing categories. User labels and links are organizational: they
+cannot change an artifact's scientific origin or make a note into experimental evidence.
+Notes have a separate retained-revision budget, `STELLARIS_MAX_NOTE_BYTES` (64 MiB default).
+
+Back up **both** the complete API data volume and each project artifact volume. Stop writes
+before copying SQLite files (including WAL/SHM), or use SQLite's online backup API; copying
+only a live `.sqlite3` file can omit committed writes. A corrupt catalog fails visibly with
+503 and is never replaced automatically. Restore its backup with the API stopped. If a
+catalog is absent, scientific projections can be rebuilt on first access, but user notes,
+tags, collections, and links require the catalog backup.
+
 ## Verification
 
 Run the commands below from `backend/`. The scripts use HTTP and Docker, without a personal browser or other personal applications.
@@ -97,6 +120,9 @@ Synthetic fixtures and their results are explicitly marked **simulated**.
 ```sh
 python3 scripts/smoke_test.py
 python3 scripts/integration_test.py
+python3 scripts/workspace_files_test.py --slice 1
+python3 scripts/workspace_files_test.py --slice 2
+python3 scripts/workspace_collections_test.py
 python3 scripts/pipeline_test.py
 docker compose exec -T api python - < scripts/check_worker_validation.py
 docker compose exec -T api python - < scripts/check_audit_storage.py

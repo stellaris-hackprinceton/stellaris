@@ -6,7 +6,7 @@ import uuid
 
 from flask import Flask, g, request
 
-from . import agent_runs, analysis, artifacts, chat, db, experiments, idempotency, reports, research, runs, worker
+from . import agent_runs, analysis, artifacts, catalog, chat, db, experiments, file_collections, files, idempotency, reports, research, runs, worker
 from .config import load_config
 from .errors import ApiError, register_error_handlers
 from .executor import RunManager
@@ -41,7 +41,7 @@ def create_app(config=None) -> Flask:
     app.extensions["stellaris_runs"] = manager
 
     register_error_handlers(app)
-    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp):
+    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp, files.bp, file_collections.bp):
         app.register_blueprint(blueprint)
     _register_guards(app, config)
     _register_system_routes(app, config, runtime, manager)
@@ -142,6 +142,8 @@ def _register_system_routes(app, config, runtime, manager):
                     "markdown_reports": True,
                     "remote_compute": False,
                     "collaboration": False,
+                    # Additive file catalog, revisioned notes, tags, collections and links.
+                    "workspace_files": True,
                 },
                 "uploads": {
                     "accepted_mime_types": UPLOAD_MIME_TYPES,
@@ -151,6 +153,29 @@ def _register_system_routes(app, config, runtime, manager):
                 },
                 "execution": {
                     "allowed_backends": ["isolated_python"] if workers else [],
+                    # Additive, informational descriptors; they do not change validation.
+                    "analysis_pipelines": (
+                        [
+                            {
+                                "id": "bouncing_ball_v1",
+                                "description": (
+                                    "Tracks one bouncing ball; measures bounce heights and energy ratios. "
+                                    "Object hint does not select a detector."
+                                ),
+                                "requires_code_artifact": False,
+                            },
+                            {
+                                "id": "python_analysis_v1",
+                                "description": (
+                                    "Runs a supplied Python code artifact in an isolated worker; "
+                                    "no automatic implementation generated."
+                                ),
+                                "requires_code_artifact": True,
+                            },
+                        ]
+                        if workers
+                        else []
+                    ),
                     "max_wall_time_s": config.worker_wall_time_s if workers else 0,
                     "max_memory_mb": config.worker_memory_mb if workers else 0,
                     "max_cpu_cores": config.worker_cpus if workers else 0,
@@ -201,6 +226,10 @@ def _reconcile_containers(config, runtime) -> None:
         worker.cleanup_orphans(runtime, lambda: db.connect(config.db_path))
     except Exception:
         log.exception("Worker orphan cleanup failed")
+    try:  # Deliver catalog events committed before a restart; never creates catalogs.
+        catalog.relay_all(config)
+    except Exception:
+        log.exception("Catalog event relay at startup failed")
     conn = db.connect(config.db_path)
     try:
         project_ids = [r["id"] for r in conn.execute("SELECT id FROM projects WHERE runtime_state = 'ready'")]

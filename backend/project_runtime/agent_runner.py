@@ -125,7 +125,13 @@ _EXPERIMENT_SCOPE = (
     "Supported experiments: physical experiments recorded with the user's webcam/phone camera or uploaded video "
     "or images (the MVP workflow is a bouncing or dropped ball tracked across frames), plus CSV/text data, analyzed "
     "by isolated Python. Do not assume lab equipment such as air tracks, photogates, force sensors, or "
-    "motion sensors is available; if a topic needs them, say so and propose a camera-based alternative.")
+    "motion sensors is available; if a topic needs them, say so and propose a camera-based alternative. "
+    "The built-in automatic video pipeline (bouncing_ball_v1) only measures bouncing-ball motion, bounce heights, "
+    "and energy ratios; it is NOT gesture recognition or finger counting, and its object hint is metadata that "
+    "does not select a detector. Custom analysis requires a supplied implementation run through the existing "
+    "python_analysis_v1 pipeline with a ready code artifact. You may research and design other experiments, but "
+    "state that a plan is not an executable analysis and that a matching implementation is still needed; never "
+    "promise arbitrary computer vision from a target's name.")
 
 
 def experiment_problems(payload, known_artifacts):
