@@ -42,7 +42,7 @@ export function SourcesSection({ project_id, selected, onSelect }: Props) {
         ) : sources.items.length === 0 ? (
           <EmptyState title={provider ? "No sources from this provider" : "No sources yet"}>
             {caps.data?.features.literature_search
-              ? "Ask Research Chat to search the literature, or add a reference manually."
+              ? "Ask Assistant to search the literature, or add a reference manually."
               : "Add a reference manually. Literature search is not enabled on this server."}
           </EmptyState>
         ) : (

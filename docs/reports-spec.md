@@ -1,7 +1,10 @@
 # Reports library and generation specification
 
+The approved [experiment studio design](design/experiment-studio.md) supersedes visual styles, navigation presentation, and display labels in this specification. Resource identifiers, scientific semantics, and capability requirements remain unchanged.
+
+
 Version: **1.0 proposed**. Prepared November 14, 2026.
-Status: **Specified, not implemented or verified.** Existing report generation and individual Markdown readers are implemented. The Reports index, navigation, cards, and composer placement below are proposed.
+Status: **Frontend implemented, with capability-gated library support.** Reports navigation, cards, saved excerpts, and composer placement are implemented. Checks and remaining limits are recorded in [virtual desk verification](verification/virtual-desk.md).
 
 Read with the [Research desk](research-workspace-spec.md), [Materials views](materials-views-spec.md), and [scientific contract](frontend-backend-contract.md). The report generator currently assembles Markdown from persisted evidence. Moving its controls does not add an LLM writing service.
 
@@ -32,11 +35,11 @@ Reports summarize selected saved evidence.
 
 ## 2. Report cards and reading
 
-Use the same report card in Writing, the library, and mixed Materials views. Show the artifact's filename as the title. A human report title may replace it only when resolved from the generating report run's recorded input, never extracted heuristically from arbitrary Markdown.
+Use the same report card in Writing, the library, and mixed Materials views. Show the artifact's filename as the title. A human report title may replace it only when resolved from the generating report run's recorded input, never extracted heuristically from arbitrary Markdown. Cards use the shared 12px corner radius and 16px inset. They may show a short excerpt from the saved Markdown itself; load it lazily through the existing bounded 256 KiB reader, strip Markdown presentation syntax for the excerpt, and indicate when the loaded excerpt is truncated. Never generate replacement report prose for a preview.
 
-Card content is ordered: title up to three lines, saved date, associated experiment when recorded, Generated report label, and actions. **Open report** navigates to the reader. **Download Markdown** uses the existing artifact-content download URL. A separate **Evidence and provenance** action opens the catalog inspector. Omit an unknown experiment instead of fabricating a project-wide association.
+Card content is ordered: title up to three lines, saved date, bounded excerpt, associated experiment when recorded, Generated report label, and actions. **Open report** navigates to the reader. **Download Markdown** uses the existing artifact-content download URL. A separate **Evidence and provenance** action opens the catalog inspector. Omit an unknown experiment instead of fabricating a project-wide association.
 
-The overview shows two cards and a Generate report tile. It expands to six. The library paginates without that cap. All order by artifact `created_at` and catalog ID descending through the proposed artifact-kind filter. Keep timestamps tied to original creation, not a later catalog sync.
+The overview shows three cards and a Generate report tile. It expands to nine. The library paginates without that cap. All order by artifact `created_at` and catalog ID descending through the capability-gated artifact-kind filter. Keep timestamps tied to original creation, not a later catalog sync.
 
 The reader shows title, saved date, experiment link when known, Download Markdown, Evidence and provenance, and Report generation run when `run_id` exists. The document sits in a readable column of at most 78 characters with horizontal scrolling inside wide tables or code blocks. Charts use contain sizing and links to their source artifacts. Small screens stack the action row.
 

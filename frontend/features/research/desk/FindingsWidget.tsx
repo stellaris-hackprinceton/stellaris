@@ -17,7 +17,7 @@ export type OpenCitation = (source_id: ID, opener: HTMLElement | null, citation:
 const KIND_LABEL: Record<Claim["kind"], string> = { observation: "Observation", inference: "Inference", hypothesis: "Hypothesis · proposed" };
 
 export function FindingsWidget({ project_id, onOpenClaim, onOpenCitation, selected }: { project_id: ID; onOpenClaim: OpenClaim; onOpenCitation: OpenCitation; selected: ID | null }) {
-  const disclosure = useDisclosure(3, 6);
+  const disclosure = useDisclosure(3, 9);
   const list = useCatalogView(project_id, { origin_type: "claim", sort: "created_at", order: "desc" }, disclosure.limit);
   const blocked = listHasBlockingState(list);
   return (

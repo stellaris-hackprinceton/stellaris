@@ -21,12 +21,12 @@ export function LiteratureWidget({ project_id, onOpenSource, selected }: { proje
   const blocked = listHasBlockingState(list);
 
   return (
-    <Widget id="desk-literature" title="Literature"
-      footer={<WidgetFooter label="literature" canExpand={list.has_next_page || list.items.length > disclosure.preview} expanded={disclosure.expanded} onToggle={disclosure.toggle} viewAll={hrefs.materialsView(project_id, "literature")} />}>
-      {blocked ? <ListState list={list} what="Literature" skeletons={3} /> : list.items.length === 0 && <p className={styles.empty}>No sources saved yet.</p>}
+    <Widget id="desk-sources" title="Sources"
+      footer={<WidgetFooter label="sources" canExpand={list.has_next_page || list.items.length > disclosure.preview} expanded={disclosure.expanded} onToggle={disclosure.toggle} viewAll={hrefs.materialsView(project_id, "literature")} />}>
+      {blocked ? <ListState list={list} what="Sources" skeletons={3} /> : list.items.length === 0 && <p className={styles.empty}>No sources saved yet.</p>}
       <ul className={styles.cards}>
         {!blocked && visible.map((file) => <li key={file.id}><SourceDeskCard project_id={project_id} file={file} onOpen={onOpenSource} selected={selected === file.origin?.id} /></li>)}
-        {!blocked && list.error && list.items.length > 0 && <li><CardError what={list.is_next_page_error ? "More sources" : "Literature refresh"} error={list.error} retry={list.is_next_page_error ? list.load_next_page : list.refetch} /></li>}
+        {!blocked && list.error && list.items.length > 0 && <li><CardError what={list.is_next_page_error ? "More sources" : "Sources refresh"} error={list.error} retry={list.is_next_page_error ? list.load_next_page : list.refetch} /></li>}
         <li><LiteratureActions project_id={project_id} onOpenSource={onOpenSource} tile /></li>
       </ul>
     </Widget>
@@ -68,7 +68,7 @@ export function LiteratureActions({ project_id, onOpenSource, tile = false }: { 
       {fullText && <Button onClick={() => choose("arxiv")}>Retrieve arXiv full text</Button>}
       <Button onClick={askChat}>Find literature in Chat</Button>
     </div>}
-    {chatNote && <p role="status" className={styles.meta}>A prompt was placed in Research chat. Open Chat to edit and send it; nothing was sent.</p>}
+    {chatNote && <p role="status" className={styles.meta}>A prompt was placed in Assistant. Open Assistant to edit and send it. Nothing was sent.</p>}
     <AddSourceDialog project_id={project_id} open={dialog === "reference"} onClose={() => setDialog(null)} onCreated={() => setDialog(null)} />
     {fullText && <PdfIngestDialog key={`pdf-${retry.key}`} project_id={project_id} open={dialog === "pdf"} onClose={() => setDialog(null)} onAccepted={(run) => accepted(run.id)}
       retry={retry.value?.mode === "pdf" ? retry.value : null} />}
@@ -94,6 +94,7 @@ function SourceDeskCard({ project_id, file, onOpen, selected }: { project_id: ID
     <article className={styles.card} data-selected={selected}>
       <button type="button" className={styles.title} onClick={(e) => onOpen(s.id, e.currentTarget)}>{s.title}</button>
       {byline && <p className={styles.meta}>{byline}</p>}
+      <p className={styles.meta}><strong>Abstract</strong></p>
       <p className={styles.clamp3}>{s.abstract || <span className={styles.unavailable}>No abstract saved.</span>}</p>
       <div className={styles.badges}>
         <StatusBadge tone={retrieval.tone}>{retrieval.text}</StatusBadge>

@@ -25,11 +25,13 @@ type Props = {
   uploadBusy: boolean;
   /** The Blob the upload controller has committed, if any. */
   uploadedBlob: Blob | null;
+  /** Keep route-level discard prompts in sync with an active or unuploaded capture. */
+  onUnsavedChange?: (unsaved: boolean) => void;
 };
 
 const noopSubscribe = () => () => {};
 
-export function CapturePanel({ uploads, disabled, onUpload, uploadBusy, uploadedBlob }: Props) {
+export function CapturePanel({ uploads, disabled, onUpload, uploadBusy, uploadedBlob, onUnsavedChange }: Props) {
   const cam = useCamera(uploads);
   // Browser capability is only knowable on the client; null during server render.
   const supported = useSyncExternalStore<boolean | null>(noopSubscribe, cameraSupported, () => null);
@@ -38,6 +40,10 @@ export function CapturePanel({ uploads, disabled, onUpload, uploadBusy, uploaded
   // Warn before leaving while an unuploaded recording or live capture exists.
   const uploaded = Boolean(cam.recording && uploadedBlob === cam.recording.blob);
   const unsaved = cam.phase === "recording" || (cam.phase === "reviewing" && !uploaded);
+  useEffect(() => {
+    onUnsavedChange?.(unsaved);
+    return () => onUnsavedChange?.(false);
+  }, [onUnsavedChange, unsaved]);
   useEffect(() => {
     if (!unsaved) return;
     const h = (e: BeforeUnloadEvent) => { e.preventDefault(); };

@@ -1,8 +1,10 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import type { Artifact, ID, Run } from "@/contracts/api";
+/* eslint-disable @next/next/no-img-element -- Project-scoped artifact URLs are fetched directly from the same-origin API. */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Artifact, Experiment, ID, Run } from "@/contracts/api";
+import { artifactContentUrl } from "@/lib/api";
 import {
-  useArtifacts, useCapabilities, useEditExperiment, useExperiment, useExperiments, useProject, useRuns,
+  useArtifact, useArtifacts, useCapabilities, useEditExperiment, useExperiment, useExperiments, useProject, useRuns,
 } from "@/lib/queries";
 import {
   Button, EmptyState, ErrorNotice, Skeleton, StatusBadge, Tabs, TimestampLabel, describeError, errorCode,
@@ -10,7 +12,7 @@ import {
 import { ResultsPane } from "@/features/results";
 import { CapturePanel } from "./capture/CapturePanel";
 import type { Recording } from "./capture/useCamera";
-import { ExperimentSelector } from "./ExperimentSelector";
+import { CreateExperimentDialog, ExperimentSelector } from "./ExperimentSelector";
 import { AnalysisSetup } from "./launch/AnalysisSetup";
 import { ExperimentEditor } from "./plan/ExperimentEditor";
 import { usePlanDraft } from "./plan/usePlanDraft";
@@ -18,6 +20,7 @@ import { FileImport } from "./upload/FileImport";
 import { mimeForFile } from "./upload/fileTypes";
 import { UploadProgressView } from "./upload/UploadProgressView";
 import { useArtifactUpload } from "./upload/useArtifactUpload";
+import { DeskAddTile, DeskGrid } from "@/components/ui/Desk";
 import { useStudioParams, STUDIO_VIEWS } from "./useStudioParams";
 import styles from "./studio.module.css";
 
@@ -30,7 +33,8 @@ export function StudioScreen({ project_id }: { project_id: ID }) {
   const project = useProject(project_id);
   const caps = useCapabilities();
   const list = useExperiments(project_id);
-  const selectedId = expParam ?? list.items[0]?.id ?? null;
+  // A run-only legacy link still opens the first experiment; an ordinary Studio visit opens the gallery.
+  const selectedId = expParam ?? (runParam ? list.items[0]?.id ?? null : null);
   const exp = useExperiment(project_id, selectedId);
   const archived = project.data?.status === "archived";
 
@@ -40,13 +44,12 @@ export function StudioScreen({ project_id }: { project_id: ID }) {
   if (list.is_loading) return <Skeleton height="20rem" />;
 
   return (
-    <div className={styles.screen}>
-      <h2 className="sr-only">Experiment Studio</h2>
-      {list.items.length === 0 && !expParam ? (
+    <div className={styles.screen} data-workspace-wide="true">
+      {!selectedId ? (
         <>
-          <ExperimentSelector project_id={project_id} experiments={[]} selected={null} onSelect={(id) => update({ experiment: id, run: null })}
-            hasMore={false} loadMore={() => {}} dirty={false} archived={archived} />
-          <EmptyState title="No experiment plans yet">Create one here, or ask Research Chat to design an experiment for your question.</EmptyState>
+          {list.items.length === 0 && <EmptyState title="No experiment plans yet">Create one here, or ask Assistant to design an experiment for your question.</EmptyState>}
+          <ExperimentGallery project_id={project_id} experiments={list.items} hasMore={list.has_next_page} loadingMore={list.is_fetching_next_page} loadMore={list.load_next_page} archived={archived}
+            onSelect={(id) => update({ experiment: id, run: null, view: "plan" })} />
         </>
       ) : exp.error != null && !exp.data ? (
         <EmptyState title="Experiment unavailable" action={<Button onClick={() => update({ experiment: null, run: null })}>Show the first experiment</Button>}>
@@ -82,6 +85,12 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
   const [captureTab, setCaptureTab] = useState("record");
   const [attachNote, setAttachNote] = useState<string | null>(null);
   const [attachConflict, setAttachConflict] = useState(false);
+  const captureUnsaved = useRef(false);
+  const captureExitApproved = useRef(false);
+  const setCaptureUnsaved = useCallback((value: boolean) => {
+    captureUnsaved.current = value;
+    if (!value) captureExitApproved.current = false;
+  }, []);
 
   // Resolve attached inputs from the experiment-filtered list plus the general list.
   const forExp = useArtifacts(project_id, { experiment_id: x.id });
@@ -156,18 +165,45 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
     analysis: "Choose a method and inputs, then start the run.",
     results: "Review the run and its evidence.",
   }[view];
-  const taskLabels = { plan: "Plan", inputs: "Inputs", analysis: "Analysis", results: "Results" };
-  function moveTo(next: typeof view) { update({ view: next }); }
+  const taskLabels = { plan: "Plan", inputs: "Data", analysis: "Analysis", results: "Results" };
+  function confirmCaptureExit() {
+    if (!captureUnsaved.current) return true;
+    return window.confirm("Leaving Data stops the camera and discards any recording that has not been uploaded. Continue?");
+  }
+  function beforeCreate() {
+    if (!confirmCaptureExit()) return false;
+    captureExitApproved.current = true;
+    return true;
+  }
+  function moveTo(next: typeof view) {
+    if (view === "inputs" && next !== "inputs" && !confirmCaptureExit()) return false;
+    update({ view: next });
+    return true;
+  }
+  function selectExperiment(id: ID) {
+    if (captureUnsaved.current && !captureExitApproved.current && !confirmCaptureExit()) return;
+    captureExitApproved.current = false;
+    update({ experiment: id, run: null, view: "plan" });
+  }
+  function showAllExperiments() {
+    if (view === "inputs" && !confirmCaptureExit()) return;
+    if (plan.dirty && !window.confirm("This plan has unsaved changes. Leave it and discard them?")) return;
+    captureExitApproved.current = false;
+    update({ experiment: null, run: null, view: null });
+  }
 
   return (
     <>
       <header className={styles.context}>
         <div className={styles.topBar}>
         <ExperimentSelector project_id={project_id} experiments={list.items} selected={x.id}
-          onSelect={(id) => update({ experiment: id, run: null, view: "plan" })} hasMore={list.has_next_page} loadMore={list.load_next_page}
-          dirty={plan.dirty} archived={archived} />
+          onSelect={selectExperiment} hasMore={list.has_next_page} loadMore={list.load_next_page}
+          dirty={plan.dirty} archived={archived} onBeforeCreate={beforeCreate}
+          onCreateCancelled={() => { captureExitApproved.current = false; }} />
+          <Button onClick={showAllExperiments}>All experiments</Button>
           <span className={plan.dirty ? styles.dirtyState : styles.savedState} role="status">{plan.dirty ? "Unsaved changes" : `Saved · revision ${x.revision}`}</span>
         </div>
+        <h1 className={styles.experimentTitle}>{x.title || "Untitled experiment"}</h1>
         <p className={styles.taskGuidance}>{taskCopy}</p>
         <div role="tablist" aria-label="Experiment tasks" className={styles.taskTabs}>
           {STUDIO_VIEWS.map((item) => <button key={item} type="button" role="tab" aria-selected={view === item}
@@ -175,7 +211,10 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
             className={styles.taskTab} onClick={() => moveTo(item)} onKeyDown={(event) => {
               const i = STUDIO_VIEWS.indexOf(item);
               const next = event.key === "ArrowRight" ? (i + 1) % STUDIO_VIEWS.length : event.key === "ArrowLeft" ? (i + STUDIO_VIEWS.length - 1) % STUDIO_VIEWS.length : event.key === "Home" ? 0 : event.key === "End" ? STUDIO_VIEWS.length - 1 : -1;
-              if (next >= 0) { event.preventDefault(); moveTo(STUDIO_VIEWS[next]); document.getElementById(`studio-tab-${STUDIO_VIEWS[next]}`)?.focus(); }
+              if (next >= 0) {
+                event.preventDefault();
+                if (moveTo(STUDIO_VIEWS[next])) document.getElementById(`studio-tab-${STUDIO_VIEWS[next]}`)?.focus();
+              }
             }}>{taskLabels[item]}</button>)}
         </div>
       </header>
@@ -183,17 +222,22 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
       <section id="studio-panel-plan" role="tabpanel" aria-labelledby="studio-tab-plan" tabIndex={0} hidden={view !== "plan"} className={styles.taskPanel}>
         <ExperimentEditor project_id={project_id} experiment={x} etag={experimentQuery.etag} plan={plan} inputs={inputs}
           archived={archived} refetch={experimentQuery.refetch} />
-        <div className={styles.taskActions}><Button variant="primary" onClick={() => moveTo("inputs")}>Continue to inputs</Button></div>
+        <div className={styles.taskActions}><Button variant="primary" onClick={() => moveTo("inputs")}>Continue to data</Button></div>
       </section>
 
       <section id="studio-panel-inputs" role="tabpanel" aria-labelledby="studio-tab-inputs" tabIndex={0} hidden={view !== "inputs"} className={styles.taskPanel}>
+        {view === "inputs" && <InputPreviews project_id={project_id} ids={x.input_artifact_ids} inputs={inputs} />}
         {view === "inputs" && <section className={styles.panel} aria-labelledby="studio-inputs">
           <h3 id="studio-inputs">Add input data</h3>
-          <p className={styles.muted}>Leaving Inputs stops the camera and discards any recording that has not been uploaded.</p>
-          <Tabs label="Input source" value={captureTab} onChange={setCaptureTab} items={[
+          <p className={styles.muted}>Leaving Data stops the camera and discards any recording that has not been uploaded.</p>
+          <Tabs label="Input source" value={captureTab} onChange={(tab) => {
+            if (tab !== captureTab && !confirmCaptureExit()) return;
+            setCaptureTab(tab);
+            captureExitApproved.current = false;
+          }} items={[
             { id: "record", label: "Record video", content: view === "inputs" && captureTab === "record" ? (
               <CapturePanel uploads={uploadsCaps} disabled={archived} onUpload={uploadRecording} uploadBusy={up.busy}
-                uploadedBlob={up.phase === "ready" ? up.input?.blob ?? null : null} />
+                uploadedBlob={up.phase === "ready" ? up.input?.blob ?? null : null} onUnsavedChange={setCaptureUnsaved} />
             ) : null },
             { id: "import", label: "Import a file", content: captureTab === "import" ? <FileImport uploads={uploadsCaps} disabled={archived || up.busy} onUpload={uploadFile} /> : null },
           ]} />
@@ -243,6 +287,75 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
       </section>
     </>
   );
+}
+
+function ExperimentGallery({ project_id, experiments, onSelect, hasMore, loadingMore, loadMore, archived }: { project_id: ID; experiments: Experiment[]; onSelect: (id: ID) => void; hasMore: boolean; loadingMore: boolean; loadMore: () => void; archived: boolean }) {
+  const [creating, setCreating] = useState(false);
+  return <>
+    <header className={styles.galleryHeading}><div><h1>Experiments</h1><p>Choose a plan to continue its research workflow.</p></div></header>
+    <section className={styles.gallery} aria-label="All experiments">
+      <DeskGrid>{experiments.map((experiment) => <li key={experiment.id}><ExperimentGalleryCard project_id={project_id} experiment={experiment} onSelect={() => onSelect(experiment.id)} /></li>)}<li><DeskAddTile label="New experiment" onClick={() => setCreating(true)} disabled={archived} /></li></DeskGrid>
+    </section>
+    {hasMore && <div className={styles.galleryMore}><Button onClick={loadMore} pending={loadingMore}>Load more experiments</Button></div>}
+    <CreateExperimentDialog project_id={project_id} open={creating} onClose={() => setCreating(false)} onCreated={(experiment) => { setCreating(false); onSelect(experiment.id); }} />
+  </>;
+}
+
+function ExperimentGalleryCard({ project_id, experiment, onSelect }: { project_id: ID; experiment: Experiment; onSelect: () => void }) {
+  const cardRef = useRef<HTMLElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  useEffect(() => {
+    const element = cardRef.current;
+    if (!element || visible) return;
+    if (typeof IntersectionObserver === "undefined") {
+      const frame = requestAnimationFrame(() => setVisible(true));
+      return () => cancelAnimationFrame(frame);
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) { setVisible(true); observer.disconnect(); }
+    }, { rootMargin: "200px" });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [visible]);
+  const firstInput = useArtifact(project_id, visible ? experiment.input_artifact_ids[0] ?? null : null);
+  const artifact = firstInput.data?.project_id === project_id ? firstInput.data : null;
+  const previewUrl = artifact ? artifactContentUrl(project_id, artifact.id, "inline") : null;
+  return <article ref={cardRef} className={styles.experimentCard}>
+    {artifact?.kind === "image" && artifact.mime_type.startsWith("image/") && artifact.mime_type !== "image/svg+xml" && !previewFailed && <img src={previewUrl!} alt={`Input preview: ${artifact.filename}`} loading="lazy" onError={() => setPreviewFailed(true)} />}
+    {artifact?.kind === "video" && artifact.mime_type.startsWith("video/") && !previewFailed && <video src={previewUrl!} controls preload="metadata" aria-label={`Input preview: ${artifact.filename}`} onError={() => setPreviewFailed(true)} />}
+    {previewFailed && <p className={styles.galleryMeta}>Saved input preview unavailable.</p>}
+    {experiment.input_artifact_ids.length > 0 && !artifact && <p className={styles.galleryMeta}>{firstInput.error ? "Saved input preview unavailable" : "Loading saved input preview…"}</p>}
+    <button type="button" className={styles.experimentOpen} onClick={onSelect}>
+      <span className={styles.galleryMeta}>{experiment.method} · revision {experiment.revision}</span>
+      <strong>{experiment.title || "Untitled experiment"}</strong>
+      <span className={styles.gallerySummary}>{experiment.hypothesis || "No hypothesis recorded yet."}</span>
+      <span className={styles.galleryMeta}>{experiment.input_artifact_ids.length} attached input{experiment.input_artifact_ids.length === 1 ? "" : "s"} · Updated {new Date(experiment.updated_at).toLocaleDateString()}</span>
+      {artifact && <span className={styles.galleryMeta}>Preview: {artifact.filename} · {artifact.origin}</span>}
+      <span className={styles.galleryLink}>Open experiment →</span>
+    </button>
+  </article>;
+}
+
+function InputPreviews({ project_id, ids, inputs }: { project_id: ID; ids: ID[]; inputs: Map<ID, Artifact> }) {
+  if (!ids.length) return null;
+  return <section className={styles.inputPreviewSection} aria-label="Attached input previews">
+    {ids.map((id) => <InputPreview key={id} project_id={project_id} id={id} known={inputs.get(id)} />)}
+  </section>;
+}
+
+function InputPreview({ project_id, id, known }: { project_id: ID; id: ID; known?: Artifact }) {
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const query = useArtifact(project_id, known ? null : id);
+  const artifact = known ?? query.data;
+  if (!artifact || artifact.project_id !== project_id) return <p className={styles.muted}>{query.error ? "Input preview unavailable." : "Loading attached input…"}</p>;
+  const url = artifactContentUrl(project_id, id, "inline");
+  return <article className={styles.inputPreview}>
+    <div><strong>{artifact.filename}</strong><span>{artifact.kind} · {artifact.origin}</span></div>
+    {artifact.kind === "image" && artifact.mime_type.startsWith("image/") && artifact.mime_type !== "image/svg+xml" && !previewFailed && <img src={url} alt={artifact.filename} loading="lazy" onError={() => setPreviewFailed(true)} />}
+    {artifact.kind === "video" && artifact.mime_type.startsWith("video/") && !previewFailed && <video src={url} controls preload="metadata" aria-label={`Preview ${artifact.filename}`} onError={() => setPreviewFailed(true)} />}
+    {previewFailed && <p className={styles.muted}>Saved input preview unavailable.</p>}
+  </article>;
 }
 
 function RunPicker({ runs, value, onChange, hasMore, loadMore }: {

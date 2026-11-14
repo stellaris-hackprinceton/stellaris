@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Stellaris",
-  description: "A persistent workspace for scientific research and experimental evidence.",
+  description: "An experiment studio for questions, evidence, and results.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

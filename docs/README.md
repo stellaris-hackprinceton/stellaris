@@ -13,15 +13,20 @@ This is the single canonical documentation tree. Root README and agent entrypoin
 - [Experiment launch selection verification](verification/experiment-launch.md).
 - [Broad layout verification](verification/broad-layout.md).
 - [Project home design and verification](verification/project-home.md).
+- [Visual desk implementation and verification](verification/virtual-desk.md).
 - [Sketch-derived logo candidates and verification](design/logo-treatments/README.md).
 - [Logo reconstruction from the original S artwork](design/logo-reconstruction/README.md).
 
 ## Product and implementation
 
+- [Experiment studio design](design/experiment-studio.md). Current visual system, navigation hierarchy, terminology, and responsive behavior.
+- [Experiment studio verification](verification/experiment-studio.md). Frontend checks, browser behavior, and remaining provider/deployment limits.
+
 - [Product vision](product-vision.md).
-- [Research desk and widget specification](research-workspace-spec.md). Proposed card contents, layout dimensions, responsive behavior, data flow, and acceptance scenarios. Not yet implemented.
-- [Materials curated views specification](materials-views-spec.md). Proposed view layouts, saved collections/presentations, inspection, navigation, and backend prerequisites. Not yet implemented.
-- [Reports library and generation specification](reports-spec.md). Proposed report browsing, composer placement, evidence selection, and execution states. Not yet implemented.
+- [Visual research desk direction](design/virtual-desk.md). Approved application-wide card and shelf layout; supersedes earlier paired-widget dimensions.
+- [Research desk and widget specification](research-workspace-spec.md). Card contents, shelf layout, responsive behavior, data flow, and acceptance scenarios.
+- [Materials curated views specification](materials-views-spec.md). View layouts, saved collections/presentations, inspection, navigation, and backend prerequisites. Curated features remain capability-gated.
+- [Reports library and generation specification](reports-spec.md). Report browsing, saved excerpts, composer placement, evidence selection, and execution states.
 - [Frontend–backend contract](frontend-backend-contract.md). The authoritative interface includes the current development mode without authentication.
 - [Full-text paper ingestion](research-contract.md). Integrated backend support for PDF/arXiv extraction and source locators. The new Literature UI remains pending.
 - [Interactive terminal contract](terminal-contract.md). Separate isolated sessions and scratch storage. Frontend integration remains separate.

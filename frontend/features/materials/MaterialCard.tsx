@@ -185,6 +185,7 @@ function MeasurementBody({ project_id, run_id, visible }: { project_id: string, 
 function ArtifactBody({ project_id, file, id, visible }: { project_id: string, file: WorkspaceFile, id: string, visible: boolean }) {
   const q = useArtifact(project_id, visible ? id : null)
   const [imageFailed, setImageFailed] = useState(false)
+  const [videoFailed, setVideoFailed] = useState(false)
   if (!visible || q.isPending) return <Loading />
   if (q.error || !q.data) return <Failed error={q.error} retry={q.refetch} />
   const a: Artifact = q.data
@@ -195,7 +196,8 @@ function ArtifactBody({ project_id, file, id, visible }: { project_id: string, f
     <p className={styles.meta}>{a.metadata.width_px && a.metadata.height_px ? `${a.metadata.width_px}×${a.metadata.height_px} px · ` : ''}{a.origin} · {added}</p>
   </>
   if (a.kind === 'video') return <>
-    <p className={styles.placeholder} aria-label="Video">Video{a.metadata.duration_ms ? ` · ${(a.metadata.duration_ms / 1000).toFixed(1)} s` : ''}</p>
+    {a.mime_type.startsWith('video/') && !videoFailed ? <video className={styles.thumb} src={artifactContentUrl(project_id, a.id, 'inline')} controls preload="none" aria-label={`Preview ${a.filename}`} onError={() => setVideoFailed(true)} /> : <p className={styles.placeholder} aria-label="Video">Video preview unavailable</p>}
+    {a.metadata.duration_ms != null && <p className={styles.meta}>{(a.metadata.duration_ms / 1000).toFixed(1)} s</p>}
     <p className={styles.meta}>{a.origin} · {added}</p>
   </>
   if (a.kind === 'report') return <>

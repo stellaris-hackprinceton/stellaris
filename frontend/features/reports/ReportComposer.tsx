@@ -189,6 +189,6 @@ export function ReportComposer({ project_id, context, initial, onAccepted, onClo
     {failure && (failure.definitive
       ? <ErrorNotice {...describeError(failure.error, 'Report request rejected')} action={<Button onClick={editRequest}>Edit request</Button>} />
       : <ErrorNotice {...describeError(failure.error, 'Submission outcome unknown')} message="The request may or may not have been accepted. Retrying sends the identical request with the same command key, so it cannot create a duplicate run. The form is locked until acceptance is resolved."
-          action={<div className={styles.actions}><Button onClick={() => void submit()} pending={start.isPending}>Retry the same submission</Button><Link href={hrefs.view(project_id, 'runs')}>Check Tracker</Link></div>} />)}
+          action={<div className={styles.actions}><Button onClick={() => void submit()} pending={start.isPending}>Retry the same submission</Button><Link href={hrefs.view(project_id, 'runs')}>Check Activity</Link></div>} />)}
   </section>
 }

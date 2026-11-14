@@ -4,17 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useProjects } from "@/lib/queries";
 import { Button, ErrorNotice, PlusIcon, Skeleton, Tabs, TimestampLabel, describeError } from "@/components/ui";
-import { ResearchIcon } from "@/components/ui/icons";
 import { StellarisMark } from "@/components/ui/StellarisMark";
 import { hrefs } from "@/components/shell/hrefs";
 import { CreateProjectDialog } from "./CreateProjectDialog";
+import { ProjectPreview } from "./ProjectPreview";
 import styles from "./projects.module.css";
 
 type Filter = "active" | "archived";
-
-function Arrow({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M4 12h16m-6-6 6 6-6 6" /></svg>;
-}
 
 export function ProjectsScreen() {
   const router = useRouter();
@@ -26,20 +22,15 @@ export function ProjectsScreen() {
       <div className={styles.masthead}>
         <div className={styles.brand}>
           <StellarisMark className={styles.brandMark} />
-          Stellaris
+          <span>Stellaris</span>
         </div>
-        <span className={styles.brandNote}>A workspace for discovery</span>
       </div>
       <header className={styles.header}>
         <div className={styles.intro}>
-          <h1>Your research projects</h1>
-          <p>From question to discovery.</p>
+          <h1>Projects</h1>
         </div>
         <Button className={styles.primaryAction} variant="primary" onClick={() => setCreating(true)}><PlusIcon /> New project</Button>
       </header>
-      <ol className={styles.workflow} aria-label="Research workflow">
-        {["Literature", "Experiment", "Measurement", "Report"].map((step, index) => <li key={step}>{index > 0 && <Arrow className={styles.workflowArrow} />}{step}</li>)}
-      </ol>
       <section className={styles.collection} aria-label="Your projects">
       <Tabs
         label="Project status"
@@ -72,11 +63,8 @@ function ProjectList({ status, onCreate }: { status: Filter; onCreate?: () => vo
   if (projects.items.length === 0) {
     return status === "active" ? (
       <div className={styles.statePanel}>
-        <span className={styles.emptyMark}><ResearchIcon /></span>
-        <h2>Start with a question</h2>
-        <p>Find literature, design an experiment, and turn your measurements into a report. Keep the evidence together in a project.</p>
-        <div className={styles.example}><span className={styles.exampleLabel}>Example research question</span><p>How much energy does a tennis ball keep after each bounce?</p></div>
-        {onCreate && <Button className={styles.primaryAction} variant="primary" onClick={onCreate}>Create your first project</Button>}
+        <p>No projects yet.</p>
+        {onCreate && <Button className={styles.primaryAction} variant="primary" onClick={onCreate}>Create project</Button>}
       </div>
     ) : (
       <div className={styles.statePanel}><h2>No archived projects</h2><p>Archived projects stay readable and can be restored from their header.</p></div>
@@ -84,21 +72,19 @@ function ProjectList({ status, onCreate }: { status: Filter; onCreate?: () => vo
   }
   return (
     <div className={styles.stack}>
-      <ul className={styles.list}>
+      <ul className={styles.grid}>
         {projects.items.map((p) => (
           <li key={p.id}>
             <Link href={hrefs.view(p.id, "research")} className={styles.card}>
+              <ProjectPreview project={p} />
               <span className={styles.cardBody}>
-              <span className={styles.cardHead}>
-                <span className={styles.cardTitle}>{p.name}</span>
-                {p.status === "archived" && <span className={styles.archivedLabel}>Archived</span>}
+                <span className={styles.cardHead}>
+                  <span className={styles.cardTitle}>{p.name}</span>
+                  {p.status === "archived" && <span className={styles.archivedLabel}>Archived</span>}
+                </span>
+                {p.research_question?.trim() && <span className={styles.cardQuestion}>{p.research_question.trim()}</span>}
+                <span className={styles.cardMeta}>Updated <TimestampLabel iso={p.updated_at} /></span>
               </span>
-              <span className={styles.cardQuestion}>
-                {p.research_question?.trim() || p.description?.trim() || "No research question yet"}
-              </span>
-              <span className={styles.cardMeta}>Updated <TimestampLabel iso={p.updated_at} /></span>
-              </span>
-              <Arrow className={styles.cardArrow} />
             </Link>
           </li>
         ))}

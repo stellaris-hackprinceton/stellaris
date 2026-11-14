@@ -19,9 +19,8 @@ export type ProjectShellProps = {
 };
 
 /**
- * Project frame: navigation, header and the single ResearchChat instance.
- * ≥1280px: sidebar + content + collapsible chat rail. 768–1279px: sidebar, chat in a side sheet.
- * <768px: navigation in a menu sheet, chat in a full-height sheet.
+ * One project frame and Assistant draft. The sidebar is CSS-responsive for a stable first paint.
+ * From 1360px Assistant docks. Narrower layouts use a sheet, with navigation in a sheet below 768px.
  */
 export function ProjectShell(props: ProjectShellProps) {
   return <ProjectShellBody key={props.project_id} {...props} />;
@@ -29,9 +28,9 @@ export function ProjectShell(props: ProjectShellProps) {
 
 function ProjectShellBody({ project_id, children }: ProjectShellProps) {
   const chatDraft = useChatDraft();
-  const wide = useMediaQuery("(min-width: 1280px)", true);
+  const wide = useMediaQuery("(min-width: 1360px)", false);
   const narrow = useMediaQuery("(max-width: 767px)", false);
-  const [railOpen, setRailOpen] = useStoredFlag("stellaris.chatRailOpen", true);
+  const [railOpen, setRailOpen] = useStoredFlag("stellaris.chatRailOpen", false);
   const [chatSheet, setChatSheet] = useState(false);
   const setChatText = chatDraft.setText;
   useEffect(() => {
@@ -66,15 +65,13 @@ function ProjectShellBody({ project_id, children }: ProjectShellProps) {
   return (
     <div className={styles.shell} data-chat-rail={wide && railOpen ? "open" : "closed"}>
       <a href="#project-main" className={styles.skipLink}>Skip to content</a>
-      {!narrow && (
-        <aside className={styles.sidebar}>
-          <ProjectNavigation project_id={project_id} />
-        </aside>
-      )}
+      <aside className={styles.sidebar}>
+        <ProjectNavigation project_id={project_id} />
+      </aside>
       <div className={styles.main}>
         <ProjectHeader
           project_id={project_id}
-          showMenuButton={narrow}
+          showMenuButton
           onOpenMenu={() => setMenuOpen(true)}
           chatOpen={chatOpen}
           onToggleChat={toggleChat}
@@ -87,10 +84,10 @@ function ProjectShellBody({ project_id, children }: ProjectShellProps) {
         )}
       </div>
       {wide && (
-        <aside className={styles.chatRail} aria-label="Research chat" hidden={!railOpen}>{chat}</aside>
+        <aside className={styles.chatRail} aria-label="Assistant" hidden={!railOpen}>{chat}</aside>
       )}
       {!wide && (
-        <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Research chat" keepMounted>{chat}</Sheet>
+        <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Assistant" keepMounted>{chat}</Sheet>
       )}
       {narrow && (
         <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} title="Project menu">

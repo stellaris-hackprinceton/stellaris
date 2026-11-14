@@ -113,20 +113,20 @@ export function KnowledgeGraph({ project_id }: { project_id: ID }) {
     return () => { observer.disconnect(); element.removeEventListener("wheel", zoomAtWheel); };
   }, [files.is_loading, capabilities.is_loading, capabilities.data?.features.workspace_files]);
 
-  if (!capabilities.is_loading && !capabilities.data?.features.workspace_files) return <div className={styles.screen}>
-    <header className={styles.header}><div><h1>Knowledge graph</h1><p>Explore saved files and their recorded links. Lines reflect explicit relations or provenance recorded by Stellaris.</p></div></header>
-    <EmptyState title="Project materials are unavailable here">This server does not currently provide the project file catalog. Open Research for saved questions and findings, or try again after catalog support is enabled.</EmptyState>
+  if (!capabilities.is_loading && !capabilities.data?.features.workspace_files) return <div className={styles.screen} data-workspace-wide="true">
+    <header className={styles.header}><div><h1>Connections</h1><p>Explore saved files and their recorded links. Lines reflect explicit relations or provenance recorded by Stellaris.</p></div></header>
+    <EmptyState title="Project materials are unavailable here">This server does not currently provide the project file catalog. Open Overview for saved questions and findings, or try again after catalog support is enabled.</EmptyState>
   </div>;
 
-  return <div className={styles.screen}>
-    <header className={styles.header}><div><h1>Knowledge graph</h1><p>Explore saved files and their recorded links. Lines reflect explicit relations or provenance recorded by Stellaris.</p></div>
+  return <div className={styles.screen} data-workspace-wide="true">
+    <header className={styles.header}><div><h1>Connections</h1><p>Explore saved files and their recorded links. Lines reflect explicit relations or provenance recorded by Stellaris.</p></div>
       <div className={styles.controls}>
         <Field label="Tag"><Select value={tag} onChange={(e) => { setTag(e.target.value); setFocus(null); }}><option value="">All tags</option>{tags.items.map((t) => <option key={t.slug} value={t.slug}>{t.label}</option>)}</Select></Field>
         <Field label="Collection"><Select value={collection} onChange={(e) => { setCollection(e.target.value); setFocus(null); }}><option value="">All files</option>{collections.items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
       </div>
     </header>
         {files.error && <ErrorNotice title={files.items.length ? "Some project files could not be loaded" : "Project files could not be loaded"} message={files.items.length ? "The graph includes files received so far." : "Try again after checking the project connection."} action={<Button onClick={files.refetch}>Try again</Button>} />}
-    {files.is_loading ? <Skeleton height="24rem" /> : files.items.length === 0 ? <EmptyState title="No files match this view">Add or restore project materials in Materials. The graph includes only catalog files and recorded relations.</EmptyState> : <>
+    {files.is_loading ? <Skeleton height="24rem" /> : files.items.length === 0 ? <EmptyState title="No files match this view">Add or restore project materials in Library. The graph includes only catalog files and recorded relations.</EmptyState> : <>
       <div className={styles.toolbar}>
         <p aria-live="polite">{visible.length} files loaded{files.has_next_page ? " so far" : " (all matching files)"} · {edges.length} links between these files{relations.has_next_page ? " in the loaded relation pages" : " across the loaded relation catalog"}</p>
         <div className={styles.buttons}><Button onClick={() => { setZoom((v) => Math.min(2.2, v * 1.2)); }}>Zoom in</Button><Button onClick={() => { setZoom((v) => Math.max(.55, v / 1.2)); }}>Zoom out</Button><Button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); setFocus(null); }}>Reset view</Button></div>
@@ -156,7 +156,7 @@ export function KnowledgeGraph({ project_id }: { project_id: ID }) {
         {!relations.is_loading && !relations.error && !relations.has_next_page && relations.items.length === 0 && <p>No relations are recorded in this project.</p>}
         {!relations.is_loading && !relations.error && !relations.has_next_page && relations.items.length > 0 && edges.length === 0 && <p>No recorded relations connect the files currently shown.</p>}
         {relations.has_next_page && edges.length === 0 && <p>No links between these files are in the loaded pages yet. Load more relation pages before drawing a conclusion.</p>}
-        {selectedId && !selected && !files.is_loading && (!files.has_next_page || files.items.length >= NODE_CAP) && <p role="status">This file is not in the current graph filter or first {NODE_CAP} loaded files. Clear filters or use Materials to locate it.</p>}
+        {selectedId && !selected && !files.is_loading && (!files.has_next_page || files.items.length >= NODE_CAP) && <p role="status">This file is not in the current graph filter or first {NODE_CAP} loaded files. Clear filters or use Library to locate it.</p>}
       </div>
       {(tags.error || collections.error) && <div className={styles.loaders}>
         {tags.error && <ErrorNotice title="Tags could not be loaded" message="Retry or continue browsing files without tag choices." action={<Button onClick={tags.refetch}>Retry tags</Button>} />}
@@ -167,7 +167,7 @@ export function KnowledgeGraph({ project_id }: { project_id: ID }) {
         {collections.has_next_page && <Button onClick={() => void collections.load_next_page()} pending={collections.is_fetching_next_page}>Load more collection choices</Button>}
       </div>}
       {selected && <div className={styles.focusControls}><span>Selected: {selected.name}</span><Button onClick={() => setDismissedInspector(null)}>Inspect material</Button><Button onClick={() => setFocus(selected.id)} aria-pressed={focus === selected.id}>Focus neighborhood</Button><Button onClick={() => setFocus(null)} disabled={!focus}>Show all nodes</Button></div>}
-      <details className={styles.fileList}><summary>Materials in this view <span>{visible.length} files</span></summary>
+      <details className={styles.fileList}><summary>Library files in this view <span>{visible.length} files</span></summary>
         <ul>{visible.map((f) => <li key={f.id}><button type="button" aria-pressed={selectedId === f.id} onClick={() => setSelected(f.id)}><strong>{f.name}</strong><span>{ROLE_LABEL[cluster(f)] ?? cluster(f)} · {f.scientific_origin ?? "origin not recorded"}</span></button></li>)}</ul>
       </details>
     </>}
