@@ -1,7 +1,7 @@
 'use client'
 import { useCallback } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient } from '@tanstack/react-query'
-import type { CatalogStatus, Collection, CreateCollection, CreateNote, CreateRelation, CreateTag, EditCollection, EditFile, EditTag, FileListFilters, NoteRevision, Relation, RelationFilters, Tag, WorkspaceFile } from '@/contracts/catalog'
+import type { CatalogFeatureExtension, CatalogStatus, Collection, CreateCollection, CreateNote, CreateRelation, CreateTag, EditCollection, EditFile, EditTag, FileListFilters, FileOriginType, NoteRevision, Relation, RelationFilters, Tag, WorkspaceFile } from '@/contracts/catalog'
 import type { Page } from '@/contracts/api'
 import type { ApiResult, CommandOptions, EditOptions } from '@/contracts/requests'
 import { encode, request, resourcePath } from '@/lib/api'
@@ -23,10 +23,26 @@ const post = <T,>(url: string, body: unknown, command: CommandOptions) => reques
 const patch = <T,>(url: string, body: unknown, edit: EditOptions) => request<T>(url, { method: 'PATCH', body, edit })
 const del = <T = void,>(url: string, edit?: EditOptions) => request<T>(url, { method: 'DELETE', deleteOptions: edit })
 
+/**
+ * Canonical file-list filters: artifact kinds deduplicated and sorted (§16.3), an empty kind list removed
+ * rather than sent, blank search dropped. Used for both the wire query and the query cache key so that
+ * equivalent selections share one cursor sequence.
+ */
+export function normalizeFileFilters(filters: FileListFilters = {}): FileListFilters {
+  const entries = Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && value !== '')
+  const out = Object.fromEntries(entries) as FileListFilters
+  if (out.q !== undefined) { const q = out.q.trim(); if (q) out.q = q; else delete out.q }
+  if (out.artifact_kinds) { const kinds = [...new Set(out.artifact_kinds)].sort(); if (kinds.length) out.artifact_kinds = kinds; else delete out.artifact_kinds }
+  if (out.tags && !out.tags.length) delete out.tags
+  return out
+}
+/** Filters that an older backend would silently ignore, so they require `features.workspace_views`. */
+export const requiresWorkspaceViews = (filters: FileListFilters) => !!filters.artifact_kinds?.length || filters.origin_id !== undefined
+
 export const catalogApi = {
   files: (p: string, filters: FileListFilters = {}, signal?: AbortSignal) => {
-    const { tags, ...rest } = filters
-    return get<Page<WorkspaceFile>>(path(p, 'files') + params({ ...rest, tag: tags }), signal)
+    const { tags, artifact_kinds, ...rest } = normalizeFileFilters(filters)
+    return get<Page<WorkspaceFile>>(path(p, 'files') + params({ ...rest, tag: tags, artifact_kind: artifact_kinds }), signal)
   },
   file: (p: string, id: string, signal?: AbortSignal) => get<WorkspaceFile>(path(p, 'files', id), signal),
   contentUrl: (p: string, id: string, revision?: number, disposition: 'inline' | 'attachment' = 'attachment') => `/api/v1${path(p, 'files', id)}/content${params({ ...(revision === undefined ? {} : { revision }), disposition })}`,
@@ -89,8 +105,46 @@ function useCatalogList<R extends object>(p: string, resource: string, filters: 
   return { items: [...items.values()], has_next_page: !!query.hasNextPage, load_next_page, is_loading: query.isPending, error: query.error, refetch, is_fetching_next_page: query.isFetchingNextPage }
 }
 
-export function useFiles(p: string, filters: FileListFilters = {}) {
-  return useCatalogList(p, 'files', filters, (cursor, signal) => catalogApi.files(p, { ...filters, cursor }, signal))
+/** Catalog capability flags. `views` certifies the complete §16 extension; missing means false. */
+export function useCatalogFeatures() {
+  const capabilities = useCapabilities()
+  const features = capabilities.data?.features as (Record<string, unknown> & CatalogFeatureExtension) | undefined
+  return { is_loading: capabilities.is_loading, error: capabilities.error, files: features?.workspace_files === true, views: features?.workspace_views === true, full_text_papers: features?.full_text_papers === true }
+}
+
+export function useFiles(p: string, filters: FileListFilters = {}, enabled = true) {
+  const features = useCatalogFeatures()
+  const normalized = normalizeFileFilters(filters)
+  // Never send a views-only filter to a backend that could ignore it and return unrelated files.
+  const allowed = enabled && (!requiresWorkspaceViews(normalized) || features.views)
+  return useCatalogList(p, 'files', normalized as Record<string, unknown>, (cursor, signal) => catalogApi.files(p, { ...normalized, cursor }, signal), allowed)
+}
+/** One collection by ID with its ETag, sharing the detail key that list reconciliation reads. */
+export function useCollection(p: string, id?: string | null) {
+  const session = useSession()
+  const features = useCatalogFeatures()
+  const query = useQuery({ queryKey: keys.detail(p, 'catalog:collections', id ?? undefined), queryFn: ({ signal }) => catalogApi.collection(p, id!, signal), enabled: !!p && !!id && !!session.data && !session.error && features.files, retry: false })
+  const { refetch: refetchQuery } = query
+  const refetch = useCallback(() => refetchQuery(), [refetchQuery])
+  return { ...query, data: query.data?.data, etag: query.data?.etag ?? null, is_loading: query.isPending, refetch }
+}
+/**
+ * Resolve a scientific origin (`source`, `claim`, `artifact`, …) to its catalog file independently of the
+ * current browse filters. With `workspace_views`, one exact `origin_type`+`origin_id` request. Without it,
+ * one bounded page of that origin type — never an open-ended page scan. Results are verified client-side.
+ */
+export function useOriginFile(p: string, type: FileOriginType | null, id: string | null) {
+  const session = useSession()
+  const features = useCatalogFeatures()
+  const exact = features.views
+  const filters: FileListFilters = exact ? { origin_type: type ?? undefined, origin_id: id ?? undefined, status: 'all', limit: 2 } : { origin_type: type ?? undefined, status: 'all', limit: 100 }
+  const query = useQuery({
+    queryKey: ['project', p, 'catalog:files', 'origin', type, id, exact] as const,
+    queryFn: ({ signal }) => catalogApi.files(p, filters, signal),
+    enabled: !!p && !!type && !!id && !!session.data && !session.error && features.files, retry: false,
+  })
+  const file = query.data?.data.items.find(f => f.origin?.type === type && f.origin.id === id && f.project_id === p)
+  return { file, is_loading: !!type && !!id && query.isPending, error: query.error, missing: !!query.data && !file, bounded: !exact && !!query.data?.data.next_cursor, refetch: query.refetch }
 }
 export function useFile(p: string, id?: string | null) {
   const session = useSession()

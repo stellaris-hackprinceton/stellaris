@@ -11,7 +11,7 @@ const LABELS: Record<RunStatus, string> = {
   queued: 'Queued', running: 'In progress', awaiting_approval: 'Needs approval',
   cancelling: 'Cancellation requested', succeeded: 'Execution completed', failed: 'Failed', cancelled: 'Cancelled',
 }
-const KINDS = { agent: 'Research', analysis: 'Analysis', report: 'Report' } as const
+const KINDS = { agent: 'Research', analysis: 'Analysis', report: 'Report generation', paper_ingest: 'Paper ingestion' } as const
 
 function RunRow({ project_id, run }: { project_id: string; run: Run }) {
   const fraction = run.progress.fraction
