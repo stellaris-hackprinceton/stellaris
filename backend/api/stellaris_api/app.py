@@ -6,7 +6,7 @@ import uuid
 
 from flask import Flask, g, request
 
-from . import agent_runs, analysis, artifacts, chat, db, experiments, idempotency, reports, research, runs, worker
+from . import agent_runs, analysis, artifacts, catalog, chat, db, experiments, files, idempotency, reports, research, runs, worker
 from .config import load_config
 from .errors import ApiError, register_error_handlers
 from .executor import RunManager
@@ -41,7 +41,7 @@ def create_app(config=None) -> Flask:
     app.extensions["stellaris_runs"] = manager
 
     register_error_handlers(app)
-    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp):
+    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp, files.bp):
         app.register_blueprint(blueprint)
     _register_guards(app, config)
     _register_system_routes(app, config, runtime, manager)
@@ -142,6 +142,9 @@ def _register_system_routes(app, config, runtime, manager):
                     "markdown_reports": True,
                     "remote_compute": False,
                     "collaboration": False,
+                    # Read foundation only (slice 1): catalog, files, content, tags. Mutation
+                    # routes of the file workspace contract are not available yet.
+                    "workspace_files": True,
                 },
                 "uploads": {
                     "accepted_mime_types": UPLOAD_MIME_TYPES,
@@ -201,6 +204,10 @@ def _reconcile_containers(config, runtime) -> None:
         worker.cleanup_orphans(runtime, lambda: db.connect(config.db_path))
     except Exception:
         log.exception("Worker orphan cleanup failed")
+    try:  # Deliver catalog events committed before a restart; never creates catalogs.
+        catalog.relay_all(config)
+    except Exception:
+        log.exception("Catalog event relay at startup failed")
     conn = db.connect(config.db_path)
     try:
         project_ids = [r["id"] for r in conn.execute("SELECT id FROM projects WHERE runtime_state = 'ready'")]

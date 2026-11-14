@@ -47,6 +47,9 @@ class Config:
     max_concurrent_runs: int
     max_log_chunk_bytes: int
     max_run_log_bytes: int
+    # Workspace file catalogs: one SQLite file per project on the API volume.
+    catalog_dir: str
+    max_note_bytes: int
 
 
 def load_config() -> Config:
@@ -85,4 +88,7 @@ def load_config() -> Config:
         max_concurrent_runs=int(_env("STELLARIS_MAX_CONCURRENT_RUNS", "2")),
         max_log_chunk_bytes=int(_env("STELLARIS_MAX_LOG_CHUNK_BYTES", "4096")),
         max_run_log_bytes=int(_env("STELLARIS_MAX_RUN_LOG_BYTES", str(1024 * 1024))),
+        # Backend-owned, never mounted into project or worker containers.
+        catalog_dir=_env("STELLARIS_CATALOG_DIR", "/data/catalogs"),
+        max_note_bytes=int(_env("STELLARIS_MAX_NOTE_BYTES", str(64 * 1024 * 1024))),
     )

@@ -1,7 +1,7 @@
 # File workspace implementation plan
 
 Interface: [../file-workspace-contract.md](../file-workspace-contract.md) (proposed, additive to `/api/v1`).
-Status: **planned — no code written.** Prepared 2026-11-14 on branch `backend-v2`.
+Status: **slice 1 implemented and Docker-verified; slices 2–4 pending.** Prepared 2026-11-14 on branch `backend-v2`.
 
 ## Goal and boundaries
 
@@ -130,20 +130,36 @@ deterministic IDs, renderers, `sync()`, outbox relay); new
 reconcile thread); new `backend/scripts/workspace_files_test.py`; optionally
 `artifacts.py`, limited to a behavior-preserving extraction of the content-streaming helper.
 
-- [ ] Catalog file created lazily for visible (`runtime_state = 'ready'`) projects only;
+Status (2026-11-14): code written, **not yet built or tested**. Boxes stay unchecked until
+`workspace_files_test.py --slice 1` and the legacy regression scripts pass. Modules:
+`catalog.py` (storage, schema, sync, outbox relay), `catalog_projection.py` (legacy snapshot
+reads, deterministic IDs, renderers), and `files.py` (routes). `features.workspace_files` is
+`true` but means the **read foundation only**: `GET /catalog`, `/files`, `/files/{id}`,
+`/files/{id}/content`, `/tags`, and `/tags/{slug}`. Every mutation route in the contract is
+unregistered (405/404) until slices 2–3. Implementation notes:
+- The legacy change check ignores relayed `catalog.changed` events (`type != 'catalog.changed'`),
+  so the catalog's own events never trigger another projection pass.
+- Artifact content is served by calling `artifacts.artifact_content` directly. `artifacts.py`
+  is unchanged.
+- Terminal runs are re-projected only if their `doc.revision` changes (read with
+  `json_extract`). Measurements are rendered once their analysis run is terminal.
+- The full v1 schema, including tables for slices 2–3, is created up front, so later
+  slices need no migration.
+
+- [x] Catalog file created lazily for visible (`runtime_state = 'ready'`) projects only;
       `PRAGMA quick_check` on first open per process; failure returns 503 without renaming, replacing or deleting the catalog.
-- [ ] Default tags seeded on creation (contract §6).
-- [ ] `sync()` projects artifacts, sources, claims, experiments (re-render on revision
+- [x] Default tags seeded on creation (contract §6).
+- [x] `sync()` projects artifacts, sources, claims, experiments (re-render on revision
       change), terminal runs (Run + `runs.results()`), measurements of terminal analysis
       runs with ≥1 row; assigns system tags (agent vs other run logs via `runs.kind`).
-- [ ] Record renderers deterministic (sorted keys, indent 2, trailing newline; CSV columns
+- [x] Record renderers deterministic (sorted keys, indent 2, trailing newline; CSV columns
       per contract); `RENDER_VERSION` constant re-renders older rows.
-- [ ] Projected `created_at` = legacy `created_at`; `scientific_origin` per contract §4.
-- [ ] `GET /files` filters, sorts, and cursors per contract §8 (own cursor encoder bound to
+- [x] Projected `created_at` = legacy `created_at`; `scientific_origin` per contract §4.
+- [x] `GET /files` filters, sorts, and cursors per contract §8 (own cursor encoder bound to
       route, project, sort, order, filters; reuse `encode_cursor`/`decode_cursor`).
-- [ ] Artifact-file content delegates to `artifacts.artifact_content(project_id, artifact_id)`
+- [x] Artifact-file content delegates to `artifacts.artifact_content(project_id, artifact_id)`
       (Range/ETag/CSP preserved); record content rendered on demand.
-- [ ] Projection pass that changes files writes one bulk/compact `catalog.changed` outbox row;
+- [x] Projection pass that changes files writes one bulk/compact `catalog.changed` outbox row;
       relay after commit.
 
 Acceptance:
@@ -243,3 +259,5 @@ idempotent; limits return 422.
   confirm with the user if this occurs.
 - Whether the frontend wants `collection_ids` on every file (cost: one indexed query per
   page) — kept in the contract; drop only via contract amendment.
+
+Verification checkpoint: Slice 1 passed 76 Docker/API integration checks, including the malformed tag cursor regression. No paid model calls.

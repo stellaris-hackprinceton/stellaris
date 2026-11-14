@@ -1,7 +1,7 @@
 # Stellaris file workspace contract
 
 Contract version: **1.1.0-draft (additive to `/api/v1`)**
-Status: **Proposed. No part of this document is implemented yet.** Progress is tracked in
+Status: **Read foundation implemented and Docker-verified (slice 1); mutations and collections/relations planned.** Progress is tracked in
 [backend/file-workspace-plan.md](backend/file-workspace-plan.md).
 Prepared: **November 14, 2026**
 Extends: [frontend-backend-contract.md](frontend-backend-contract.md). Its sections 3 (common
