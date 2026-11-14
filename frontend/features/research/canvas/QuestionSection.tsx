@@ -5,7 +5,7 @@ import { useEditProject, useProject } from "@/lib/queries";
 import { Button, EmptyState, ErrorNotice, Field, Skeleton, TextArea, TextInput, describeError, errorCode } from "@/components/ui";
 import styles from "./canvas.module.css";
 
-export function QuestionSection({ project_id }: { project_id: ID }) {
+export function QuestionSection({ project_id, compact = false }: { project_id: ID; compact?: boolean }) {
   const project = useProject(project_id);
   const [editing, setEditing] = useState(false);
 
@@ -18,6 +18,13 @@ export function QuestionSection({ project_id }: { project_id: ID }) {
 
   if (editing) {
     return <QuestionForm project={p} etag={project.etag} onDone={() => setEditing(false)} refetch={project.refetch} />;
+  }
+  if (compact) {
+    return <div className={styles.compactQuestion}>
+      <p>{p.research_question || "What are you investigating?"}</p>
+      <Button onClick={() => setEditing(true)} disabled={archived}>{p.research_question ? "Edit" : "Edit question"}</Button>
+      {archived && <span className={styles.muted}>Restore the project to edit it.</span>}
+    </div>;
   }
   return (
     <div className={styles.stack}>
