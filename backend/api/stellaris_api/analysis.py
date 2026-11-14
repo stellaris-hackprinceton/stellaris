@@ -31,7 +31,8 @@ import time
 
 from docker.errors import DockerException
 
-from . import worker
+from . import approvals, hpc, worker
+from .db import transaction
 from .artifacts import filename_error
 from .errors import ApiError
 from .executor import RunFailure
@@ -519,6 +520,33 @@ def _provenance(ctx, *, outcome, code_doc, outputs, log_staged, status_note, wor
     snap = ctx.snapshot
     exp = snap["experiment"]
     image = outcome.image if outcome else None
+    remote = getattr(outcome, "remote", None) if outcome else None
+    execution = {
+        "backend": "isolated_python",
+        "worker_image": image,
+        "user": worker.ANALYSIS_USER, "network": "none", "read_only_root": True, "read_only_input": True,
+    }
+    if snap.get("execution", {}).get("backend") == "slurm":
+        execution = {
+            "backend": "slurm", "cluster": snap["execution"]["cluster"], "resources": snap["execution"]["resources"],
+            "scheduler_job": remote, "worker_image": image,
+            "container": "apptainer exec --containall --cleanenv --no-home --net --network none"
+                         + (" --unsquash" if ctx.config.slurm_unsquash else ""),
+            "network": "none (Apptainer network namespace"
+                       + ("; local simulated cluster on an internal Docker network)"
+                          if snap["execution"]["cluster"]["kind"] == "local_simulated" else ")"),
+            "read_only_input": True,
+            "not_enforced": ["tmp and output size are bounded only at collection",
+                             "pids and open-file limits are not set by the job"],
+        }
+    execution.update({
+        "started_at": _iso(outcome.started_at) if outcome else None,
+        "finished_at": _iso(outcome.finished_at) if outcome else None,
+        "wall_time_s": outcome.wall_time_s if outcome else None,
+        "exit_code": outcome.exit_code if outcome else None,
+        "outcome": outcome.status if outcome else None,
+        "note": status_note,
+    })
     return {
         "schema": "stellaris.provenance.v1",
         "run_id": ctx.run_id, "project_id": ctx.project_id, "generated_at": now_ts(),
@@ -530,17 +558,7 @@ def _provenance(ctx, *, outcome, code_doc, outputs, log_staged, status_note, wor
         },
         "code": {"artifact_id": code_doc["id"], "sha256": code_doc["sha256"], "filename": code_doc["filename"],
                  "pipeline": snap["pipeline"]["name"], "pipeline_version": snap["pipeline"]["version"]},
-        "execution": {
-            "backend": "isolated_python",
-            "worker_image": image,
-            "user": worker.ANALYSIS_USER, "network": "none", "read_only_root": True, "read_only_input": True,
-            "started_at": _iso(outcome.started_at) if outcome else None,
-            "finished_at": _iso(outcome.finished_at) if outcome else None,
-            "wall_time_s": outcome.wall_time_s if outcome else None,
-            "exit_code": outcome.exit_code if outcome else None,
-            "outcome": outcome.status if outcome else None,
-            "note": status_note,
-        },
+        "execution": execution,
         "environment": outcome.versions if outcome else None,
         "calibration": {"mode": exp["calibration"]["mode"], "assumptions": exp["calibration"]["assumptions"]
                         + snap.get("calibration_assumptions", []), "conversion": snap["calibration_conversion"]},
@@ -566,10 +584,65 @@ def _iso(epoch):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch)) if epoch else None
 
 
+def _slurm_gate(ctx):
+    """Return the approved remote_compute action, or request approval and suspend (None)."""
+    approved = approvals.approved_action(ctx.conn, ctx.run_id, "remote_compute")
+    if approved is not None:
+        return approved
+    snap = ctx.snapshot
+    execution = snap["execution"]
+    if ctx.cluster is None:
+        raise RunFailure("REMOTE_UNAVAILABLE", "No Slurm cluster is configured.", True)
+    image = worker.image_info(ctx.runtime, ctx.config)
+    if image is None:
+        raise RunFailure("WORKER_UNAVAILABLE", "The worker image is not available.", True)
+    ctx.progress("preparing cluster image", None, "Preparing the Apptainer image on the cluster.", force=True)
+    try:
+        sif = ctx.cluster.ensure_sif(image)
+    except hpc.ClusterUnavailable as exc:
+        raise RunFailure("REMOTE_UNAVAILABLE", str(exc), True) from exc
+    res = execution["resources"]
+    action = {
+        "backend": "slurm", "cluster": execution["cluster"], "resources": res,
+        "pipeline": snap["pipeline"]["name"], "pipeline_version": snap["pipeline"]["version"],
+        "pipeline_source_sha256": snap["pipeline"]["source_sha256"],
+        "code_artifact": {"id": snap["code"]["id"], "sha256": snap["code"]["sha256"]} if snap["code"] else None,
+        "inputs": [{"id": a["id"], "filename": a["filename"], "sha256": a["sha256"]} for a in snap["inputs"]],
+        "worker_image_id": image["image_id"], "sif_sha256": sif["sha256"], "network": "none",
+    }
+    summary = (f"Run {snap['pipeline']['name']} on {execution['cluster']['label']} (partition {res['partition']}: "
+               f"{res['cpus']} CPU, {res['memory_mb']} MiB, {res['wall_time_s']} s"
+               + (f", {res['gpus']} GPU" if res["gpus"] else "") + ").")
+    with transaction(ctx.conn):
+        status = ctx.conn.execute("SELECT status FROM runs WHERE id = ?", (ctx.run_id,)).fetchone()["status"]
+        if status != "running":
+            raise RunFailure("CANCELLED", "The run was cancelled before approval was requested.")
+        approvals.request(ctx.conn, ctx.config.approval_ttl_s, project_id=ctx.project_id, run_id=ctx.run_id,
+                          action_type="remote_compute", summary=summary, action_snapshot=action)
+    ctx.log.system(f"Approval requested: {summary}")
+    ctx.log.flush()
+    ctx.suspended = True
+    return None
+
+
 def handle_analysis(ctx):
     snap = ctx.snapshot
+    approved = None
+    if snap.get("execution", {}).get("backend") == "slurm":
+        if ctx.cancel_requested():
+            ctx.finish("cancelled", summary="Cancelled.")
+            return
+        try:
+            approved = _slurm_gate(ctx)
+        except RunFailure as exc:
+            if exc.code == "CANCELLED":
+                ctx.finish("cancelled", summary="Cancelled.")
+                return
+            raise
+        if approved is None:
+            return  # Suspended until the approval decision.
     # code_doc: the executed code artifact (bouncing_ball_v1's is set once committed).
-    state = {"code_doc": snap["code"], "outcome": None}
+    state = {"code_doc": snap["code"], "outcome": None, "approved": approved}
     work_dir = tempfile.mkdtemp(prefix=f"{ctx.run_id}-", dir=_run_tmp(ctx.config))
     try:
         _run_analysis(ctx, snap, snap["pipeline"]["name"], work_dir, state)
@@ -585,7 +658,12 @@ def handle_analysis(ctx):
 
 def _run_analysis(ctx, snap, pipeline, work_dir, state):
     ctx.progress("preparing inputs", 0.02, "Publishing executed code and verifying inputs.", force=True)
-    if pipeline == "bouncing_ball_v1":
+    existing = ctx.conn.execute("SELECT doc FROM artifacts WHERE run_id = ? AND kind = 'code' ORDER BY created_at",
+                                (ctx.run_id,)).fetchone()
+    if pipeline == "bouncing_ball_v1" and existing is not None:  # Resumed run: code already published.
+        code_bytes = snap["pipeline"]["source"].encode("utf-8")
+        code_doc = json.loads(existing["doc"])
+    elif pipeline == "bouncing_ball_v1":
         code_bytes = snap["pipeline"]["source"].encode("utf-8")
         path = os.path.join(work_dir, "pipeline.py")
         with open(path, "wb") as fh:
@@ -603,6 +681,20 @@ def _run_analysis(ctx, snap, pipeline, work_dir, state):
         _finish_without_results(ctx, None, code_doc, "cancelled", None)
         return
 
+    if state["approved"] is not None:
+        on_remote = lambda stream, data: ctx.log.write(stream, data)  # noqa: E731
+        outcome = hpc.run_slurm(ctx, approved=state["approved"], tar_path=tar_path, code_doc=code_doc,
+                                work_dir=work_dir, on_output=on_remote)
+        state["outcome"] = outcome
+        ctx.log.system(f"Slurm job finished: {outcome.status} (exit code {outcome.exit_code}, "
+                       f"{outcome.wall_time_s} s)." + (f" {outcome.message}" if outcome.message else ""))
+    else:
+        outcome = _run_local(ctx, pipeline, tar_path, code_doc, work_dir)
+        state["outcome"] = outcome
+    _after_execution(ctx, snap, pipeline, work_dir, code_doc, outcome, input_row_counts)
+
+
+def _run_local(ctx, pipeline, tar_path, code_doc, work_dir):
     ctx.progress("running isolated worker", 0.1, "Executing in an isolated container.", force=True)
     ctx.log.system(f"Starting isolated worker for {pipeline} (network none, read-only inputs).")
     try:
@@ -618,10 +710,12 @@ def _run_analysis(ctx, snap, pipeline, work_dir, state):
     except DockerException as exc:
         log.error("Run %s: Docker failure during execution: %s", ctx.run_id, exc)
         raise RunFailure("WORKER_LOST", "Contact with the isolated worker was lost.", True)
-    state["outcome"] = outcome
     ctx.log.system(f"Worker finished: {outcome.status} (exit code {outcome.exit_code}, {outcome.wall_time_s} s)."
                    + (f" {outcome.message}" if outcome.message else ""))
+    return outcome
 
+
+def _after_execution(ctx, snap, pipeline, work_dir, code_doc, outcome, input_row_counts):
     if outcome.status != "completed":
         failure = EXECUTION_FAILURES[outcome.status]
         error = None if failure is None else {"code": failure[0], "message": outcome.message, "retryable": failure[1]}

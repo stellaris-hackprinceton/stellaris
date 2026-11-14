@@ -122,7 +122,7 @@ CREATE INDEX IF NOT EXISTS uploads_project ON uploads (project_id, status);
 CREATE TABLE IF NOT EXISTS runs (
     id            TEXT PRIMARY KEY,
     project_id    TEXT NOT NULL REFERENCES projects (id),
-    kind          TEXT NOT NULL CHECK (kind IN ('agent', 'analysis', 'report')),
+    kind          TEXT NOT NULL CHECK (kind IN ('agent', 'analysis', 'report', 'paper_ingest')),
     experiment_id TEXT,
     status        TEXT NOT NULL CHECK (status IN ('queued', 'running', 'awaiting_approval', 'cancelling',
                                                   'succeeded', 'failed', 'cancelled')),
@@ -143,6 +143,27 @@ CREATE TABLE IF NOT EXISTS measurements (
     doc         TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS measurements_page ON measurements (project_id, run_id, created_at, id);
+
+-- Normalized extracted paper text, keyed by the paper.json artifact (ADR-0002). Used to verify
+-- that citation excerpts and locators come from the retrieved full text. Internal only.
+CREATE TABLE IF NOT EXISTS paper_texts (
+    artifact_id TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects (id),
+    text        TEXT NOT NULL,
+    locators    TEXT NOT NULL
+);
+
+-- Approvals (Contracts section 7). Public JSON in `doc`.
+CREATE TABLE IF NOT EXISTS approvals (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects (id),
+    run_id      TEXT NOT NULL REFERENCES runs (id),
+    status      TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    doc         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS approvals_page ON approvals (project_id, created_at, id);
+CREATE INDEX IF NOT EXISTS approvals_run ON approvals (run_id, status);
 
 CREATE TABLE IF NOT EXISTS run_logs (
     id          TEXT PRIMARY KEY,
@@ -173,9 +194,38 @@ def init_db(path: str) -> None:
         os.makedirs(directory, exist_ok=True)
     conn = connect(path)
     try:
+        _migrate_run_kinds(conn)
         conn.executescript(SCHEMA)
     finally:
         conn.close()
+
+
+def _migrate_run_kinds(conn: sqlite3.Connection) -> None:
+    """Rebuild a pre-1.1 runs table whose CHECK constraint lacks 'paper_ingest'.
+
+    SQLite cannot alter a CHECK constraint, so the table is copied into the current schema
+    (SQLite's documented 12-step procedure, with foreign keys disabled during the swap).
+    """
+    row = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'runs'").fetchone()
+    if row is None or "paper_ingest" in row["sql"]:
+        return
+    runs_ddl = SCHEMA[SCHEMA.index("CREATE TABLE IF NOT EXISTS runs ("):]
+    runs_ddl = runs_ddl[:runs_ddl.index(");") + 2].replace("CREATE TABLE IF NOT EXISTS runs (",
+                                                              "CREATE TABLE runs_migrated (")
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        with transaction(conn):
+            conn.execute(runs_ddl)
+            conn.execute("INSERT INTO runs_migrated (id, project_id, kind, experiment_id, status, created_at, doc, "
+                         "snapshot, warnings) SELECT id, project_id, kind, experiment_id, status, created_at, doc, "
+                         "snapshot, warnings FROM runs")
+            conn.execute("DROP TABLE runs")
+            conn.execute("ALTER TABLE runs_migrated RENAME TO runs")
+            problems = conn.execute("PRAGMA foreign_key_check").fetchall()
+            if problems:
+                raise sqlite3.IntegrityError(f"runs migration broke {len(problems)} foreign key references")
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
 
 
 @contextmanager

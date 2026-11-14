@@ -1,12 +1,13 @@
 """Flask application factory, system routes, request guards, and restart reconciliation."""
 
+import atexit
 import logging
 import threading
 import uuid
 
 from flask import Flask, g, request
 
-from . import agent_runs, analysis, artifacts, catalog, chat, db, experiments, file_collections, files, idempotency, reports, research, runs, worker
+from . import agent_runs, analysis, approvals, artifacts, catalog, chat, db, experiments, file_collections, files, hpc, idempotency, papers, reports, research, runs, worker
 from .config import load_config
 from .errors import ApiError, register_error_handlers
 from .executor import RunManager
@@ -14,6 +15,7 @@ from .http import json_response
 from .media import UPLOAD_MIME_TYPES
 from .projects import bp as projects_bp
 from .runtime import ProjectRuntime, RuntimeUnavailable
+from .terminals import TerminalManager, create_blueprint as terminal_blueprint, init_schema as init_terminal_schema
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +27,11 @@ def create_app(config=None) -> Flask:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     config = config or load_config()
     db.init_db(config.db_path)
+    terminal_conn = db.connect(config.db_path)
+    try:
+        init_terminal_schema(terminal_conn)
+    finally:
+        terminal_conn.close()
 
     app = Flask(__name__)
     # Limits JSON bodies. Upload content PUTs read the WSGI input directly and enforce the
@@ -33,16 +40,28 @@ def create_app(config=None) -> Flask:
     app.config["STELLARIS"] = config
     runtime = ProjectRuntime(config)
     app.extensions["stellaris_runtime"] = runtime
+    terminal_manager = TerminalManager(config, runtime)
+    terminal_manager.start()
+    app.extensions["stellaris_terminals"] = terminal_manager
+    atexit.register(terminal_manager.close_all)
     # Shared run executor; agent coordination stays in the project runtime.
     manager = RunManager(config, runtime)
     manager.register_handler("agent", agent_runs.handle_agent_run)
     manager.register_handler("analysis", analysis.handle_analysis)
     manager.register_handler("report", reports.handle_report)
+    manager.register_handler("paper_ingest", papers.handle_paper_ingest)
+    manager.cluster = hpc.SlurmCluster(config, runtime) if config.slurm_host else None
+    if manager.cluster is not None:
+        try:
+            manager.cluster.ensure_key()
+        except OSError:
+            log.exception("Could not prepare Slurm transport; remote execution stays unavailable")
     app.extensions["stellaris_runs"] = manager
 
     register_error_handlers(app)
-    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp, files.bp, file_collections.bp):
+    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp, files.bp, file_collections.bp, approvals.bp):
         app.register_blueprint(blueprint)
+    app.register_blueprint(terminal_blueprint(terminal_manager))
     _register_guards(app, config)
     _register_system_routes(app, config, runtime, manager)
 
@@ -51,8 +70,11 @@ def create_app(config=None) -> Flask:
     artifacts.cleanup_uploads(config)
     analysis.cleanup_run_tmp(config)
     manager.start()
-    for run_id in queued:  # Accepted before the restart but never started: safe to run now.
-        manager.enqueue(run_id)
+    for run_id, mode in queued:
+        if mode == "resume":
+            manager.resume(run_id)
+        else:
+            manager.enqueue(run_id, remote=mode)
     threading.Thread(target=_reconcile_containers, args=(config, runtime), daemon=True,
                      name="stellaris-reconcile").start()
     return app
@@ -125,6 +147,7 @@ def _register_system_routes(app, config, runtime, manager):
         # available". Video analysis (bouncing_ball_v1) and isolated Python execution need the
         # worker image; Markdown reports run in the API (they still need evidence runs).
         workers = manager.worker_available()
+        remote = manager.cluster.capabilities() if workers and manager.cluster is not None else None
         provider, _model, _runtime_env, agent_error, _message = agent_runs.selected_model_config()
         agent_configured = agent_error is None
         return json_response(
@@ -140,10 +163,12 @@ def _register_system_routes(app, config, runtime, manager):
                     "image_analysis": False,
                     "audio_analysis": False,
                     "markdown_reports": True,
-                    "remote_compute": False,
+                    "remote_compute": remote is not None,
+                    "full_text_papers": workers,
                     "collaboration": False,
                     # Additive file catalog, revisioned notes, tags, collections and links.
                     "workspace_files": True,
+                    "terminal": app.extensions["stellaris_terminals"].available(),
                 },
                 "uploads": {
                     "accepted_mime_types": UPLOAD_MIME_TYPES,
@@ -152,7 +177,7 @@ def _register_system_routes(app, config, runtime, manager):
                     "max_project_bytes": config.max_project_bytes,
                 },
                 "execution": {
-                    "allowed_backends": ["isolated_python"] if workers else [],
+                    "allowed_backends": (["isolated_python"] + (["slurm"] if remote else [])) if workers else [],
                     # Additive, informational descriptors; they do not change validation.
                     "analysis_pipelines": (
                         [
@@ -181,6 +206,12 @@ def _register_system_routes(app, config, runtime, manager):
                     "max_cpu_cores": config.worker_cpus if workers else 0,
                     "network_access": False,
                 },
+                "terminal": {
+                    "network_access": False, "max_output_bytes": 2 * 1024 * 1024,
+                    "max_input_bytes": 16 * 1024, "max_active_per_project": 1,
+                    "max_duration_s": app.extensions["stellaris_terminals"].settings.duration_s,
+                },
+                "remote_compute": remote,
                 "literature_providers": ["arxiv"] if agent_configured else [],
                 "event_retention_seconds": config.event_retention_s,
                 "max_log_chunk_bytes": config.max_log_chunk_bytes,

@@ -1,4 +1,4 @@
-"""Runs, results, measurements, and logs (docs/frontend-backend-contract.md sections 5-7).
+"""Runs, results, measurements, and logs (Contracts.md sections 5-7).
 
 Acceptance: POST /runs validates the request, builds the complete immutable input snapshot
 (experiment revision, artifact hashes/metadata, parameters, executed pipeline code, selected
@@ -31,7 +31,7 @@ from .validation import Validator, invalid_reference, is_finite, is_int
 
 bp = Blueprint("runs", __name__, url_prefix="/api/v1/projects")
 
-KINDS = ("agent", "analysis", "report")
+KINDS = ("agent", "analysis", "report", "paper_ingest")
 STATUSES = ("queued", "running", "awaiting_approval", "cancelling", "succeeded", "failed", "cancelled")
 ACTIVE = ("queued", "running", "awaiting_approval", "cancelling")
 TERMINAL = ("succeeded", "failed", "cancelled")
@@ -46,7 +46,8 @@ PIPELINES = {
     "python_analysis_v1": {"version": "1.0.0", "source_file": None},
 }
 ANALYSIS_FIELDS = {"kind", "experiment_id", "experiment_revision", "input_artifact_ids", "pipeline",
-                   "code_artifact_id", "parameters"}
+                   "code_artifact_id", "parameters", "execution"}
+RESOURCE_FIELDS = {"partition", "wall_time_s", "memory_mb", "cpus", "gpus"}
 REPORT_FIELDS = {"kind", "experiment_id", "evidence_run_ids", "source_ids", "title", "format"}
 BOUNCING_PARAMETERS = {"start_time_s", "end_time_s", "object_hint"}
 VIDEO_MIME_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
@@ -86,6 +87,12 @@ def save_run(conn, run_id: str, **changes) -> dict:
         (run_id, run["project_id"]))]
     if status in TERMINAL and run["input"]["kind"] == "agent":
         finalize_agent_message(conn, updated)
+    if status in TERMINAL or status == "cancelling":  # Section 7: outstanding approvals expire.
+        for arow in conn.execute("SELECT doc FROM approvals WHERE run_id = ? AND status = 'pending'", (run_id,)).fetchall():
+            approval = json.loads(arow["doc"])
+            approval.update(status="expired", decided_at=now_ts())
+            conn.execute("UPDATE approvals SET status = 'expired', doc = ? WHERE id = ?", (dumps(approval), approval["id"]))
+            record_event(conn, run["project_id"], "approval.updated", {"approval": approval}, run_id=run_id)
     conn.execute("UPDATE runs SET status = ?, doc = ? WHERE id = ?", (updated["status"], dumps(updated), run_id))
     record_event(conn, run["project_id"], "run.updated", {"run": updated}, run_id=run_id)
     return updated
@@ -148,10 +155,17 @@ def recover_after_restart(conn):
     """
     queued, lost = [], []
     ts = now_ts()
-    for row in conn.execute("SELECT id, status FROM runs WHERE status IN ('queued', 'running', "
+    for row in conn.execute("SELECT id, status, doc FROM runs WHERE status IN ('queued', 'running', "
                             "'awaiting_approval', 'cancelling') ORDER BY created_at, id").fetchall():
+        remote = json.loads(row["doc"]).get("execution_backend") == "slurm"
         if row["status"] == "queued":
-            queued.append(row["id"])
+            queued.append((row["id"], remote))
+            continue
+        if remote:
+            # Slurm jobs outlive the backend: approvals stay pending, and executing runs reattach
+            # to their job (found by its run-specific name) instead of becoming WORKER_LOST.
+            if row["status"] in ("running", "cancelling"):
+                queued.append((row["id"], "resume"))
             continue
         lost.append(row["id"])
         warning = {"code": "WORKER_LOST", "message": "The backend restarted while this run was executing. "
@@ -182,9 +196,13 @@ def _validate_structure(body: dict) -> str:
     kind = body.get("kind")
     if kind == "agent":
         raise validation_error([{"path": "/kind", "message": "Agent runs are created through chat messages."}])
+    if kind == "paper_ingest":
+        from . import papers
+        papers.validate_structure(body)
+        return kind
     v = Validator()
     if kind not in ("analysis", "report"):
-        v.error("/kind", "kind must be 'analysis' or 'report'.")
+        v.error("/kind", "kind must be 'analysis', 'report', or 'paper_ingest'.")
         v.check()
     if kind == "analysis":
         v.unknown(body, ANALYSIS_FIELDS)
@@ -199,6 +217,23 @@ def _validate_structure(body: dict) -> str:
             v.error("/code_artifact_id", "code_artifact_id is required (string or null).")
         else:
             v.string(body, "code_artifact_id", nullable=True, min_len=1, max_len=100)
+        execution = body.get("execution")
+        if execution is not None:
+            if not isinstance(execution, dict):
+                v.error("/execution", "execution must be an object.")
+            else:
+                v.unknown(execution, {"backend", "resources"}, "/execution")
+                v.enum(execution, "backend", ("isolated_python", "slurm"), "/execution")
+                res = execution.get("resources")
+                if res is not None:
+                    if execution.get("backend") != "slurm" or not isinstance(res, dict):
+                        v.error("/execution/resources", "resources are accepted only for the slurm backend.")
+                    else:
+                        v.unknown(res, RESOURCE_FIELDS, "/execution/resources")
+                        v.string(res, "partition", "/execution/resources", required=False, min_len=1, max_len=64)
+                        for key in ("wall_time_s", "memory_mb", "cpus", "gpus"):
+                            if key in res and (not is_int(res[key]) or res[key] < (0 if key == "gpus" else 1)):
+                                v.error(f"/execution/resources/{key}", f"{key} must be a positive integer.")
         if not isinstance(body.get("parameters"), dict):
             v.error("/parameters", "parameters must be a JSON object.")
         elif len(dumps(body["parameters"]).encode()) > MAX_PARAMETERS_BYTES:
@@ -331,6 +366,7 @@ def _analysis_snapshot(conn, config, project_id: str, body: dict) -> dict:
         "calibration_assumptions": assumptions,
         "sources": [],
         "simulated": any(a["origin"] == "simulated" for a in data_inputs),
+        "execution": resolve_execution(body.get("execution"), config, _manager().cluster),
         "limits": _limits(config),
         "accepted_at": now_ts(),
     }
@@ -367,21 +403,58 @@ def _report_snapshot(conn, project_id: str, body: dict) -> dict:
 
 
 def _new_run(project_id: str, run_input: dict) -> dict:
-    return {
+    backend = (run_input.get("execution") or {}).get("backend", "isolated_python")
+    run = {
         "id": new_id("run"), "project_id": project_id, "input": run_input, "status": "queued", "phase": "queued",
         "progress": {"fraction": None, "message": "Waiting for an execution slot."},
-        "execution_backend": "isolated_python", "output_artifact_ids": [], "result_summary": None, "error": None,
+        "execution_backend": backend, "output_artifact_ids": [], "result_summary": None, "error": None,
         "provenance_artifact_id": None, "created_at": now_ts(), "started_at": None, "finished_at": None, "revision": 1,
     }
+    if backend == "slurm":
+        run["remote_job"] = None
+    return run
 
 
-def insert_run(conn, project_id: str, run_input: dict, snapshot: dict, experiment_id=None) -> dict:
+def resolve_execution(execution, config, cluster) -> dict:
+    """Validate a requested execution against capabilities; returns the snapshot form."""
+    execution = execution or {"backend": "isolated_python"}
+    if execution["backend"] == "isolated_python":
+        return {"backend": "isolated_python"}
+    caps = cluster.capabilities() if cluster is not None else None
+    if caps is None:
+        raise ApiError(409, "FEATURE_UNAVAILABLE", "Slurm execution is not available (no reachable cluster).")
+    requested = execution.get("resources") or {}
+    partitions = {p["name"]: p for p in caps["partitions"]}
+    name = requested.get("partition") or caps["partitions"][0]["name"]
+    if name not in partitions:
+        raise validation_error([{"path": "/execution/resources/partition", "message": f"Unknown partition {name!r}."}])
+    part = partitions[name]
+    resources = {
+        "partition": name,
+        "wall_time_s": requested.get("wall_time_s", min(config.worker_wall_time_s, part["max_wall_time_s"])),
+        "memory_mb": requested.get("memory_mb", min(config.worker_memory_mb, part["max_memory_mb"])),
+        "cpus": requested.get("cpus", max(1, min(math.ceil(config.worker_cpus), part["max_cpus"]))),
+        "gpus": requested.get("gpus", 0),
+    }
+    limits = {"wall_time_s": part["max_wall_time_s"], "memory_mb": part["max_memory_mb"], "cpus": part["max_cpus"],
+              "gpus": part["max_gpus"]}
+    errors = [{"path": f"/execution/resources/{k}", "message": f"{k} exceeds the partition limit ({limits[k]})."}
+              for k in limits if resources[k] > limits[k]]
+    if errors:
+        raise validation_error(errors)
+    return {"backend": "slurm", "resources": resources,
+            "cluster": {"label": caps["cluster_label"], "kind": caps["cluster_kind"], "scheduler": "slurm",
+                        "container_runtime": "apptainer"}}
+
+
+def insert_run(conn, project_id: str, run_input: dict, snapshot: dict, experiment_id=None, config=None) -> dict:
     """Persist a queued run with its snapshot and run.created event (caller's transaction).
 
-    Also used by the next slice for agent runs created through chat.
+    Used by POST /runs, chat (agent runs), and agent-requested paper ingestion (which passes
+    `config` because it runs outside a request context).
     """
     from .artifacts import _used_bytes, _quota_error
-    config = current_app.config["STELLARIS"]
+    config = config or current_app.config["STELLARIS"]
     audit_budget = config.max_run_log_bytes + 16 * 1024 * 1024
     if _used_bytes(conn, project_id) + audit_budget > config.max_project_bytes:
         raise _quota_error()
@@ -407,18 +480,25 @@ def create_run(project_id):
     body = json_body()
     key = idempotency_key()
     kind = _validate_structure(body)
-    if kind == "analysis" and not _manager().worker_available():
+    if kind in ("analysis", "paper_ingest") and not _manager().worker_available():
         raise ApiError(409, "FEATURE_UNAVAILABLE", "Isolated analysis workers are not available (worker image missing).")
     created = []
 
     def build(conn):
         load_writable(conn, project_id)
+        if kind == "paper_ingest":
+            from . import papers
+            run_input, snapshot = papers.build_snapshot(conn, config, project_id, body)
+            run = insert_run(conn, project_id, run_input, snapshot)
+            created.append(run["id"])
+            return 202, run, {"Location": f"/api/v1/projects/{project_id}/runs/{run['id']}"}, run["id"]
         if kind == "analysis":
             snapshot = _analysis_snapshot(conn, config, project_id, body)
             run_input = {"kind": "analysis", "experiment_id": body["experiment_id"],
                          "experiment_revision": body["experiment_revision"],
                          "input_artifact_ids": list(body["input_artifact_ids"]), "pipeline": body["pipeline"],
-                         "code_artifact_id": body["code_artifact_id"], "parameters": snapshot["parameters"]}
+                         "code_artifact_id": body["code_artifact_id"], "parameters": snapshot["parameters"],
+                         "execution": {k: v for k, v in snapshot["execution"].items() if k != "cluster"}}
         else:
             snapshot = _report_snapshot(conn, project_id, body)
             run_input = {"kind": "report", "experiment_id": body["experiment_id"],
@@ -431,7 +511,7 @@ def create_run(project_id):
 
     response = idempotency.run_command(g.db, key, body, build)
     if created:  # Committed (snapshot persisted) before the executor sees it.
-        _manager().enqueue(created[0])
+        _manager().enqueue(created[0], remote=(body.get("execution") or {}).get("backend") == "slurm")
     return response
 
 
@@ -475,19 +555,6 @@ def cancel_run(project_id, run_id):
     if signal:
         _manager().request_cancel(run_id)
     return response
-
-
-@bp.get("/<project_id>/runs/<run_id>/approvals")
-def list_approvals(project_id, run_id):
-    """Contract section 7: `200 Page<Approval>`. The MVP has no paid or privileged tool integration,
-    so no approval is ever created and the page is always empty. There is no approval execution
-    machinery; the decision route stays unimplemented until a supported action requires it."""
-    load_visible(g.db, project_id)
-    load_run_row(g.db, project_id, run_id)
-    page_limit()
-    if request.args.get("cursor"):
-        raise ApiError(400, "INVALID_CURSOR", "cursor is invalid.")
-    return json_response({"items": [], "next_cursor": None})
 
 
 @bp.get("/<project_id>/runs/<run_id>/results")

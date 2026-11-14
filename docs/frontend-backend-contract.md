@@ -7,6 +7,10 @@ Source: the supplied “Stellaris — From question to discovery” product docu
 
 ## 1. Purpose and scope
 
+Additive backend extensions are specified in [research-contract.md](research-contract.md),
+[hpc-contract.md](hpc-contract.md), and [terminal-contract.md](terminal-contract.md).
+Their implementation/verification status is recorded in each document; legacy fields remain compatible.
+
 This document defines the boundary between the Stellaris frontend and backend so they can be implemented independently. It specifies requests, responses, persistent resources, live events, errors, and scientific provenance for the first complete research workflow.
 
 The MVP supports creating a project, asking a research question, collecting cited literature, designing an experiment, uploading or recording video, running isolated analysis, inspecting measurements and charts, and generating a Markdown report. Previously completed experiments remain accessible and carry their original execution dates.

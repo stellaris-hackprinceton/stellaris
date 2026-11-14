@@ -138,3 +138,27 @@ annotated evidence and limitations. Uncalibrated results remain in pixels or dim
 Live Bedrock/Nova behavior requires separately supplied configuration and live verification.
 
 Observed results and remaining live-provider verification are recorded in [verification.md](verification.md).
+
+
+## Full-text research, HPC and terminal extensions
+
+See [research](../research-contract.md), [HPC](../hpc-contract.md), and
+[terminal](../terminal-contract.md) for the additive frontend contracts. The existing file
+catalog continues to expose new scientific sources and immutable ingestion outputs.
+Paper ingestion accepts uploaded PDFs or an arXiv identifier and extracts text in an isolated
+worker. Interactive terminals use a separate, non-root, network-disabled runtime with a persistent
+per-project terminal workspace; they do not receive research-agent credentials or scratch.
+
+Build the terminal image with the other backend images:
+
+```sh
+docker compose --profile build-only build api worker project-runtime terminal-runtime
+python3 scripts/paper_ingest_test.py --skip-arxiv
+docker compose exec -T api python - --offline-transport < scripts/hpc_test.py
+```
+
+`terminal_test.py` uses two synthetic project IDs supplied via `STELLARIS_TEST_PROJECT_ID`
+and `STELLARIS_TEST_OTHER_PROJECT_ID`. It tests the backend shell; no browser is required.
+HPC stays disabled with a blank `STELLARIS_SLURM_HOST`. The local `hpc` Compose profile uses a
+privileged simulator and is not started by ordinary Compose startup; enabling it and real
+cluster execution require separate configuration/testing. No frontend changes are included.
