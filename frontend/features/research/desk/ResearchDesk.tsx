@@ -35,7 +35,7 @@ export function ResearchDesk({ project_id }: { project_id: ID }) {
   useEffect(() => {
     const node = root.current;
     if (!node || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= 1100));
+    const observer = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= 1008));
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
@@ -68,7 +68,7 @@ export function ResearchDesk({ project_id }: { project_id: ID }) {
       <div className={styles.layout} data-inspector={inspector && wide ? "side" : undefined}>
         <div className={styles.screen}>
           <header className={styles.header}>
-            <h1>Research</h1>
+            <h1>Overview</h1>
             {project.data?.description && <p>{project.data.description}</p>}
           </header>
           <section aria-label="Research question" className={styles.question}>
@@ -77,16 +77,16 @@ export function ResearchDesk({ project_id }: { project_id: ID }) {
           </section>
           <ActiveWork project_id={project_id} />
           <div className={styles.grid}>
-            <LiteratureWidget project_id={project_id} onOpenSource={openSource} selected={inspector?.kind === "source" ? inspector.id : null} />
+          <LiteratureWidget project_id={project_id} onOpenSource={openSource} selected={inspector?.kind === "source" ? inspector.id : null} />
             <ExperimentsWidget project_id={project_id} />
-            <FindingsWidget project_id={project_id} onOpenClaim={openClaim} onOpenCitation={openCitation} selected={inspector?.kind === "claim" ? inspector.id : null} />
             <MeasurementsWidget project_id={project_id} />
+            <FindingsWidget project_id={project_id} onOpenClaim={openClaim} onOpenCitation={openCitation} selected={inspector?.kind === "claim" ? inspector.id : null} />
             <WritingWidget project_id={project_id} />
           </div>
         </div>
         {inspector && wide && <aside className={styles.inspector} aria-label="Research inspector">
           <div className={styles.inspectorHead}>
-            <h2>{inspector.kind === "source" ? "Literature source" : "Finding"}</h2>
+          <h2>{inspector.kind === "source" ? "Source" : "Finding"}</h2>
             <Button onClick={closeInspector}>Close</Button>
           </div>
           {inspector.kind === "source"
@@ -94,7 +94,7 @@ export function ResearchDesk({ project_id }: { project_id: ID }) {
             : <ClaimInspector project_id={project_id} claim_id={inspector.id} onOpenCitation={openCitation} />}
         </aside>}
       </div>
-      {!wide && <Sheet open={!!inspector} onClose={closeInspector} title={inspector?.kind === "source" ? "Literature source" : "Finding"}>
+      {!wide && <Sheet open={!!inspector} onClose={closeInspector} title={inspector?.kind === "source" ? "Source" : "Finding"}>
         {inspector?.kind === "source" && <SourceInspector project_id={project_id} source_id={inspector.id} citation={inspector.citation} />}
         {inspector?.kind === "claim" && <ClaimInspector project_id={project_id} claim_id={inspector.id} onOpenCitation={openCitation} />}
       </Sheet>}

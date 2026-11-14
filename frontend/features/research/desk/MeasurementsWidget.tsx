@@ -21,8 +21,8 @@ export function MeasurementsWidget({ project_id }: { project_id: ID }) {
   const runId = list.items[0]?.origin?.id ?? null;
   const blocked = listHasBlockingState(list);
   return (
-    <Widget id="desk-measurements" title="Measurements and results"
-      footer={<WidgetFooter label="measurements" canExpand={!!runId} expanded={disclosure.expanded} onToggle={disclosure.toggle} viewAll={hrefs.materialsView(project_id, "measurements")} />}>
+    <Widget id="desk-results" title="Results"
+      footer={<WidgetFooter label="results" canExpand={!!runId} expanded={disclosure.expanded} onToggle={disclosure.toggle} viewAll={hrefs.materialsView(project_id, "measurements")} />}>
       {blocked ? <ListState list={list} what="Measurements" skeletons={1} /> : !runId ? <p className={styles.empty}>Analyze an experiment to save measurements.</p> : <MeasurementSet project_id={project_id} run_id={runId} expanded={disclosure.expanded} />}
     </Widget>
   );

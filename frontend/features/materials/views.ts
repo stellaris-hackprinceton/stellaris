@@ -6,11 +6,11 @@ export type SortOrder = CollectionPresentation['order']
 export type StatusFilter = 'active' | 'trashed' | 'all'
 
 export const VIEW_OPTIONS: { id: ViewPreset, label: string }[] = [
-  { id: 'desk', label: 'Desk' }, { id: 'literature', label: 'Literature' }, { id: 'notes', label: 'Notes' },
+  { id: 'desk', label: 'Recent' }, { id: 'literature', label: 'Sources' }, { id: 'notes', label: 'Notes' },
   { id: 'media-data', label: 'Media & data' }, { id: 'findings', label: 'Findings' },
-  { id: 'measurements', label: 'Measurements' }, { id: 'all', label: 'All materials' },
+  { id: 'measurements', label: 'Measurements' }, { id: 'all', label: 'All items' },
 ]
-export const viewLabel = (v: ViewPreset) => VIEW_OPTIONS.find(o => o.id === v)?.label ?? 'Desk'
+export const viewLabel = (v: ViewPreset) => VIEW_OPTIONS.find(o => o.id === v)?.label ?? 'Recent'
 const VIEWS = new Set<string>(VIEW_OPTIONS.map(v => v.id))
 const SORTS = new Set<string>(['created_at', 'updated_at', 'name'])
 const ORDERS = new Set<string>(['asc', 'desc'])
@@ -55,7 +55,7 @@ export type BrowseState = {
 
 /**
  * URL precedence (spec §5): explicit valid URL values, then the open collection's saved presentation,
- * then the preset default. Unknown view → Desk with a notice. Invalid sort/order/status are reported.
+ * then the preset default. Unknown view → Recent with a notice. Invalid sort/order/status are reported.
  */
 export function parseBrowseState(search: URLSearchParams, collection: Collection | null | undefined): BrowseState {
   const rawView = search.get('view'), rawSort = search.get('sort'), rawOrder = search.get('order'), rawStatus = search.get('status')

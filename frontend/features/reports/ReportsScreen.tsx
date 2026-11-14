@@ -8,6 +8,7 @@ import { useCatalogView } from '@/lib/queries/views'
 import { Button, ErrorNotice, Field, Skeleton, TextInput, describeError } from '@/components/ui'
 import { hrefs } from '@/components/shell/hrefs'
 import { ReportCard } from './ReportCard'
+import { DeskGrid } from '@/components/ui/Desk'
 import { ReportComposer, type ComposerContext, type ComposerDraft } from './ReportComposer'
 import styles from './reports.module.css'
 
@@ -63,17 +64,17 @@ function ReportLibrary({ project_id, q }: { project_id: ID, q: string }) {
     const latest = workspace.data?.latest_report_artifact_id
     return <section aria-label="Saved reports">
       <p role="note">The full report library needs the backend workspace views extension, which this backend does not advertise. Existing report readers remain available.</p>
-      {latest ? <ul className={styles.grid}><li><ReportCard project_id={project_id} artifact_id={latest} /></li></ul> : workspace.data ? <p>No latest report is recorded for this project.</p> : null}
+      {latest ? <DeskGrid><li><ReportCard project_id={project_id} artifact_id={latest} /></li></DeskGrid> : workspace.data ? <p>No latest report is recorded for this project.</p> : null}
     </section>
   }
   if (list.capability_error) return <ErrorNotice {...describeError(list.capability_error, 'Backend capabilities could not be loaded')} />
-  if (list.is_loading || list.capability_pending) return <ul className={styles.grid} aria-busy="true">{[0, 1, 2].map(i => <li key={i} className={styles.card}><Skeleton height="1.25rem" /><Skeleton width="60%" /></li>)}</ul>
+  if (list.is_loading || list.capability_pending) return <div aria-busy="true"><DeskGrid>{[0, 1, 2].map(i => <li key={i} className={styles.card}><Skeleton height="1.25rem" /><Skeleton width="60%" /></li>)}</DeskGrid></div>
   if (list.error && !list.items.length) return <ErrorNotice {...describeError(list.error, 'Saved reports could not be loaded')} action={<Button onClick={() => void list.refetch()}>Retry</Button>} />
   if (!list.items.length) return <p>{q ? 'No report names match this search.' : 'No reports saved yet. Generate one from recorded experiment analysis.'}</p>
   return <section aria-label="Saved reports">
-    <ul className={styles.grid}>
+    <DeskGrid>
       {list.items.map(file => <li key={file.id}>{file.origin?.type === 'artifact' ? <ReportCard project_id={project_id} artifact_id={file.origin.id} /> : <article className={styles.card}><p className={styles.cardTitle}>Report unavailable</p></article>}</li>)}
-    </ul>
+    </DeskGrid>
     {list.is_next_page_error && <ErrorNotice {...describeError(list.error, 'More reports could not be loaded')} action={<Button onClick={() => void list.load_next_page()}>Retry</Button>} />}
     {list.has_next_page && !list.is_next_page_error && <p><Button onClick={() => void list.load_next_page()} pending={list.is_fetching_next_page}>Load more</Button></p>}
   </section>

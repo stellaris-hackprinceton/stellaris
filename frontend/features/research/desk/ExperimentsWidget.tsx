@@ -5,7 +5,7 @@ import { useExperiment, useProject } from "@/lib/queries";
 import { useCatalogView, type ViewFile } from "@/lib/queries/views";
 import { hrefs } from "@/components/shell/hrefs";
 import { METHOD_LABEL } from "../canvas/labels";
-import { ARCHIVED_NOTE, AddTile, CardError, CardSkeleton, ListState, Widget, WidgetFooter, dateLabel, listHasBlockingState, useDisclosure } from "./Widget";
+import { ARCHIVED_NOTE, AddTile, CardError, CardSkeleton, ListState, MediaPreview, Widget, WidgetFooter, dateLabel, listHasBlockingState, useDisclosure } from "./Widget";
 import styles from "./desk.module.css";
 
 /** Helpful prompts in a fixed order, not backend readiness certification. */
@@ -50,6 +50,7 @@ function ExperimentDeskCard({ project_id, file }: { project_id: ID; file: ViewFi
       <Link className={styles.title} href={hrefs.studio(project_id, e.id)}>{e.title}</Link>
       <p className={styles.meta}>{METHOD_LABEL[e.method]} · revision {e.revision} · {e.input_artifact_ids.length} input{e.input_artifact_ids.length === 1 ? "" : "s"} attached</p>
       <p className={styles.clamp2}>{e.hypothesis.trim() || <span className={styles.unavailable}>Hypothesis not recorded</span>}</p>
+      {e.input_artifact_ids[0] && <MediaPreview project_id={project_id} artifact_id={e.input_artifact_ids[0]} />}
       <p className={styles.meta}>Last saved {dateLabel(e.updated_at)}</p>
       <div className={styles.links}><Link href={hrefs.studio(project_id, e.id)}>{nextAction(e)}</Link></div>
     </article>

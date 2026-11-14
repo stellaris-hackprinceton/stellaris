@@ -1,42 +1,46 @@
-/* Shared design tokens. Owned by Agent A; change only here. */
+/* Shared experiment studio design tokens. */
 :root {
-  --color-background: #f2f4f6;
+  --color-background: #f3f4f6;
   --color-surface: #ffffff;
-  --color-surface-muted: #e9edf1;
-  --color-text: #18212b;
-  --color-text-muted: #4c5a69;
-  --color-border: #c4ccd5;
-  --color-accent: #185abc;
+  --color-surface-muted: #eceef2;
+  --color-text: #242630;
+  --color-text-muted: #606575;
+  --color-border: #cdd1da;
+  --color-accent: #6435c9;
+  --color-accent-hover: #5227ae;
   --color-accent-contrast: #ffffff;
-  --color-success: #1b6a45;
-  --color-warning: #8a5400;
-  --color-danger: #a32929;
-  --color-selection: #e8f0fe;
-  --color-control-border: #758393;
-  --color-nav-background: #18212b;
-  --color-nav-text: #f3f5f7;
-  --color-nav-muted: #b8c3cf;
-  --color-nav-selected: #2d4057;
-  --color-focus: #185abc;
-
+  --color-success: #216848;
+  --color-success-surface: #e6f3ec;
+  --color-warning: #855200;
+  --color-warning-surface: #fff2d9;
+  --color-danger: #af303d;
+  --color-danger-surface: #fbe9ec;
+  --color-selection: #ede7fa;
+  --color-selection-text: #49229c;
+  --color-control-border: #858b9b;
+  --color-nav-background: #e7e9ee;
+  --color-nav-text: #242630;
+  --color-nav-muted: #606575;
+  --color-nav-selected: #ede7fa;
+  --color-focus: #6435c9;
+  --shadow-overlay: 0 8px 24px #2426301f;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
-
-  --radius-control: 2px;
-  --radius-panel: 2px;
-
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-panel: 8px;
+  --radius-dialog: 12px;
   --control-height: 40px;
-
-  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-code: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --font-body: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-code: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --text-body: 16px;
   --text-label: 14px;
-  --text-title: 20px;
-
-  --sidebar-width: 208px;
+  --text-title: 18px;
+  --sidebar-width: 224px;
   --chat-rail-width: 360px;
 }

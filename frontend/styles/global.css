@@ -2,25 +2,26 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scrollbar-color: var(--color-control-border) var(--color-background); }
 
 body {
   margin: 0;
   background: var(--color-background);
   color: var(--color-text);
-  font-family: var(--font-body);
+  font-family: var(--font-geist-sans), var(--font-body);
   font-size: var(--text-body);
-  line-height: 1.5;
+  line-height: 1.5625;
   overflow-x: hidden;
 }
 
 h1, h2, h3, h4 { line-height: 1.25; margin: 0; }
-h1 { font-size: 24px; }
-h2 { font-size: var(--text-title); }
-h3 { font-size: 18px; }
+h1 { font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -.025em; }
+h2 { font-size: var(--text-title); line-height: 24px; font-weight: 600; }
+h3 { font-size: 16px; line-height: 22px; font-weight: 600; }
 p { margin: 0; }
 
 a { color: var(--color-accent); }
+input, textarea { caret-color: var(--color-accent); }
 
 code, pre, kbd, samp { font-family: var(--font-code); font-size: 0.9em; }
 
@@ -32,7 +33,7 @@ img, video, audio, svg { max-width: 100%; }
 }
 
 .num { font-variant-numeric: tabular-nums; }
-.prose { max-width: 70ch; }
+.prose { max-width: 72ch; }
 .sr-only {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -47,6 +48,10 @@ img, video, audio, svg { max-width: 100%; }
   }
 }
 
-::selection { background: #d8e7ff; color: var(--color-text); }
+::selection { background: var(--color-selection); color: var(--color-selection-text); }
 a { text-underline-offset: 3px; }
 @media (pointer: coarse) { :root { --control-height: 44px; } }
+
+button, input, textarea, select { font-family: inherit; }
+input::placeholder, textarea::placeholder { color: var(--color-text-muted); opacity: 1; }
+button, a, input, select, textarea { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }

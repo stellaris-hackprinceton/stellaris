@@ -11,16 +11,16 @@ import styles from "./desk.module.css";
 export function WritingWidget({ project_id }: { project_id: ID }) {
   const project = useProject(project_id);
   const capabilities = useCapabilities();
-  const disclosure = useDisclosure(2, 6);
+  const disclosure = useDisclosure(3, 9);
   const list = useCatalogView(project_id, { artifact_kinds: ["report"], sort: "created_at", order: "desc" }, disclosure.limit);
   const archived = project.data?.status === "archived";
   const allowed = project.data?.status === "active" && capabilities.data?.features.markdown_reports === true;
   const composeHref = hrefs.reports(project_id, { compose: true });
   const blocked = listHasBlockingState(list);
 
-  return <Widget id="desk-writing" title="Writing"
+  return <Widget id="desk-reports" title="Reports"
     footer={<WidgetFooter label="reports" canExpand={list.has_next_page || list.items.length > disclosure.preview} expanded={disclosure.expanded} onToggle={disclosure.toggle} viewAll={hrefs.view(project_id, "reports")} />}>
-    {blocked ? <ListState list={list} what="Reports" skeletons={2} /> : list.items.length === 0 && <p className={styles.empty}>Generate a report from recorded analysis.</p>}
+    {blocked ? <ListState list={list} what="Reports" skeletons={3} /> : list.items.length === 0 && <p className={styles.empty}>Generate a report from recorded analysis.</p>}
     <ul className={styles.cards}>
       {!blocked && list.items.slice(0, disclosure.shown).map((file) => <li key={file.id}>
         {file.origin?.id ? <ReportCard project_id={project_id} artifact_id={file.origin.id} /> : <div className={styles.card}><p className={styles.unavailable}>Report artifact unavailable.</p></div>}

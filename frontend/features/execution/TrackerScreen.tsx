@@ -67,19 +67,12 @@ export function TrackerScreen({ project_id }: { project_id: string }) {
     groups.set(key, [...(groups.get(key) ?? []), run])
   }
   return <div className={styles.tracker}>
-    <header className={styles.pageHeading}><h1>Tracker</h1><p>Follow the work from investigation to saved results.</p></header>
-    <div className={styles.workflow} aria-label="Research workflow">
-      <div><strong>Research</strong><span>Question, literature &amp; evidence</span></div>
-      <span aria-hidden="true">→</span>
-      <div><strong>Analysis</strong><span>Experiment, inputs &amp; measurements</span></div>
-      <span aria-hidden="true">→</span>
-      <div><strong>Report</strong><span>Evidence-backed findings</span></div>
-    </div>
+    <header className={styles.pageHeading}><h1>Activity</h1><p>Follow the work from investigation to saved results.</p></header>
     <section className={styles.active}>
       <div className={styles.sectionHeading}><h2>Active work</h2><span>Live project state</span></div>
       <ErrorNotice error={workspace.error} />
       {workspace.data?.active_run_ids.length ? <ul className={styles.runList}>{workspace.data.active_run_ids.map(id => <ActiveRun key={id} project_id={project_id} id={id} />)}</ul>
-        : <div className={styles.empty}><p>No runs are active.</p><Link href={`${projectHref(project_id)}/studio`}>Open an experiment</Link><span> or direct research in Chat.</span></div>}
+        : <div className={styles.empty}><p>No runs are active.</p><Link href={`${projectHref(project_id)}/studio`}>Open an experiment</Link><span> or direct research in Assistant.</span></div>}
     </section>
     <section>
       <div className={styles.sectionHeading}><h2>Run history</h2><span>{runs.items.length} loaded{runs.has_next_page ? ' · more available' : ''}</span></div>
@@ -89,7 +82,7 @@ export function TrackerScreen({ project_id }: { project_id: string }) {
       </div>
       <ErrorNotice error={runs.error} />
       {runs.is_loading && <p className={styles.loading} aria-busy="true">Loading run history…</p>}
-      {!runs.is_loading && !runs.error && !runs.items.length && <p className={styles.empty}>No runs match these filters. Start research in Chat or analysis in Experiments.</p>}
+      {!runs.is_loading && !runs.error && !runs.items.length && <p className={styles.empty}>No runs match these filters. Start research in Assistant or analysis in Experiments.</p>}
       {[...groups].map(([id, rows]) => <HistoryGroup key={id} project_id={project_id} experiment_id={id || undefined} runs={rows} />)}
       <PageMore has_more={runs.has_next_page} loading={runs.is_fetching_next_page} load={runs.load_next_page} />
       <p className={styles.qualification}>These are execution states. A completed run does not establish a scientific conclusion.</p>
