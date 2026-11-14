@@ -1,6 +1,6 @@
 # Research, HPC and terminal backend integration
 
-Status: planning and implementation in progress. No new capability is implied by this plan.
+Status: backend implementation integrated and locally verified; live HPC execution remains opt-in and unverified in this integration.
 
 ## Decisions
 
@@ -37,14 +37,32 @@ scoping. Existing record/artifact projection exposes the new persisted outputs i
 
 ## Verification and checkpoints
 
-- [ ] Contract for each feature checked against implementation and linked from shared docs.
-- [ ] Research: deterministic PDF/LaTeX fixtures, archive traversal/limits, no-text failure,
+- [x] Contract for each feature checked against implementation and linked from shared docs.
+- [x] Research: deterministic PDF/LaTeX fixtures, archive traversal/limits, no-text failure,
       provenance and exact source/locator checks, old abstract-only behavior retained.
-- [ ] Terminal: Docker PTY input/output, Ctrl-C, resize, binary output/replay, cross-project
+- [x] Terminal: Docker PTY input/output, Ctrl-C, resize, binary output/replay, cross-project
       rejection, duplicate-input handling, limits, close/reopen persistence and restart cleanup.
-- [ ] HPC: unavailable-by-default API, bound approval decisions and cancellation, scheduler
+- [x] HPC: unavailable-by-default API, bound approval decisions and cancellation, scheduler
       transport/recovery fixtures; live cluster checks reported separately when configured.
-- [ ] Legacy/catalog integration checks, independent review, clean commits and pushes.
+- [x] Legacy/catalog integration checks, independent review, clean commits and pushes.
 
 No frontend implementation, general gesture-recognition pipeline, graph rendering, or broad
 new integrations are included in this rewrite.
+
+## Observed verification
+
+- Rebuilt API, scientific worker, project runtime and separate terminal image. No privileged
+  Slurm service was started. API database was backed up before the additive schema migration.
+- Paper ingestion: 27 offline Docker/API checks passed (`paper_ingest_test.py --skip-arxiv`).
+  Four unsafe archive fixtures were rejected and safe LaTeX was extracted without execution.
+- Terminal: real PTY input/output, duplicate-input handling, Ctrl-C, resize, binary output,
+  project scoping, transcript and reopen persistence checks passed. A separate flood fixture
+  verified exact 2 MiB retention, termination and filter-preserving output cursors.
+- HPC: seven offline transport checks passed, including timeout/output bounds and external
+  host-key requirements. Unconfigured HPC is correctly unavailable. Source-branch historical
+  Slurm results were not counted as new integration results.
+- Existing backend suite: 95 checks passed (idle heartbeat delay skipped); notes/tagging suite:
+  112 checks passed. Offline Deep Agents regression passed. Database foreign-key checks passed.
+- No paid application-model calls, live arXiv retrieval, frontend edits, or host credential
+  inspection occurred in this verification pass. Live remote execution, privileged demo-cluster
+  startup and live agent-driven paper retrieval are separate checks.

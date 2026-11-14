@@ -35,6 +35,9 @@ TYPES = {
     "text/csv": ("text", None, {"dataset"}, {"dataset"}),
     "text/x-python": ("text", None, {"code"}, {"code"}),
     "application/json": ("json", None, set(), {"dataset", "environment", "document", "log"}),
+    "application/pdf": ("pdf", None, {"document"}, {"document"}),
+    "application/gzip": ("gzip", None, set(), {"document"}),
+    "application/x-tar": ("tar", None, set(), {"document"}),
 }
 UPLOAD_MIME_TYPES = sorted(m for m, spec in TYPES.items() if spec[2])
 INLINE_MIME_TYPES = {"image/png", "image/jpeg", "video/mp4", "video/webm", "video/quicktime",
@@ -70,6 +73,9 @@ def inspect_file(path: str, mime_type: str, config) -> dict:
         return {}
     if validator == "json":
         _check_json(path)
+        return {}
+    if validator in SIGNATURES:
+        _check_signature(path, validator)
         return {}
     probe = _ffprobe(path, demuxer, config, [
         "-select_streams", "v:0", "-count_frames", "-read_intervals", "%+#5", "-show_format", "-show_streams",
@@ -147,6 +153,19 @@ def _ffprobe(path: str, demuxer: str, config, probe_args) -> dict:
     except ValueError:
         raise decode_failed("Media inspection returned unreadable output.")
     return data if isinstance(data, dict) else {}
+
+
+SIGNATURES = {"pdf": "PDF", "gzip": "gzip", "tar": "tar"}
+
+
+def _check_signature(path: str, validator: str) -> None:
+    """Magic-byte check only; document parsing happens in the isolated worker."""
+    with open(path, "rb") as fh:
+        head = fh.read(1024)
+    ok = {"pdf": b"%PDF-" in head, "gzip": head[:2] == b"\x1f\x8b",
+          "tar": len(head) > 262 and head[257:262] == b"ustar"}[validator]
+    if not ok:
+        raise decode_failed(f"The content is not a {SIGNATURES[validator]} file.")
 
 
 def _check_utf8(path: str) -> None:

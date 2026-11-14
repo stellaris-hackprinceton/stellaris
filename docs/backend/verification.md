@@ -82,3 +82,15 @@ live there; structured scientific records are projected JSON/CSV files and exist
 bytes remain in their project filesystem. See the file workspace contract and backup notes.
 The hand/finger-analysis bug is diagnosed, with capability/prompt clarification added;
 full pipeline selection or strict target rejection remains a separate product decision.
+
+
+## Manual HPC/research integration and terminal — 2026-11-14
+
+See [hpc-research-terminal-plan.md](hpc-research-terminal-plan.md) for actual observations.
+The source branch was not merged: selected backend files and changes were adapted manually,
+with the current file workspace retained. Paper ingestion passed 27 offline API checks;
+HPC passed seven transport fixtures; terminal PTY, replay, resize, Ctrl-C, binary transcripts,
+reopen persistence and output-limit/pagination checks passed. Existing integration (95) and
+notes/tagging (112) checks passed, as did the offline Deep Agents flow and database FK check.
+Live Slurm/Apptainer, live arXiv and live model requests were not run. The source branch's
+historical live verification is not represented as current verification.

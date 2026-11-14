@@ -35,7 +35,30 @@ def _project_for_write(conn, project_id, allow_archived):
 
 # -- sources --------------------------------------------------------------------
 
-def validate_source(fields: dict, *, allowed=None) -> dict:
+_INTERNAL_CONTENT_URL = re.compile(r"^/api/v1/projects/prj_[0-9a-f]{32}/artifacts/art_[0-9a-f]{32}/content$")
+
+
+def normalize_text(text: str) -> str:
+    return " ".join(text.split())
+
+
+def normalize_locator(locator: str) -> str:
+    return " ".join(locator.replace(",", " ").split()).lower()
+
+
+def _excerpt_at_locator(text: str, locator: str, excerpt: str) -> bool:
+    markers = list(re.finditer(r"⟦([^⟧]+)⟧", text))
+    target = normalize_locator(locator)
+    for index, marker in enumerate(markers):
+        if target not in {normalize_locator(part) for part in marker.group(1).split("|", 1)}:
+            continue
+        end = markers[index + 1].start() if index + 1 < len(markers) else len(text)
+        if excerpt in text[marker.end():end]:
+            return True
+    return False
+
+
+def validate_source(fields: dict, *, allowed=None, internal_url_ok=False) -> dict:
     """Validate Source input fields; returns normalized values. Raises 422."""
     v = Validator()
     if allowed is not None:
@@ -49,7 +72,9 @@ def validate_source(fields: dict, *, allowed=None) -> dict:
         "abstract": v.string(fields, "abstract", required=False, nullable=True, max_len=MAX_TEXT),
     }
     url = values["url"]
-    if isinstance(url, str):
+    if isinstance(url, str) and internal_url_ok and _INTERNAL_CONTENT_URL.fullmatch(url):
+        pass
+    elif isinstance(url, str):
         parts = urlsplit(url)
         if parts.scheme not in ("http", "https") or not parts.netloc or any(c.isspace() or ord(c) < 32 for c in url):
             v.error("/url", "url must be an absolute http(s) URL.")
@@ -62,7 +87,8 @@ def validate_source(fields: dict, *, allowed=None) -> dict:
 def publish_source(conn, project_id: str, *, title: str, url: str, provider: str = "manual",
                    authors=(), external_id=None, published_at=None, doi=None, abstract=None,
                    retrieval_status: str = "metadata_only", retrieved_at=None,
-                   document_artifact_id=None, allow_archived: bool = False) -> dict:
+                   document_artifact_id=None, full_text=None, paper_text=None,
+                   allow_archived: bool = False) -> dict:
     """Create an immutable Source snapshot and its source.created event.
 
     Call inside db.transaction(conn). Raises ApiError (404 project, 409 PROJECT_ARCHIVED,
@@ -70,7 +96,8 @@ def publish_source(conn, project_id: str, *, title: str, url: str, provider: str
     """
     _project_for_write(conn, project_id, allow_archived)
     values = validate_source({"title": title, "url": url, "authors": list(authors), "doi": doi,
-                              "published_at": published_at, "abstract": abstract})
+                              "published_at": published_at, "abstract": abstract},
+                             internal_url_ok=document_artifact_id is not None)
     v = Validator()
     v.enum({"provider": provider}, "provider", PROVIDERS)
     v.enum({"retrieval_status": retrieval_status}, "retrieval_status", RETRIEVAL_STATUSES)
@@ -80,6 +107,18 @@ def publish_source(conn, project_id: str, *, title: str, url: str, provider: str
     v.check()
     if document_artifact_id is not None:
         require_one(conn, "artifacts", project_id, document_artifact_id, "/document_artifact_id")
+    if (retrieval_status == "full_text_retrieved") != (full_text is not None) or (
+            full_text is not None and (document_artifact_id is None or paper_text is None)):
+        raise ValueError("full_text_retrieved sources need full_text, a document artifact, and paper_text")
+    if full_text is not None:
+        if set(full_text) != {"format", "text_artifact_id", "ingest_run_id", "section_count", "page_count",
+                              "truncated", "license_url"}:
+            raise ValueError("invalid full_text fields")
+        require_one(conn, "artifacts", project_id, full_text["text_artifact_id"], "/full_text/text_artifact_id")
+        text, locators = paper_text
+        conn.execute("INSERT OR REPLACE INTO paper_texts (artifact_id, project_id, text, locators) VALUES (?, ?, ?, ?)",
+                     (full_text["text_artifact_id"], project_id, normalize_text(text),
+                      dumps(sorted({normalize_locator(loc) for loc in locators}))))
 
     ts = now_ts()
     source = {
@@ -87,7 +126,7 @@ def publish_source(conn, project_id: str, *, title: str, url: str, provider: str
         "title": values["title"], "authors": values["authors"], "published_at": values["published_at"],
         "doi": values["doi"], "url": values["url"], "abstract": values["abstract"],
         "retrieval_status": retrieval_status, "retrieved_at": retrieved_at or ts,
-        "document_artifact_id": document_artifact_id, "created_at": ts,
+        "document_artifact_id": document_artifact_id, "full_text": full_text, "created_at": ts,
     }
     conn.execute("INSERT INTO sources (id, project_id, provider, created_at, doc) VALUES (?, ?, ?, ?, ?)",
                  (source["id"], project_id, provider, ts, dumps(source)))
@@ -195,12 +234,31 @@ def publish_claim(conn, project_id: str, *, run_id: str, kind: str, text: str, m
     errors = []
     for i, cit in enumerate(citations):
         source = require_one(conn, "sources", project_id, cit["source_id"], f"/citations/{i}/source_id")
-        excerpt = cit["excerpt"]
+        excerpt, locator = cit["excerpt"], cit["locator"]
+        status = source["retrieval_status"]
+        paper = None
+        if status == "full_text_retrieved" and source.get("full_text"):
+            paper = conn.execute("SELECT text, locators FROM paper_texts WHERE artifact_id = ? AND project_id = ?",
+                                 (source["full_text"]["text_artifact_id"], project_id)).fetchone()
+            if locator is not None and paper is not None and normalize_locator(locator) not in set(json.loads(paper["locators"])):
+                errors.append({"path": f"/citations/{i}/locator", "message": "Locator must name an extracted part of the source."})
+            if paper is None:
+                errors.append({"path": f"/citations/{i}/excerpt", "message": "Retrieved full-text citation data is unavailable."})
         if excerpt is None:
             continue
-        status = source["retrieval_status"]
-        if status in ("metadata_only", "failed") or (
-                status == "abstract_retrieved" and excerpt not in (source["abstract"] or "")):
+        needle = normalize_text(excerpt)
+        if status == "full_text_retrieved":
+            if paper is None:
+                ok = False
+            elif locator is None:
+                ok = needle in paper["text"] or needle in normalize_text(source["abstract"] or "")
+            else:
+                ok = _excerpt_at_locator(paper["text"], locator, needle)
+        elif status == "abstract_retrieved":
+            ok = needle in normalize_text(source["abstract"] or "")
+        else:
+            ok = False
+        if not ok or not needle:
             errors.append({"path": f"/citations/{i}/excerpt", "message": "Excerpt must come from retrieved source material."})
     if errors:
         raise validation_error(errors)

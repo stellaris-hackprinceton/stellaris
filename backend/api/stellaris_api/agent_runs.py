@@ -9,7 +9,7 @@ import socket
 import threading
 import time
 
-from . import experiments, research
+from . import experiments, papers, research
 from .db import transaction
 from .errors import ApiError
 from .events import record_event
@@ -21,7 +21,9 @@ _PROJECT_LOCKS = {}
 _LOCKS_GUARD = threading.Lock()
 MAX_AGENT_CONTEXT_BYTES = 8 * 1024 * 1024
 MAX_AGENT_OUTPUT_CHARS = 200_000
-MAX_AGENT_SECONDS = 300
+MAX_AGENT_SECONDS = 480
+MAX_PAPER_CONTEXT_BYTES = 4 * 1024 * 1024
+MAX_AGENT_INGESTIONS = 2
 MAX_AGENT_RETRIEVALS = 3
 DEFAULT_MODEL_PROVIDER = "bedrock"
 DEFAULT_AWS_REGION = "us-east-1"
@@ -158,9 +160,13 @@ def _apply_proposal(ctx, event, claim_ids):
                     if isinstance(source_ref, str) and source_ref.startswith("arxiv:"):
                         external_id = source_ref[len("arxiv:"):]
                         rows = ctx.conn.execute("SELECT doc FROM sources WHERE project_id = ? AND provider = 'arxiv' "
-                                                "ORDER BY created_at, id", (ctx.project_id,)).fetchall()
-                        source = next((json.loads(row["doc"]) for row in rows
-                                       if json.loads(row["doc"]).get("external_id") == external_id), None)
+                                                "ORDER BY created_at DESC, id DESC", (ctx.project_id,)).fetchall()
+                        docs = [json.loads(row["doc"]) for row in rows]
+                        unversioned = lambda value: re.sub(r"v\d+$", "", value or "")
+                        matches = [d for d in docs if d.get("external_id") == external_id] or \
+                                  [d for d in docs if unversioned(d.get("external_id")) == unversioned(external_id)]
+                        source = next((d for d in matches if d["retrieval_status"] == "full_text_retrieved"),
+                                      matches[0] if matches else None)
                         if source is None:
                             raise RunFailure("INVALID_AGENT_OUTPUT", "The cited arXiv source was not retrieved in this project.")
                         citation["source_id"] = source["id"]
@@ -205,10 +211,23 @@ def _put_request(container, run_id, request):
     if not re.fullmatch(r"run_[0-9a-f]{32}", run_id):
         raise RunFailure("INTERNAL_ERROR", "The agent run identifier is invalid.")
     filename = f"/tmp/stellaris-agent-{run_id}.json"
+    return _write_runtime_file(container, run_id, filename, raw)
+
+
+def _deliver_paper(container, run_id, index, delivery):
+    raw = dumps(delivery).encode("utf-8")
+    if len(raw) > MAX_AGENT_CONTEXT_BYTES:
+        raw = dumps({"status": "failed", "code": "AGENT_CONTEXT_TOO_LARGE",
+                     "message": "The extracted paper is too large to supply to the agent."}).encode("utf-8")
+    return _write_runtime_file(container, run_id, f"/tmp/stellaris-agent-{run_id}-paper-{index}.json", raw)
+
+
+def _write_runtime_file(container, run_id, filename, raw):
     writer = ("import os,sys; n=int(sys.argv[1]); p=sys.argv[2]; "
               "data=sys.stdin.buffer.read(n); "
               "(len(data)==n) or sys.exit(2); "
-              "f=open(p,'xb'); f.write(data); f.close(); os.chmod(p,0o600)")
+              "t=p+'.part'; f=open(t,'xb'); f.write(data); f.close(); os.chmod(t,0o600); "
+              "os.link(t,p); os.unlink(t)")
     api = container.client.api
     try:
         created = api.exec_create(container.id, ["python", "-c", writer, str(len(raw)), filename],
@@ -284,6 +303,8 @@ def _cleanup_agent_files(container, run_id):
     if not re.fullmatch(r"run_[0-9a-f]{32}", run_id):
         return
     paths = [f"/tmp/stellaris-agent-{run_id}.json", f"/tmp/stellaris-agent-{run_id}.pid"]
+    paths += [f"/tmp/stellaris-agent-{run_id}-paper-{i}.json{suffix}"
+              for i in range(MAX_AGENT_INGESTIONS) for suffix in ("", ".part")]
     code = "import os,sys; [os.path.exists(p) and os.unlink(p) for p in sys.argv[1:]]"
     try:
         container.exec_run(["python", "-c", code, *paths], stdout=False, stderr=False)
@@ -396,6 +417,21 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id)
                 elif event.get("type") == "proposal":
                     if set(event) != {"type", "kind", "payload"}:
                         raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid proposal event.")
+                    if event.get("kind") == "paper_ingest":
+                        payload = event.get("payload")
+                        if not isinstance(payload, dict) or set(payload) != {"arxiv_id"}:
+                            raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid ingestion request.")
+                        ingestions = agent_metadata.setdefault("ingestions", [])
+                        index = len(ingestions)
+                        if index >= MAX_AGENT_INGESTIONS:
+                            raise RunFailure("INVALID_AGENT_OUTPUT", "The agent exceeded its paper ingestion limit.")
+                        delivery = papers.ingest_for_agent(ctx, payload["arxiv_id"])
+                        ingestions.append({k: delivery.get(k) for k in ("status", "run_id", "code")})
+                        if delivery.get("supplied"):
+                            agent_metadata.setdefault("papers_supplied", []).append(delivery.pop("supplied"))
+                        ctx.log.system(f"Paper ingestion for the agent: {delivery['status']} ({delivery.get('run_id')}, {delivery.get('code', 'ok')}).")
+                        _deliver_paper(container, ctx.run_id, index, delivery)
+                        continue
                     result = _apply_proposal(ctx, event, claim_ids)
                     ctx.log.system(f"Validated {event.get('kind')} proposal: {dumps(result)}")
                     agent_metadata.setdefault("resource_outputs", []).append({"kind": event["kind"], **result})
@@ -466,16 +502,17 @@ def handle_agent_run(ctx):
         if row is None:
             _finish_message(ctx, status="interrupted")
             raise RunFailure("RESOURCE_NOT_FOUND", "The submitted user message could not be loaded.")
+        paper_entries, papers_supplied = papers.papers_for_agent(ctx, MAX_PAPER_CONTEXT_BYTES)
         request = {"project_id": ctx.project_id, "run_id": ctx.run_id,
                    "snapshot": ctx.snapshot, "message": json.loads(row["doc"]),
-                   "artifact_text": _artifact_text_context(ctx)}
+                   "artifact_text": _artifact_text_context(ctx), "papers": paper_entries}
         if ctx.cancel_requested():
             _finish_message(ctx, status="interrupted")
             ctx.finish("cancelled", summary="Cancelled.")
             return
         ctx.progress("research", 0.1, "Running the project research agent.", force=True)
         claim_ids = []
-        agent_metadata = {"provider": provider, "model": model_id}
+        agent_metadata = {"provider": provider, "model": model_id, "papers_supplied": papers_supplied}
         try:
             _run_agent(ctx, request, provider_env, claim_ids, agent_metadata, provider, model_id)
             self = ctx.conn.execute("SELECT doc FROM messages WHERE id = ?", (ctx.input["assistant_message_id"],)).fetchone()
