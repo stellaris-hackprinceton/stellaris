@@ -13,6 +13,8 @@ This is the single canonical documentation tree. Root README and agent entrypoin
 - [Experiment launch selection verification](verification/experiment-launch.md).
 - [Broad layout verification](verification/broad-layout.md).
 - [Project home design and verification](verification/project-home.md).
+- [Sketch-derived logo candidates and verification](design/logo-treatments/README.md).
+- [Logo reconstruction from the original S artwork](design/logo-reconstruction/README.md).
 
 ## Product and implementation
 
