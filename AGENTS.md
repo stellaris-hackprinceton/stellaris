@@ -7,15 +7,33 @@
 - Build the complete bouncing-ball research → experiment → measurement → Markdown-report workflow first. Keep future modalities and integrations out of the MVP.
 - Keep backend code and infrastructure in `backend/`; root-level project instructions and shared documentation may live at the repository root.
 - If an architectural decision requires a contract change, make the discrepancy explicit and resolve it with the user before implementing incompatible behavior.
+- User decisions below supersede conflicting draft contract requirements. Update the contract to reflect them before implementing the affected interfaces.
+
+## Confirmed implementation decisions
+
+- Use LangChain Deep Agents. Each project's research agent runs inside that project's container and receives a project-isolated scratch space through LangChain, separate from published immutable evidence and artifacts.
+- Use OpenAI as the initial model API provider; live provider testing is deferred. Bedrock is a possible later provider, not a requirement to implement both providers now. Model selection remains configurable.
+- Create the project container when its project is created and keep it active for the project's duration. Do not add idle shutdown. Define what ends a project's duration before implementing container teardown; preserve its data.
+- Execute scientific analysis in temporary isolated containers per run, separate from persistent project containers.
+- Omit authentication for now, as explicitly requested by the user. Reconcile the session/authentication requirements in `Contracts.md` before implementing routes. Continue enforcing project-scoped references and execution isolation. Do not represent project IDs as an authorization boundary.
+- Docker is available on this Mac, and the user authorizes using the existing Docker runtime for container testing. The restriction on personal applications applies to website-testing applications and profiles, not this authorized runtime.
+- External integrations currently center on LangChain and the initial model provider. Literature-provider choices are not yet confirmed; do not assume credentials or invent retrieved sources.
+
+## Environment secrets
+
+- `backend/.env` is reserved for user-populated runtime configuration and secrets. Keep it ignored by Git.
+- Agents must not read, source, print, search, or otherwise inspect `.env` files, including through delegated tools. Exclude them from repository searches and handoffs. Never copy their contents into logs, prompts, or reports.
+- Applications and Docker Compose may load the environment at runtime without exposing its contents. Verify configuration through safe presence checks or redacted application errors.
+- Maintain variable names and blank placeholders in `backend/.env.example` for agent-readable configuration documentation. Ask the user to populate missing secrets themselves.
 
 ## Docker architecture
 
 - Maintain one backend Docker Compose configuration for the primary backend and its fixed supporting services. Create project containers dynamically through the backend; do not generate a Compose stack per project or enumerate projects as static services.
-- The primary backend owns the public API, authentication, project routing, lifecycle management, persistence coordination, and live events. The frontend communicates with this backend.
+- The primary backend owns the public API, project routing, lifecycle management, persistence coordination, and live events. The frontend communicates with this backend. Authentication is deferred per the confirmed decisions above.
 - Each project has its own container and isolated persistent filesystem for project data and agent workspaces. Preserve project data across container stops and recreation. Keep project access scoped to the owning project.
 - Keep scientific execution within the isolation and resource limits in `Contracts.md`. A project workspace container does not automatically provide sufficient isolation for generated code. Decide the worker arrangement before implementing execution.
 - Keep Docker lifecycle control in the trusted primary backend. Project agents and scientific code must not receive the Docker socket, host credentials, or unrestricted host filesystem access.
-- Container lifecycle, storage layout, and worker arrangement remain implementation decisions until settled with the user; do not assume that every project must run continuously.
+- Use the confirmed lifecycle and worker arrangement above. Storage layout and the project-ending operation still require concrete implementation decisions.
 
 ## Claude Code delegation
 
@@ -23,6 +41,7 @@
 - Read `CC-Instructions.md` before delegating to Claude Code and follow its preflight, task briefs, tool restrictions, and result inspection workflow.
 - Explicitly select `--model opus` for normal tasks and `--model sonnet` for very light tasks. Preserve configured effort unless the user specifies otherwise.
 - Supply bounded tasks, exact file scope, relevant contract requirements, and observable acceptance criteria. Carry the backend-only scope and testing restrictions into every handoff.
+- Include the prohibition on reading `.env` files in every delegation brief.
 - Prevent recursive delegation and concurrent writers to the same files. Inspect Claude's changes and run appropriate checks before accepting its work.
 - If Claude is unavailable or unauthenticated, report the blocker. Do not silently substitute another model or install/authenticate the CLI.
 
@@ -42,4 +61,4 @@
 
 ## Current authorization
 
-- The current task is to establish these instructions and clarify implementation decisions. Begin sustained implementation when the user supplies the long-running goal.
+- The user has authorized full backend implementation. Proceed in bounded slices following `backend/IMPLEMENTATION_PLAN.md`, resolving its open decisions with the user before implementing them.

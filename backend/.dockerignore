@@ -1,0 +1,11 @@
+# Secrets must never enter a build context or image.
+.env
+.env.*
+**/.env
+**/.env.*
+
+**/__pycache__
+**/*.pyc
+.git
+scripts/
+*.md

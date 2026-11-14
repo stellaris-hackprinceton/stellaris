@@ -60,6 +60,20 @@ The frontend may show optimistic pending indicators. It MUST NOT manufacture suc
 - Every resource lookup checks the authenticated user's project access, including event streams and binary downloads.
 - Unauthenticated requests return `401`. A resource outside the user's access returns `404` to avoid exposing its existence. An authorized user lacking a permitted action receives `403`.
 
+### Development mode without authentication (user-approved, current implementation)
+
+The user explicitly approved omitting authentication for now. Until an authentication provider is selected, the backend runs in this mode and the session/CSRF rules above are not enforced:
+
+- The API is published on loopback only (`127.0.0.1`). It MUST NOT be exposed beyond the local machine in this mode.
+- `GET /session` is a development compatibility response: a fixed local user, `csrf_token: ""`, and an additional `auth_mode: "development_none"` field. `X-CSRF-Token` is ignored and `401` is never returned.
+- Mitigations retained: requests with a `Host` outside the configured loopback names return `403 ACTION_FORBIDDEN`; mutating requests carrying an `Origin` outside the configured allow-list return `403 CSRF_FAILED`; JSON bodies require `Content-Type: application/json` (`415` otherwise).
+- Project IDs are not an authorization boundary. Project-scoped references and execution isolation are still enforced.
+- Idempotency keys are scoped to method and route (there is no user). A missing `Idempotency-Key` returns `428 PRECONDITION_REQUIRED`. Replayed responses carry `Idempotent-Replayed: true`.
+
+### Backend topology (implementation detail, not a browser contract)
+
+One Docker Compose configuration runs the primary backend. Creating a project creates a dedicated project container and a persistent named volume (project data plus the project agent's scratch space); the container stays running for the project's duration, including while archived. Scientific code runs in separate temporary isolated containers per run. Only the primary backend controls Docker; project and worker containers never receive the Docker socket or host filesystem access. None of these paths, names, or mounts appear in API responses.
+
 ### Serialization
 
 - Request and response JSON uses `snake_case`. TypeScript below documents the wire shape and does not mandate a frontend implementation language.
@@ -134,7 +148,7 @@ type Capabilities = {
 }
 ```
 
-A disabled feature returns `409 FEATURE_UNAVAILABLE` if requested directly. Browser camera availability is detected by the frontend and is separate from backend video-analysis support. Browser-produced media MIME types must intersect `accepted_mime_types`. If they do not, the UI offers a supported file upload.
+When uploads, execution, events, or logs are not yet available, their numeric limits are `0`, their lists are empty, and the related features are `false`. A disabled feature returns `409 FEATURE_UNAVAILABLE` if requested directly. Browser camera availability is detected by the frontend and is separate from backend video-analysis support. Browser-produced media MIME types must intersect `accepted_mime_types`. If they do not, the UI offers a supported file upload.
 
 ## 5. Core resource schemas
 
@@ -420,11 +434,12 @@ All routes in this section are relative to `/api/v1`. Routes nested under a proj
 
 ### Session and projects
 
-- `GET /session` → `200 Session`. An expired session returns `401`.
+- `GET /session` → `200 Session`. An expired session returns `401`. In development mode (section 3) this returns the fixed compatibility session and never `401`.
+- `GET /health` → `200 { status: "ok", database: "ok", docker: "ok" }`, or `503` with the same shape and `status: "degraded"` when a dependency is unavailable. Operational endpoint, not a product resource.
 - `GET /projects` → `200 Page<Project>`. Optional query: `status=active|archived`.
-- `POST /projects` with `{ name, description?, research_question? }` → `201 Project` and `Location`. Name must contain 1–120 non-whitespace characters. Description defaults to `""`, research question to `null`, and status to `active`.
+- `POST /projects` with `{ name, description?, research_question? }` → `201 Project` and `Location`. Name must contain 1–120 non-whitespace characters. Description defaults to `""`, research question to `null`, and status to `active`. The `201` is returned only after the project's dedicated workspace is running. If it cannot be provisioned, the response is `503 SERVICE_UNAVAILABLE` (retryable, `Retry-After`), the project is not listed or retrievable, and retrying with the same `Idempotency-Key` resumes provisioning of the same project.
 - `GET /projects/{project_id}` → `200 Project` and ETag.
-- `PATCH /projects/{project_id}` with any of `{ name, description, research_question, status }` → `200 Project` and a new ETag. At least one field is required.
+- `PATCH /projects/{project_id}` with any of `{ name, description, research_question, status }` → `200 Project` and a new ETag. At least one field is required. While archived, only a PATCH that sets `status: "active"` (optionally with other fields) is accepted; others return `409 PROJECT_ARCHIVED`. A PATCH that changes nothing returns the unchanged revision.
 - `GET /projects/{project_id}/workspace` → `200 Workspace`. Its cursor and summary reflect one consistent project snapshot.
 
 Project hard deletion is not an MVP operation. Archiving avoids removing evidence or breaking existing reports.
@@ -659,7 +674,7 @@ All JSON API failures use the following envelope, including validation, access, 
 
 `details` is a JSON object and defaults to `{}`. Field paths use JSON Pointer notation. Error codes, rather than message text, drive UI behavior.
 
-- `400`: malformed JSON, invalid query, or invalid event cursor.
+- `400`: malformed JSON (`MALFORMED_JSON`), invalid query (`INVALID_QUERY`, `INVALID_CURSOR`), invalid header (`INVALID_HEADER`), or invalid event cursor.
 - `401`: `AUTH_REQUIRED` or `SESSION_EXPIRED`.
 - `403`: `ACTION_FORBIDDEN` or `CSRF_FAILED`.
 - `404`: `RESOURCE_NOT_FOUND`.
