@@ -477,6 +477,19 @@ def cancel_run(project_id, run_id):
     return response
 
 
+@bp.get("/<project_id>/runs/<run_id>/approvals")
+def list_approvals(project_id, run_id):
+    """Contract section 7: `200 Page<Approval>`. The MVP has no paid or privileged tool integration,
+    so no approval is ever created and the page is always empty. There is no approval execution
+    machinery; the decision route stays unimplemented until a supported action requires it."""
+    load_visible(g.db, project_id)
+    load_run_row(g.db, project_id, run_id)
+    page_limit()
+    if request.args.get("cursor"):
+        raise ApiError(400, "INVALID_CURSOR", "cursor is invalid.")
+    return json_response({"items": [], "next_cursor": None})
+
+
 @bp.get("/<project_id>/runs/<run_id>/results")
 def get_results(project_id, run_id):
     load_visible(g.db, project_id)
