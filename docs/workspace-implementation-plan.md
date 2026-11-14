@@ -6,22 +6,22 @@ scientific commands, immutable evidence, and working Studio/graph/chat behavior.
 
 ## Delivery slices
 
-- [ ] Catalog schema 2: transactional migration, artifact kinds and filtering,
+- [x] Catalog schema 2: transactional migration, artifact kinds and filtering,
   collection presentation, exact origin lookup, capability gating, preservation checks.
-- [ ] Shared frontend contracts, capability fallbacks, cards and evidence inspection.
-- [ ] Literature: manual references, explicit PDF extraction, arXiv ingestion,
+- [x] Shared frontend contracts, capability fallbacks, cards and evidence inspection.
+- [x] Literature: manual references, explicit PDF extraction, arXiv ingestion,
   structured full-text reader and honest retrieval states.
-- [ ] Research desk: Literature, Experiments, Findings, Measurements, Writing widgets.
-- [ ] Materials: curated views, URL filters, pagination, collections and deep links.
-- [ ] Reports: navigation, library, shared cards, contextual composer, safe reader.
-- [ ] Terminal: project-wide bottom panel, ANSI display, replay, sequenced input,
+- [x] Research desk: Literature, Experiments, Findings, Measurements, Writing widgets.
+- [x] Materials: curated views, URL filters, pagination, collections and deep links.
+- [x] Reports: navigation, library, shared cards, contextual composer, safe reader.
+- [x] Terminal: project-wide bottom panel, ANSI display, replay, sequenced input,
   resize, transcript download and explicit end-session action.
-- [ ] Integrated verification and implementation handoff.
+- [x] Integrated verification and implementation record.
 
 ## Agreed defaults
 
-- Frontend implementation is authorized. Use Claude Opus for implementation and
-  Sonnet for light tasks; this supersedes the earlier Luna preference.
+- Frontend implementation is authorized. Claude Opus produced the initial work;
+  the user authorized Luna to finish after Claude reached its five-hour limit.
 - Closing the terminal panel or navigating does not end the shell. The backend's
   session limits still apply. Terminal files are separate from research/evidence.
 - Backend support ships first; `workspace_views` gates richer frontend queries.
@@ -42,4 +42,4 @@ clearly label fixture-based checks and any unavailable live-provider coverage.
 
 ## Progress
 
-Implementation started. Verification results will be recorded as slices land.
+Implementation completed in bounded commits. See [verification and remaining limits](workspace-verification.md).
