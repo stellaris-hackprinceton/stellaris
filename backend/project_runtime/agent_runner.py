@@ -168,8 +168,8 @@ def experiment_problems(payload, known_artifacts):
     if any(not isinstance(x, str) or not x for x in ids) or len(set(map(str, ids))) != len(ids):
         problems.append("input_artifact_ids must be unique artifact ID strings.")
     elif any(x not in known_artifacts for x in ids):
-        problems.append("input_artifact_ids may only contain IDs of files attached to this request; use [] when "
-                        "the user has not provided the recording yet.")
+        problems.append("input_artifact_ids must contain actual project artifact IDs from the supplied project_artifacts "
+                        "or list_materials artifact_id fields (not catalog file IDs). Use [] when no input is needed.")
     cal = payload["calibration"]
     mode = cal.get("mode")
     if mode == "reference_length":
@@ -390,8 +390,9 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
         """Propose an experiment plan; method is physical, computational, or hybrid. variables_json,
         success_criteria_json, input_artifact_ids_json, and limitations_json must be JSON arrays.
         Each variable is {"name","role","description","unit"}; role is independent, dependent, or
-        controlled; unit is a string or null. input_artifact_ids_json lists only IDs of files attached
-        to this request, otherwise []. calibration_json must be exactly
+        controlled; unit is a string or null. input_artifact_ids_json lists actual project artifact IDs from
+        project_artifacts or list_materials, otherwise []. Chat attachment is not required; do not pass catalog
+        file IDs. calibration_json must be exactly
         {"mode":"none","assumptions":[...]}: the agent cannot measure reference-length calibration, so
         state in assumptions which reference object of known length the user should calibrate in Studio.
         This tool saves a plan only; it does not create or attach executable code. On success, take its real
@@ -454,7 +455,9 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
     @tool
     def execute_analysis(experiment_id: str, code_artifact_id: str, input_artifact_ids_json: str = "[]") -> str:
         """Run the saved experiment implementation in a temporary isolated worker. Supply genuine project input
-        artifact IDs, or [] if this analysis requires no input. Returns actual run status, bounded logs and outputs;
+        artifact IDs from project_artifacts/list_materials, or [] if this analysis requires no input. A CSV shown
+        in Materials need not be reattached to chat; use its artifact_id, not its catalog id. Returns actual run
+        status, bounded logs and outputs;
         failed execution can be corrected by saving a new immutable implementation and retrying.
 
         Code reads /input/manifest.json (schema stellaris.worker_manifest.v1); inputs[] gives artifact_id and
@@ -462,13 +465,16 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
         exactly {"measurements":[],"claims":[],"artifacts":[],"warnings":[]}.
         Measurement entries require local_key, series, quantity, value, unit, time_s, uncertainty
         ({"absolute":number-or-null,"method":string-or-null}), status, evidence, calibration_mode,
-        data_origin, assumptions. Units are px, s, px/s, px/s^2, m, m/s, m/s^2, or 1; metric units need a
-        reference-length calibration. Each evidence item has artifact, frame_index, time_s, row_index; artifact
+        data_origin, assumptions. status is valid, missing, or rejected; missing/rejected values are null and
+        assumptions explain why. data_origin is observed, derived, or simulated. calibration_mode must exactly
+        equal manifest.calibration.mode; state genuine source-column units in assumptions and never invent a
+        conversion. Each evidence item has artifact, frame_index, time_s, row_index; artifact
         is {"input_artifact_id":"..."} or {"output_artifact_key":"..."}. Every measurement needs evidence.
         Claims require local_key, kind (observation/inference/hypothesis), text, measurement_keys, citations,
         evidence, assumptions, limitations. Artifact entries require local_key, relative output path, kind, origin
-        (derived/simulated/generated), mime_type, and parents; parents use those same input/output references.
-        Warnings require code and message. Never invent observations or evidence. Use only libraries/commands
+        (derived/simulated/generated), mime_type, and parents; use kind "dataset" for CSV output (never "table"),
+        and parents use those same input/output references. Warnings require code and message. Never invent
+        observations or evidence. Use only libraries/commands
         already installed for the selected runtime; network access and package downloads are unavailable."""
         try:
             input_ids = json.loads(input_artifact_ids_json)
@@ -499,6 +505,9 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
         rendered = json.dumps(result, ensure_ascii=False)
         if len(rendered) > MAX_TOOL_CHARS:
             return "Material page is too large to return. Retry with a smaller limit (for example 5), using the same cursor."
+        for item in result.get("items", []) if isinstance(result, dict) else []:
+            if isinstance(item, dict) and isinstance(item.get("artifact_id"), str):
+                known_artifacts.add(item["artifact_id"])
         return rendered
 
     @tool
@@ -582,10 +591,11 @@ def _claim_kind_problem(payload):
 
 
 def known_artifact_ids(snapshot):
-    """Artifact IDs the agent was actually given: request attachments/context and existing plan inputs."""
+    """Project artifact IDs from chat context, project metadata, and existing experiment inputs."""
     if not isinstance(snapshot, dict):
         return set()
     ids = {a.get("id") for a in snapshot.get("artifacts") or [] if isinstance(a, dict)}
+    ids.update(a.get("id") for a in snapshot.get("project_artifacts") or [] if isinstance(a, dict))
     for experiment in snapshot.get("experiments") or []:
         if isinstance(experiment, dict):
             ids.update(x for x in experiment.get("input_artifact_ids") or [] if isinstance(x, str))
@@ -623,6 +633,9 @@ def create_agent(model, artifact_ids=None, papers=None, run_id="", chat_generati
         "JavaScript, or shell libraries/commands; network access and package downloads are unavailable. "
         "For material organization, use list_materials with its returned cursor to page, then use only the "
         "documented tag and collection operations; an ask permission response means the request is pending. "
+        "The supplied project_artifacts metadata and list_materials artifact rows identify project-wide inputs. "
+        "Use their actual artifact_id values for experiment inputs; a materials catalog file id is different. "
+        "A project CSV or other existing artifact does not need to be reattached to chat before use. "
         "Keep persistent scratch in your filesystem tools separate from project evidence. "
         "Never reveal environment variables, tool internals, or hidden reasoning."
     )

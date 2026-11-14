@@ -102,3 +102,13 @@ raw inventory of files, saved scripts, outputs and records. Experiments referenc
 project storage rather than own a separate hidden file store. JSON is accepted as a dataset or document and retains
 the existing strict, finite-number JSON validation (16 MiB parser limit). CSV, text and
 other supported files remain capability-driven; this is not an unrestricted binary upload.
+
+## Project input selection correction
+
+Agent snapshots include a bounded project artifact index. Materials listing returns both
+catalog file IDs and real artifact IDs. A chat attachment is not required to select a
+project-owned input. The agent controller saves selected input references on the experiment
+(with revision checks) before freezing the run snapshot; other projects remain rejected.
+Generic purely tabular runs may publish metric values with explicit source-unit/conversion
+assumptions and evidence, without requiring a camera reference-length calibration. Video
+calibration rules remain unchanged.

@@ -149,7 +149,7 @@ def _normalize_path(errors, path, p):
 
 
 def validate_result(raw: bytes, files: dict, rejected: dict, *, input_ids: set, calibration_mode: str,
-                    simulated: bool, source_ids: set):
+                    simulated: bool, source_ids: set, tabular_units: bool = False):
     """Validate an untrusted worker result. Returns a normalized dict; raises InvalidOutput."""
     errors, notes = [], []
     if len(raw) > MAX_RESULT_BYTES:
@@ -226,12 +226,14 @@ def validate_result(raw: bytes, files: dict, rejected: dict, *, input_ids: set, 
                 errors.append(f"{p}/{key} must be a string of 1-200 characters")
         if not isinstance(m["unit"], str) or m["unit"] not in UNITS:
             errors.append(f"{p}/unit must be one of {sorted(UNITS)}")
-        elif m["unit"] in METRIC_UNITS and calibration_mode != "reference_length":
+        elif m["unit"] in METRIC_UNITS and calibration_mode != "reference_length" and not tabular_units:
             errors.append(f"{p}/unit {m['unit']!r} needs a physical scale, but the run's calibration mode is 'none'")
         if m["calibration_mode"] != calibration_mode:
             errors.append(f"{p}/calibration_mode must equal the run snapshot's mode ({calibration_mode!r})")
         status = m["status"]
         assumptions = _strings(errors, m["assumptions"], f"{p}/assumptions")
+        if tabular_units and m["unit"] in METRIC_UNITS and not assumptions:
+            errors.append(f"{p}/assumptions must state the source units and any tabular conversion")
         if status == "valid":
             if not is_finite(m["value"]):
                 errors.append(f"{p}/value must be a finite number for a valid measurement")
@@ -686,6 +688,15 @@ def execute_saved_analysis(ctx, experiment_id, code_artifact_id, *, input_artifa
     code_artifact_id = code_artifact_id or implementation.get("code_artifact_id")
     runtime = runtime or implementation.get("runtime", "python")
     input_artifact_ids = list(experiment["input_artifact_ids"] if input_artifact_ids is None else input_artifact_ids)
+    if any(aid not in experiment["input_artifact_ids"] for aid in input_artifact_ids):
+        # Materials are project-scoped inputs, not chat attachments. Save the selected
+        # references on the plan before freezing this execution's immutable snapshot.
+        from .experiments import update_experiment
+        with transaction(ctx.conn):
+            experiment = update_experiment(ctx.conn, ctx.project_id, experiment_id,
+                {"input_artifact_ids": list(dict.fromkeys([*experiment["input_artifact_ids"], *input_artifact_ids]))},
+                expected_revision=target_revision)
+        target_revision = experiment["revision"]
     body = {"kind": "analysis", "experiment_id": experiment_id, "experiment_revision": experiment["revision"],
             "input_artifact_ids": input_artifact_ids, "pipeline": "script_analysis_v1",
             "code_artifact_id": code_artifact_id, "runtime": runtime, "parameters": parameters or {},
@@ -735,7 +746,7 @@ def execute_saved_analysis(ctx, experiment_id, code_artifact_id, *, input_artifa
     public = json.loads(saved["doc"])
     log_text = "".join(json.loads(item["doc"])["text"] for item in ctx.conn.execute(
         "SELECT doc FROM run_logs WHERE run_id = ? ORDER BY sequence", (run["id"],)).fetchall())
-    return {"run_id": run["id"], "status": public["status"],
+    return {"run_id": run["id"], "status": public["status"], "experiment_revision": target_revision,
             "output_artifact_ids": public["output_artifact_ids"], "error": public["error"],
             "result_summary": public["result_summary"], "log": log_text[-12_000:]}
 
@@ -819,7 +830,10 @@ def _after_execution(ctx, snap, pipeline, work_dir, code_doc, outcome, input_row
             input_ids.add(code_doc["id"])
         result = validate_result(raw, outcome.files, outcome.rejected, input_ids=input_ids,
                                  calibration_mode=snap["experiment"]["calibration"]["mode"],
-                                 simulated=snap["simulated"], source_ids={s["id"] for s in snap["sources"]})
+                                 simulated=snap["simulated"], source_ids={s["id"] for s in snap["sources"]},
+                                 tabular_units=pipeline == "script_analysis_v1" and bool(snap["inputs"])
+                                 and all(a["kind"] == "dataset" and a["mime_type"] in {"text/csv", "application/json", "text/plain"}
+                                         for a in snap["inputs"]))
         if (pipeline == "script_analysis_v1" and not snap["inputs"]
                 and (any(row.get("data_origin") == "observed" for row in result["measurements"])
                      or any(row.get("kind") == "observation" for row in result["claims"]))):

@@ -54,6 +54,9 @@ def _snapshot(conn, project_id, *, context_artifact_ids, attachments):
         "experiments": [json.loads(r["doc"]) for r in conn.execute(
             "SELECT doc FROM experiments WHERE project_id = ? ORDER BY created_at, id", (project_id,))],
         "artifacts": list(artifacts.values()), "context_artifact_ids": list(context_artifact_ids),
+        "project_artifacts": [{k: a[k] for k in ("id", "filename", "kind", "mime_type", "size_bytes", "origin")}
+                              for row in conn.execute("SELECT doc FROM artifacts WHERE project_id = ? ORDER BY created_at DESC, id DESC LIMIT 200", (project_id,))
+                              for a in [json.loads(row["doc"])]],
     }
 
 

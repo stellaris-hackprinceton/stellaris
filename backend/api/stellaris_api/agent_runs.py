@@ -225,6 +225,7 @@ def _handle_agent_tool(ctx, name, payload, claim_ids, cancelled=None):
             result = analysis.execute_saved_analysis(
                 ctx, payload["experiment_id"], payload["code_artifact_id"],
                 input_artifact_ids=payload["input_artifact_ids"], cancelled=cancelled, expected_revision=expected)
+            revisions[payload["experiment_id"]] = result["experiment_revision"]
         elif name in {"list_materials", "organize_materials"}:
             from . import agent_management
             result = agent_management.handle_tool(ctx, name, payload)

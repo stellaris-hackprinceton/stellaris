@@ -342,7 +342,10 @@ def handle_tool(ctx, name, payload):
             for row in rows[:limit]:
                 tags=[{"slug":r[0],"assigned_by":r[1]} for r in cat.execute("SELECT slug,assigned_by FROM file_tags WHERE file_id=? ORDER BY slug",(row["id"],))]
                 cols=[r[0] for r in cat.execute("SELECT collection_id FROM collection_files WHERE file_id=? ORDER BY collection_id",(row["id"],))]
-                items.append({"id":row["id"],"name":row["name"],"file_kind":row["file_kind"],"status":row["status"],"tags":tags,"collection_ids":cols,"revision":row["revision"],"mime_type":row["mime_type"],"size_bytes":row["size_bytes"]})
+                item={"id":row["id"],"name":row["name"],"file_kind":row["file_kind"],"status":row["status"],"origin":{"type":row["origin_type"],"id":row["origin_id"]} if row["origin_type"] else None,"tags":tags,"collection_ids":cols,"revision":row["revision"],"mime_type":row["mime_type"],"size_bytes":row["size_bytes"]}
+                if row["file_kind"]=="artifact":
+                    item["artifact_id"] = row["origin_id"] if row["origin_type"]=="artifact" else None
+                items.append(item)
             next_cursor=None
             if len(rows)>limit:
                 last=rows[limit-1]
