@@ -8,7 +8,7 @@ import { artifactContentUrl } from "@/lib/api";
 import { useArtifact } from "@/lib/queries";
 import type { CatalogViewUnsupported } from "@/lib/queries/views";
 import { Button, ErrorNotice, Skeleton, describeError } from "@/components/ui";
-import { PlusIcon } from "@/components/ui/icons";
+import { DeskAddTile } from "@/components/ui/Desk";
 import { hrefs } from "@/components/shell/hrefs";
 import styles from "./desk.module.css";
 
@@ -17,13 +17,12 @@ export const ARCHIVED_NOTE = "Restore project to add or generate material.";
 export function Widget({ id, title, wide = false, action, children, footer }: {
   id: string; title: string; wide?: boolean; action?: ReactNode; children: ReactNode; footer?: ReactNode;
 }) {
-  return (
-    <section className={`${styles.widget} ${wide ? styles.full : styles.half}`} aria-labelledby={id}>
-      <div className={styles.widgetHead}><h2 id={id}>{title}</h2>{action}</div>
-      {children}
-      {footer}
-    </section>
-  );
+  void wide;
+  return <section className={styles.widget} aria-labelledby={id}>
+    <header className={styles.widgetHead}><h2 id={id}>{title}</h2>{action}</header>
+    {children}
+    {footer}
+  </section>;
 }
 
 /** Expand reveals the bounded preview; View all navigates. The toggle keeps focus because it stays mounted. */
@@ -49,9 +48,7 @@ export function useDisclosure(preview: number, max: number) {
 export function AddTile({ label, onClick, href, disabled, expanded, controls }: {
   label: string; onClick?: () => void; href?: string; disabled?: boolean; expanded?: boolean; controls?: string;
 }) {
-  const body = <><PlusIcon /><span>{label}</span></>;
-  if (href && !disabled) return <Link className={styles.tile} href={href}>{body}</Link>;
-  return <button type="button" className={styles.tile} onClick={onClick} disabled={disabled} aria-expanded={expanded} aria-controls={controls}>{body}</button>;
+  return <DeskAddTile label={label} onClick={onClick} href={href} disabled={disabled} expanded={expanded} controls={controls} />;
 }
 
 export function CardSkeleton() {
@@ -66,7 +63,7 @@ export function ListState({ list, what, skeletons }: {
   list: { unsupported: CatalogViewUnsupported; is_loading: boolean; capability_pending: boolean; capability_error: unknown; error: unknown; items: unknown[]; refetch: () => unknown };
   what: string; skeletons: number;
 }) {
-  if (list.unsupported === "catalog") return <p className={styles.empty}>Richer views are unavailable: this backend does not provide the project catalog. Existing tools in Materials and Experiments remain available.</p>;
+  if (list.unsupported === "catalog") return <p className={styles.empty}>Richer views are unavailable: this backend does not provide the project catalog. Existing tools in Library and Experiments remain available.</p>;
   if (list.unsupported === "views") return <p className={styles.empty}>Richer views are unavailable: this backend does not advertise the workspace views extension.</p>;
   if (list.capability_error) return <ErrorNotice {...describeError(list.capability_error, "Backend capabilities could not be loaded")} />;
   if (list.is_loading || list.capability_pending) return <ul className={styles.cards} aria-busy="true"><CardSkeletons count={skeletons} /></ul>;

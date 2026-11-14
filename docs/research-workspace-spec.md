@@ -1,7 +1,14 @@
 # Research desk and widget specification
 
-Version: **1.0 proposed**. Prepared November 14, 2026.
-Status: **Specified, not implemented or verified.** This document describes the next interface, not the current screenshot or a completed feature.
+The [continuous studio direction](design/continuous-studio-direction.md) and its
+preferred visual reference govern the next light/dark theme work, ahead of the
+historical visual dimensions in this document.
+
+The approved [experiment studio design](design/experiment-studio.md) supersedes visual styles, navigation presentation, and display labels in this specification. Resource identifiers, scientific semantics, and capability requirements remain unchanged.
+
+
+Version: **1.1 implementation update**. Prepared November 14, 2026.
+Status: **Frontend implemented.** This document records layout and behavioral requirements. Completed checks and limits are recorded in [virtual desk verification](verification/virtual-desk.md).
 
 This is the public implementation specification for the project's Research overview. Read it with [Materials views](materials-views-spec.md), [Reports](reports-spec.md), and the [file workspace contract](file-workspace-contract.md#16-proposed-curated-views-extension). The scientific contract remains authoritative for evidence and commands.
 
@@ -23,15 +30,13 @@ References stay inside the current project. Cross-project knowledge, human taskb
 
 ## 2. Page composition and appearance
 
-Use existing CSS tokens from `frontend/styles/tokens.css`: system font, 24px page title, 20px widget titles, 16px body, 14px metadata, white surfaces, gray borders, blue actions, and 2px panel/control radii. No new decorative palette, gradients, oversized headings, or charts invented for empty states.
+Use the existing cool palette and CSS tokens from `frontend/styles/tokens.css`: system font, 24px page title, 20px shelf titles, 16px body, 14px metadata, white surfaces, gray borders, and blue actions. Shelves have 16px corner radii, 24px padding, and 16px gaps. Cards have 12px corner radii. No charts are invented for empty states.
 
-The main content fills its available column up to 1440px. Use 24px outer padding, reduced to 16px below 800px of content width. A 12-column grid has 16px gutters. The breakpoint is the width available to the research content after navigation and Chat, not the browser viewport.
+The main content fills its available column up to 1440px with 24px outer padding, reduced to 16px below 800px of content width. Research shelves are full-width and ordered Literature, Experiments, Measurements and results, Findings, Writing. The breakpoint is the width available to the research content after navigation and Chat, not the browser viewport. Shelf cards use one column below 640px, two columns from 640px, and three from 960px, with 16px gaps.
 
-- At 800px or wider, Literature and Experiments each span six columns. Findings and Measurements each span six columns on the next row. Writing spans twelve columns.
-- Below 800px, all widgets span twelve columns in that same reading order. The grid never has horizontal overflow.
-- Cards use `repeat(auto-fit, minmax(min(240px, 100%), 1fr))` with 12px gaps. At narrow widget widths this naturally becomes a vertical stack.
-- Panels have 16px padding, a 1px border, and natural height. Grid items align to the start. Short panels do not stretch to match a neighbor.
-- Card padding is 12px. Titles use 16px semibold. Metadata uses 14px muted text. Title truncation is three lines and prose previews are three lines. The inspector exposes complete text.
+- Every shelf spans the full content width and has a 1px border and natural height. Cards flow in the responsive one/two/three-column layout above without horizontal overflow.
+- Shelves have 24px padding, 16px gaps, and natural height. Grid items align to the start. Short shelves do not stretch to match another shelf.
+- Cards use 16px padding and 12px corner radii. Titles use 16px semibold. Metadata uses 14px muted text. Title truncation is three lines and prose previews are three lines. The inspector exposes complete text.
 - Charts and images use `object-fit: contain`. Preview media has a maximum height of 200px on the desk and never crops axes, units, or annotations. Expanding or opening Results provides a larger view.
 - Controls have a minimum 40px height. Large add tiles have a minimum 112px height, a 32px plus icon, and a visible action label. They follow real cards in reading order.
 
@@ -51,23 +56,26 @@ Project description
 Question: How does bounce height change?       [Edit]
 [Analysis running · tracking frames · Open run]   <- conditional strip
 
-+ Literature ----------------+ + Experiments ----------------+
-| recent source cards        | | recent experiment cards     |
-| [+ Add source]             | | [+ New experiment]          |
-| Expand / View all          | | Expand / View all           |
-+----------------------------+ +-----------------------------+
-+ Findings ------------------+ + Measurements and results ---+
-| statement + evidence links | | saved chart, values, units  |
-| qualifications             | | origin, calibration, warning|
-+----------------------------+ +-----------------------------+
++ Literature ------------------------------------------------+
+| recent sources, saved abstracts, [Add source]             |
++------------------------------------------------------------+
++ Experiments -----------------------------------------------+
+| experiment cards with saved input previews                 |
++------------------------------------------------------------+
++ Measurements and results ----------------------------------+
+| saved chart, values, units, origin, calibration, warning   |
++------------------------------------------------------------+
++ Findings --------------------------------------------------+
+| statements, evidence links, qualifications                 |
++------------------------------------------------------------+
 + Writing ---------------------------------------------------+
-| report card | report card | [+ Generate report]              |
+| report cards, [Generate report]                             |
 +------------------------------------------------------------+
 ```
 
 Empty desk retains the same headings but replaces each content area with one short explanation and its relevant action. Literature has the Add source tile. Experiments has the New experiment tile. Findings says “Findings appear when research or analysis saves a claim.” Measurements says “Analyze an experiment to save measurements.” Writing says “Generate a report from recorded analysis.” No empty chart axes, dummy cards, or unavailable numeric zeros appear.
 
-Expanded widgets grow in normal document flow, pushing later content down. They do not become modal dashboards. On a narrow screen, the page reads Question → active work → Literature → Experiments → Findings → Measurements → Writing. Chat and inspectors use sheets rather than adding cramped columns.
+Expanded widgets grow in normal document flow, pushing later content down. They do not become modal dashboards. On a narrow screen, the page reads Question → active work → Literature → Experiments → Measurements and results → Findings → Writing. Chat and inspectors use sheets rather than adding cramped columns.
 
 ## 3. Shared widget behavior
 

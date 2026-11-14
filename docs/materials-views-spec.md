@@ -1,7 +1,14 @@
 # Materials curated views specification
 
+The [continuous studio direction](design/continuous-studio-direction.md) and its
+preferred visual reference govern the next light/dark theme work, ahead of the
+historical visual dimensions in this document.
+
+The approved [experiment studio design](design/experiment-studio.md) supersedes visual styles, navigation presentation, and display labels in this specification. Resource identifiers, scientific semantics, and capability requirements remain unchanged.
+
+
 Version: **1.0 proposed**. Prepared November 14, 2026.
-Status: **Specified, not implemented or verified.** The current Materials screen is a name-search catalog with filters and an inspector.
+Status: **Curated views are implemented.** This specification remains the behavior reference; card styling uses 12px corners, 16px padding, and shared desk spacing. Video cards render the saved video with controls and no autoplay.
 
 This document defines the replacement browsing experience. Shared colors, typography, card dimensions, and widget states come from [Research desk](research-workspace-spec.md). Proposed wire fields and migration requirements live in the [file workspace contract extension](file-workspace-contract.md#16-proposed-curated-views-extension).
 

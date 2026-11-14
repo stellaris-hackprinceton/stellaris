@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { ID } from "@/contracts/api";
 import { useEditProject, useProject } from "@/lib/queries";
@@ -9,7 +8,7 @@ import {
 } from "@/components/ui";
 import { MoreIcon } from "@/components/ui/icons";
 import { ConnectionStatus } from "./ConnectionStatus";
-import { VIEWS, currentView } from "./ProjectNavigation";
+import { StellarisMark } from "@/components/ui/StellarisMark";
 import { hrefs } from "./hrefs";
 import styles from "./shell.module.css";
 
@@ -25,32 +24,29 @@ type Props = {
 
 export function ProjectHeader({ project_id, showMenuButton, onOpenMenu, chatOpen, onToggleChat, terminalOpen, onToggleTerminal }: Props) {
   const project = useProject(project_id);
-  const view = currentView(usePathname() ?? "", project_id);
-  const viewLabel = VIEWS.find((v) => v.id === view)?.label;
   const archived = project.data?.status === "archived";
 
   return (
     <header className={styles.header}>
-      {showMenuButton && <IconButton label="Open project menu" icon={<MenuIcon />} onClick={onOpenMenu} />}
+      {showMenuButton && <div className={styles.mobileControls}><IconButton label="Open project menu" icon={<MenuIcon />} onClick={onOpenMenu} /><Link href={hrefs.projects()} aria-label="Stellaris projects" className={styles.mobileBrand}><StellarisMark /></Link></div>}
       <div className={styles.headerTitle}>
         {project.data ? (
-          <h1 className={styles.projectName} title={project.data.name}>{project.data.name}</h1>
+          <span className={styles.projectName} title={project.data.name}>{project.data.name}</span>
         ) : project.error ? (
-          <h1 className={styles.projectName}>Project unavailable</h1>
+          <span className={styles.projectName}>Project unavailable</span>
         ) : (
           <Skeleton width="12rem" height="1.5rem" />
         )}
-        {viewLabel && <span className={styles.viewLabel}><span aria-hidden="true">/</span> {viewLabel}</span>}
         {archived && <StatusBadge tone="warning">Archived</StatusBadge>}
       </div>
       <div className={styles.headerActions}>
         <ConnectionStatus />
         <Button
-          aria-label={chatOpen ? "Hide research chat" : "Show research chat"}
+          aria-label={chatOpen ? "Hide Assistant" : "Show Assistant"}
           aria-pressed={chatOpen}
           className={styles.chatToggle}
           onClick={onToggleChat}
-        ><ChatIcon /><span>Chat</span></Button>
+        ><ChatIcon /><span>Assistant</span></Button>
         <Button
           id="terminal-toggle"
           aria-label={terminalOpen ? "Hide terminal" : "Show terminal"}

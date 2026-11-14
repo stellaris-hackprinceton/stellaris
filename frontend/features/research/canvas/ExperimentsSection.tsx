@@ -19,7 +19,7 @@ export function ExperimentsSection({ project_id }: { project_id: ID }) {
     return (
       <EmptyState title="No experiment plans yet" action={<Link href={hrefs.studio(project_id)}>Open experiments</Link>}>
         {caps.data?.features.experiment_design
-          ? "Create a plan in Experiments, or ask Research Chat to draft one for your question."
+          ? "Create a plan in Experiments, or ask Assistant to draft one for your question."
           : "Create a plan in Experiments. Agent-assisted experiment design is unavailable on this server."}
       </EmptyState>
     );

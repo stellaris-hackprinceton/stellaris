@@ -45,7 +45,7 @@ export function ResearchChat({ project_id, draft, showHeading = false }: Researc
   const announcement = useStatusAnnouncement(messages.items);
 
   return (
-    <section ref={surface} className={styles.chat} aria-label="Research chat">
+    <section ref={surface} className={styles.chat} aria-label="Assistant">
       {showHeading && <header className={styles.heading}><ChatHeading /></header>}
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
       {messages.error != null && messages.items.length === 0 ? (
@@ -81,7 +81,7 @@ export function ResearchChat({ project_id, draft, showHeading = false }: Researc
 }
 
 function ChatHeading() {
-  return <><h2>Research chat</h2><span>Project conversation</span></>;
+  return <><h2>Assistant</h2><span>Project conversation</span></>;
 }
 
 /**

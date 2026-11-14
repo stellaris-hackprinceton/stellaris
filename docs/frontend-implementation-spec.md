@@ -1,5 +1,13 @@
 # Stellaris frontend implementation specification
 
+**Current visual priority:** Start the next frontend theme work with the
+[continuous studio light/dark direction](design/continuous-studio-direction.md)
+and its [preferred visual reference](design/review-assets/continuous-studio-preferred-reference.png).
+The user prioritized this composition during PR #11 integration. It supersedes
+older layout and fixed palette instructions below. The [experiment studio design](design/experiment-studio.md)
+records the implemented baseline. Keep the integrated agent execution, project
+uploads, and report-analysis behavior while developing that visual direction.
+
 Version: **1.0-draft**  
 Status: **Implementation plan. No frontend implementation or agent execution is implied.**  
 Prepared: **November 13, 2026**  

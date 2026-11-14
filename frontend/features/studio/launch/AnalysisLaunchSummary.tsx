@@ -30,7 +30,7 @@ export function AnalysisLaunchSummary({ project_id, experiment: x, method, runti
       <dl className={styles.dl}>
         <dt>Plan</dt><dd>{x.title} · revision {x.revision}</dd>
         <dt>Method</dt><dd>{isBall ? "Bouncing-ball video tracker" : method === "script_analysis_v1" ? "Saved code analysis" : "Legacy Python analysis"}<details className={styles.muted}><summary>Method ID</summary><code className={styles.mono}>{method}</code></details></dd>
-        <dt>{isBall ? "Video" : "Inputs"}</dt><dd>{inputs.length ? inputs.map((a) => <span key={a.id}>{a.filename}{a.metadata.duration_ms != null && ` (${formatDuration(a.metadata.duration_ms)})`}{a.origin === "simulated" && " · simulated"} </span>) : "—"}</dd>
+        <dt>{isBall ? "Video" : "Data"}</dt><dd>{inputs.length ? inputs.map((a) => <span key={a.id}>{a.filename}{a.metadata.duration_ms != null && ` (${formatDuration(a.metadata.duration_ms)})`}{a.origin === "simulated" && " · simulated"} </span>) : "—"}</dd>
         {isBall ? <>
           <dt>Interval</dt><dd className="num">{Number.isFinite(start) ? start : "?"} s → {end == null ? "end of video" : `${end} s`}</dd>
           <dt>Tracking label</dt><dd>{hint || "—"}</dd>

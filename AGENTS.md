@@ -9,6 +9,11 @@
 - If an architectural decision requires a contract change, make the discrepancy explicit and resolve it with the user before implementing incompatible behavior.
 - User decisions below supersede conflicting draft contract requirements. Update the contract to reflect them before implementing the affected interfaces.
 
+## Frontend design priority
+
+- Start frontend theme and visual work with `docs/design/continuous-studio-direction.md` and its preferred image at `docs/design/review-assets/continuous-studio-preferred-reference.png`. The user prioritized this direction when resolving PR #11. Its continuous work surface, light/dark modes, readable scientific content, and top-right Assistant/Terminal/project controls take priority over older widget layouts and fixed palette prescriptions.
+- Preserve the integrated frontend theme from `main` as the implemented baseline described in `docs/design/experiment-studio.md`. Build the next design around the continuous studio reference and the open reading/interaction issues in `docs/design/human-experience-issues.md`. Carry the report agent's interpretation and original evidence into that composition. Generated reference values and controls are illustrative, not scientific evidence or an implemented feature contract.
+
 ## Confirmed implementation decisions
 
 - Use LangChain Deep Agents. Each project's research agent runs inside that project's container and receives a project-isolated scratch space through LangChain, separate from published immutable evidence and artifacts.

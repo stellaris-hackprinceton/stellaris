@@ -115,7 +115,7 @@ export function MaterialsViews({ project_id, integrations = {} }: { project_id: 
   const base = `${projectHref(project_id)}/materials`
   const pageRef = useRef<HTMLElement | null>(null)
   const width = useWidth(pageRef)
-  const wide = width === null || width >= 1100, narrowSelect = width !== null && width < 800
+  const wide = width === null || width >= 1008
 
   const navigate: Nav = useCallback((updates, mode) => {
     const p = new URLSearchParams(search.toString())
@@ -194,49 +194,56 @@ export function MaterialsViews({ project_id, integrations = {} }: { project_id: 
   let content: ReactNode
   if (state.collection && collection.error) {
     content = statusOf(collection.error) === 404
-      ? <div className={styles.unavailable} role="alert"><p>This collection is unavailable. It may have been deleted; its materials remain in the project.</p><button type="button" onClick={() => navigate({ collection: null, view: null, sort: null, order: null }, 'push')}>Return to Materials</button></div>
+      ? <div className={styles.unavailable} role="alert"><p>This collection is unavailable. It may have been deleted; its items remain in the Library.</p><button type="button" onClick={() => navigate({ collection: null, view: null, sort: null, order: null }, 'push')}>Return to Library</button></div>
       : <div><ErrorNotice error={collection.error} /><button type="button" onClick={() => void collection.refetch()}>Retry collection</button></div>
   } else if (!collectionReady) content = <p role="status" className={styles.empty}>Loading collection…</p>
   else if (isDesk) content = <DeskView project_id={project_id} recent={recent} notes={recentNotes} expanded={deskExpanded} setExpanded={setDeskExpanded} collections={collections.items} openCollection={openCollection} go={v => changeView(v)} onInspect={inspect} selectedId={selectedId} filtered={filtered} clearFilters={clearFilters} />
   else content = <FullView project_id={project_id} state={state} list={list} onInspect={inspect} onViewAll={() => changeView('all')} openChat={integrations.openChat} selectedId={selectedId} filtered={filtered} clearFilters={clearFilters} archived={archived} collection={collection.data ?? null}
-    emptyAction={state.view === 'notes' ? <button type="button" disabled={archived} onClick={() => setCreatingNote(true)}>New note</button> : state.view === 'literature' ? <button type="button" disabled={archived} onClick={() => setAddingSource(true)}>Add source</button> : null} />
+    emptyAction={state.view === 'notes' ? <button type="button" disabled={archived} onClick={() => setCreatingNote(true)}>New note</button> : state.view === 'literature' ? <button type="button" disabled={archived} onClick={() => setAddingSource(true)}>Add source</button> : state.view === 'media-data' ? <Link href={`${projectHref(project_id)}/studio?view=inputs`}>Import experiment input in Studio</Link> : null} />
 
   return <section ref={pageRef} className={`${styles.page} ${styles.viewsPage}`}>
     <header className={styles.heading}>
       <div>
-        {collection.data ? <><p className={styles.eyebrow}>Materials · Collection</p><h1>{collection.data.name}</h1>{collection.data.description && <p>{collection.data.description}</p>}</> : <h1>Materials</h1>}
+        {collection.data ? <><h1>{collection.data.name}</h1>{collection.data.description && <p>{collection.data.description}</p>}</> : <h1>Library</h1>}
         {archived && <p className={styles.notice}>Restore project to add or generate material.</p>}
       </div>
-      <div className={styles.actions}>
-        <MaterialUpload project_id={project_id} archived={archived} />
-        <button type="button" disabled={archived} onClick={() => { setCreatingNote(true) }}>New note</button>
-        {(isDesk || state.view === 'literature') && !integrations.addSourceActions && <button type="button" disabled={archived} onClick={() => setAddingSource(true)}>Add source</button>}
-        {(isDesk || state.view === 'literature') && integrations.addSourceActions}
-        <button type="button" disabled={archived} onClick={() => setSavingView(v => !v)} aria-expanded={savingView}>Save view</button>
-      </div>
+      <details className={styles.addMenu}>
+        <summary aria-label="Add to Library" aria-disabled={archived} onClick={e => { if (archived) e.preventDefault() }}>Add</summary>
+        <div className={styles.menuPanel}>
+          <button type="button" disabled={archived} onClick={() => setCreatingNote(true)}>New note</button>
+          <MaterialUpload project_id={project_id} archived={archived} />
+          {!archived && <Link href={`${projectHref(project_id)}/studio?view=inputs`}>Import experiment data</Link>}
+          {(isDesk || state.view === 'literature') && (integrations.addSourceActions ?? <button type="button" disabled={archived} onClick={() => setAddingSource(true)}>Add source</button>)}
+        </div>
+      </details>
     </header>
 
-    {narrowSelect
-      ? <label className={styles.viewSelect}>View<select value={state.view} onChange={e => changeView(e.target.value as ViewPreset)}>{VIEW_OPTIONS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></label>
-      : <nav aria-label="Materials views" className={styles.viewTabs}>{VIEW_OPTIONS.map(v => <button key={v.id} type="button" aria-current={state.view === v.id ? 'page' : undefined} onClick={() => changeView(v.id)}>{v.label}</button>)}</nav>}
-    {state.unknownView && <p className={styles.notice} role="status">Unknown view. Showing Desk.</p>}
+    {state.unknownView && <p className={styles.notice} role="status">Unknown view. Showing Recent.</p>}
     {state.invalid.length > 0 && <p className={styles.notice} role="alert">Unrecognized {state.invalid.join(', ')} in the link. Defaults are shown instead. <button type="button" onClick={() => navigate({ sort: null, order: null, status: null }, 'replace')}>Reset these parameters</button></p>}
 
-    <CollectionsDisclosure project_id={project_id} archived={archived} collections={collections} openCollection={openCollection} activeId={state.collection} />
-    {collection.data && <div className={styles.chips}><span className={styles.chip}>Collection: {collection.data.name}{collection.data.filter ? ' · saved filter' : ''}<button type="button" onClick={clearCollection} aria-label={`Clear collection ${collection.data.name}`}>Clear</button></span>
-      <PresentationControl project_id={project_id} collection={collection.data} etag={collection.etag} state={state} archived={archived} refetch={collection.refetch} onUseSaved={() => navigate({ view: null, sort: null, order: null }, 'replace')} />
-    </div>}
-
-    {savingView && <SaveViewForm project_id={project_id} state={state} archived={archived} inCollection={!!state.collection} onCancel={() => setSavingView(false)} onSaved={id => { setSavingView(false); navigate({ collection: id, view: null, sort: null, order: null, q: null, tag: null, status: null, file: null }, 'push') }} />}
-
     <div className={styles.toolbar}>
-      <label>Search names in this view<input type="search" value={qDraft} onChange={e => setQDraft(e.target.value)} placeholder="Name contains…" /></label>
-      <div className={styles.inline}>
-        {!isDesk && <label className={styles.sortField}>Sort<select value={`${state.sort}:${state.order}`} onChange={e => { const [sort, order] = e.target.value.split(':') as [SortField, SortOrder]; navigate({ sort, order }, 'replace') }}>{SORT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>}
+      <label className={styles.viewSelect}>View<select value={state.view} onChange={e => changeView(e.target.value as ViewPreset)}>{VIEW_OPTIONS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></label>
+      <label className={styles.searchField}>Search names<input aria-label="Search names" type="search" value={qDraft} onChange={e => setQDraft(e.target.value)} placeholder="Search names…" /><span className={styles.searchHint}>Names only</span></label>
+      <div className={styles.toolbarTools}>
+        <CollectionsDisclosure project_id={project_id} archived={archived} collections={collections} openCollection={openCollection} onClear={clearCollection} activeId={state.collection} />
+        {collection.data && <div className={styles.chip}>
+          <span>Collection: {collection.data.name}{collection.data.filter ? ' · saved filter' : ''}</span>
+          <details className={styles.presentationMenu}><summary>Presentation</summary><div className={styles.menuPanel}>
+            <PresentationControl project_id={project_id} collection={collection.data} etag={collection.etag} state={state} archived={archived} refetch={collection.refetch} onUseSaved={() => navigate({ view: null, sort: null, order: null }, 'replace')} />
+            <span className={styles.meta}>Saved: {viewLabel(resolvedPresentation(collection.data).preset)} · {SORT_OPTIONS.find(([v]) => v === `${resolvedPresentation(collection.data).sort}:${resolvedPresentation(collection.data).order}`)?.[1]}</span>
+          </div></details>
+          <button type="button" onClick={clearCollection} aria-label={`Clear collection ${collection.data.name}`}>Clear</button>
+        </div>}
         <details className={styles.filters}><summary>Filters{state.tag || state.status !== 'active' ? ' · active' : ''}</summary><div className={styles.filterFields}>
           <label>Tag<select value={state.tag} onChange={e => navigate({ tag: e.target.value || null }, 'replace')}><option value="">All tags</option>{tags.items.map(t => <option key={t.slug} value={t.slug}>{t.label}</option>)}</select></label>
           <label>Show<select value={state.status} onChange={e => navigate({ status: e.target.value }, 'replace')}><option value="active">Active</option><option value="trashed">Trash</option><option value="all">Active + trash</option></select></label>
+          <label className={`${styles.sortField} ${styles.sortFieldMobile}`}>Sort<select value={`${state.sort}:${state.order}`} onChange={e => { const [sort, order] = e.target.value.split(':') as [SortField, SortOrder]; navigate({ sort, order }, 'replace') }}>{SORT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
           {tags.has_next_page && <button type="button" disabled={tags.is_fetching_next_page} onClick={() => void tags.load_next_page()}>Load more tags</button>}
+        </div></details>
+        <label className={styles.sortField}>Sort<select value={`${state.sort}:${state.order}`} onChange={e => { const [sort, order] = e.target.value.split(':') as [SortField, SortOrder]; navigate({ sort, order }, 'replace') }}>{SORT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+        <details className={styles.moreMenu}><summary>More</summary><div className={styles.menuPanel}>
+          <button type="button" disabled={archived} onClick={() => setSavingView(v => !v)} aria-expanded={savingView}>Save view</button>
+          {savingView && <SaveViewForm project_id={project_id} state={state} archived={archived} inCollection={!!state.collection} onCancel={() => setSavingView(false)} onSaved={id => { setSavingView(false); navigate({ collection: id, view: null, sort: null, order: null, q: null, tag: null, status: null, file: null }, 'push') }} />}
         </div></details>
       </div>
     </div>
@@ -285,8 +292,8 @@ function DeskView({ project_id, recent, notes, expanded, setExpanded, collection
   return <div className={styles.desk}>
     <section className={styles.widget} aria-labelledby="desk-recent">
       <header className={styles.widgetHeader}><h2 id="desk-recent">Recently added</h2></header>
-      {recent.is_loading ? <p role="status" className={styles.empty}>Loading materials…</p> : recent.error ? <ListError list={recent} /> : !shown.length
-        ? <p className={styles.empty}>{filtered ? <>No materials match these filters. <button type="button" onClick={clearFilters}>Clear filters</button></> : 'Nothing has been added yet. Add a source, create a note, or upload a file to Materials.'}</p>
+      {recent.is_loading ? <p role="status" className={styles.empty}>Loading Library…</p> : recent.error ? <ListError list={recent} /> : !shown.length
+        ? <p className={styles.empty}>{filtered ? <>No items match these filters. <button type="button" onClick={clearFilters}>Clear filters</button></> : 'Nothing has been added yet. Use Add to save a source, write a note, upload a file, or import experiment data.'}</p>
         : <div className={styles.cardGrid}>{shown.map(f => <MaterialCard key={f.id} project_id={project_id} file={f} onInspect={onInspect} selected={selectedId === f.id} />)}</div>}
       {(expanded || recent.items.length > 6) && <div className={styles.widgetFooter}><button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? 'Collapse' : 'Expand'}</button><button type="button" onClick={() => go('all')}>View all</button></div>}
     </section>
@@ -304,21 +311,13 @@ function DeskView({ project_id, recent, notes, expanded, setExpanded, collection
         {named.length ? <ul className={styles.shortcutList}>{named.map(c => <li key={c.id}><button type="button" onClick={() => openCollection(c.id)}>{c.name}</button> <span className={styles.meta}>{c.filter ? 'saved filter' : 'explicit membership'}</span></li>)}</ul> : <p className={styles.empty}>No collections yet. Save a view or create one under Collections.</p>}
       </section>
     </div>
-    <nav aria-label="Material shortcuts" className={styles.shortcutRow}>
-      <button type="button" onClick={() => go('literature')}>Literature</button>
-      <button type="button" onClick={() => go('media-data')}>Media &amp; data</button>
-      <button type="button" onClick={() => go('findings')}>Findings</button>
-      <button type="button" onClick={() => go('measurements')}>Measurements</button>
-      <Link href={`${projectHref(project_id)}/reports`}>Reports</Link>
-      <button type="button" onClick={() => go('all')}>All materials</button>
-    </nav>
   </div>
 }
 
 const EMPTY_VIEW: Record<ViewPreset, string> = {
   desk: '', literature: 'No sources saved yet. Add a reference or find literature in Chat.', notes: 'No notes yet. Notes organize your thinking; they are not scientific evidence.',
-  'media-data': 'No images, videos, or datasets yet. Upload a file to Materials.', findings: 'Findings appear when research or analysis saves a claim.',
-  measurements: 'Analyze an experiment to save measurements.', all: 'No materials yet.',
+  'media-data': 'No images, videos, or datasets yet. Import experiment input in Studio.', findings: 'Findings appear when research or analysis saves a claim.',
+  measurements: 'Analyze an experiment to save measurements.', all: 'No items yet.',
 }
 
 function FullView({ project_id, state, list, onInspect, onViewAll, openChat, selectedId, filtered, clearFilters, archived, collection, emptyAction }: {
@@ -329,14 +328,14 @@ function FullView({ project_id, state, list, onInspect, onViewAll, openChat, sel
   let body: ReactNode
   if (list.is_loading) body = <p role="status" className={styles.empty}>Loading {viewLabel(state.view).toLowerCase()}…</p>
   else if (!list.items.length && list.error) body = <ListError list={list} />
-  else if (!list.items.length) body = <div className={styles.empty}>{filtered ? <p>No materials match these filters. <button type="button" onClick={clearFilters}>Clear filters</button></p> : collection ? <p>{narrowsExplicit ? <>This presentation shows matching members. <button type="button" onClick={onViewAll}>Open All materials</button> to see the collection&apos;s other items.</> : 'This collection has no matching materials.'}</p> : <><p>{EMPTY_VIEW[state.view]}</p>{emptyAction}</>}</div>
+  else if (!list.items.length) body = <div className={styles.empty}>{filtered ? <p>No items match these filters. <button type="button" onClick={clearFilters}>Clear filters</button></p> : collection ? <p>{narrowsExplicit ? <>This presentation shows matching members. <button type="button" onClick={onViewAll}>Open All items</button> to see the collection&apos;s other items.</> : 'This collection has no matching items.'}</p> : <><p>{EMPTY_VIEW[state.view]}</p>{emptyAction}</>}</div>
   else if (state.view === 'all') body = <AllList project_id={project_id} list={list} onInspect={onInspect} selectedId={selectedId} archived={archived} />
   else if (state.view === 'measurements') body = <MeasurementGroups project_id={project_id} items={list.items} onInspect={onInspect} selectedId={selectedId} />
   else body = <div className={styles.cardGrid}>{list.items.map(f => <MaterialCard key={f.id} project_id={project_id} file={f} onInspect={onInspect} selected={selectedId === f.id} />)}</div>
   return <section className={styles.widget} aria-labelledby="view-heading">
     <header className={styles.widgetHeader}><h2 id="view-heading">{viewLabel(state.view)}</h2><CountLabel list={list} /></header>
-    {narrowsExplicit && <p className={styles.notice}>This presentation shows matching members. Open All materials to see the collection&apos;s other items.</p>}
-    {state.view === 'literature' && <ChatPrompt label="Find literature in Chat" initial="Find published literature relevant to this project's research question." openChat={openChat} />}
+    {narrowsExplicit && <p className={styles.notice}>This presentation shows matching members. Open All items to see the collection&apos;s other items.</p>}
+    {state.view === 'literature' && <ChatPrompt label="Find papers with Assistant" initial="Find published literature relevant to this project's research question." openChat={openChat} />}
     {body}
     {list.items.length > 0 && <ListError list={list} />}
     <LoadMore list={list} />
@@ -426,7 +425,7 @@ function TagTools({ project_id, archived }: { project_id: string, archived: bool
   </details>
 }
 
-function CollectionsDisclosure({ project_id, archived, collections, openCollection, activeId }: { project_id: string, archived: boolean, collections: ReturnType<typeof useCollections>, openCollection: (id: string) => void, activeId: string }) {
+function CollectionsDisclosure({ project_id, archived, collections, openCollection, onClear, activeId }: { project_id: string, archived: boolean, collections: ReturnType<typeof useCollections>, openCollection: (id: string) => void, onClear: () => void, activeId: string }) {
   const mutation = useCatalogMutation(project_id)
   const [name, setName] = useState(''), [description, setDescription] = useState('')
   const command = useRef<{ key: string, body: string } | null>(null)
@@ -437,18 +436,21 @@ function CollectionsDisclosure({ project_id, archived, collections, openCollecti
     const key = stableKey(command, body)
     try { const r = await mutation.mutateAsync(() => catalogApi.createCollection(project_id, body, { idempotency_key: key })) as { data?: Collection }; command.current = null; setName(''); setDescription(''); if (r?.data) openCollection(r.data.id) } catch { /* Form and key retained for retry. */ }
   }
-  return <details className={styles.collections}><summary>Collections{collections.items.length ? ` (${collections.items.length}${collections.has_next_page ? '+' : ''})` : ''}</summary>
+  return <details className={styles.collections}><summary>{activeId ? 'Collection' : `Collections${collections.items.length ? ` (${collections.items.length}${collections.has_next_page ? '+' : ''})` : ''}`}</summary>
+    <div className={styles.collectionPanel}>
+    {activeId && <button type="button" onClick={onClear}>All items</button>}
     <ul className={styles.plainList}>{collections.items.map(c => <li key={c.id}>
       <button type="button" aria-current={activeId === c.id ? 'true' : undefined} onClick={() => openCollection(c.id)}>{c.name}</button> <span className={styles.meta}>{c.filter ? `saved filter: ${describeFilter(c.filter)}` : 'explicit membership'}</span>
       <CollectionEditor project_id={project_id} collection={c} archived={archived} />
-      <button type="button" disabled={archived} onClick={() => { if (window.confirm(`Delete collection “${c.name}”? This removes its organization and saved presentation. Its materials stay in the project.`)) void mutation.mutateAsync(() => catalogApi.deleteCollection(project_id, c.id, { etag: `"${c.revision}"` })).catch(() => {}) }}>Delete collection</button>
+      <button type="button" disabled={archived} onClick={() => { if (window.confirm(`Delete collection “${c.name}”? This removes its organization and saved presentation. Its items stay in the Library.`)) void mutation.mutateAsync(() => catalogApi.deleteCollection(project_id, c.id, { etag: `"${c.revision}"` })).catch(() => {}) }}>Delete collection</button>
     </li>)}</ul>
     {collections.has_next_page && <button type="button" disabled={collections.is_fetching_next_page} onClick={() => void collections.load_next_page()}>Load more collections</button>}
-    <form className={styles.form} onSubmit={e => void create(e)}><h3>New collection</h3><p className={styles.meta}>Creates an explicit collection. Add members from All materials. Use Save view for a dynamic filter.</p>
+    <form className={styles.form} onSubmit={e => void create(e)}><h3>New collection</h3><p className={styles.meta}>Creates an explicit collection. Add members from All items. Use Save view for a dynamic filter.</p>
       <label>Collection name<input value={name} onChange={e => setName(e.target.value)} maxLength={120} /></label>
       <label>Description<input value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} /></label>
       <button disabled={archived || mutation.isPending || !name.trim()}>Create collection</button></form>
     <ErrorNotice error={mutation.error ?? collections.error} />
+    </div>
   </details>
 }
 
@@ -521,7 +523,7 @@ function ChatPrompt({ label, initial, openChat }: { label: string, initial: stri
   const [text, setText] = useState(initial), [copied, setCopied] = useState(false)
   return <details className={styles.tools}><summary>{label}</summary>
     <label className={styles.form}>Prompt (editable; nothing is sent automatically)<textarea value={text} onChange={e => { setText(e.target.value); setCopied(false) }} rows={3} /></label>
-    <div className={styles.actions}>{openChat ? <button type="button" onClick={() => openChat(text)}>Open in Chat</button> : <button type="button" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true)).catch(() => {})}>Copy prompt</button>}{copied && <span role="status" className={styles.meta}>Copied. Paste it into Research chat to continue.</span>}</div>
+    <div className={styles.actions}>{openChat ? <button type="button" onClick={() => openChat(text)}>Open in Assistant</button> : <button type="button" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true)).catch(() => {})}>Copy prompt</button>}{copied && <span role="status" className={styles.meta}>Copied. Paste it into Assistant to continue.</span>}</div>
   </details>
 }
 
@@ -531,7 +533,7 @@ function InspectorContext({ project_id, file_id, linkedOutside, integrations }: 
   return <>
     {linkedOutside && <p className={styles.notice} role="status">Opened from a link. This item is outside the current view.</p>}
     {file && origin?.type === 'source' && <SourceCitation project_id={project_id} source_id={origin.id} integrations={integrations} />}
-    {file && origin?.type === 'claim' && <div className={styles.contextBox}><ChatPrompt label="Continue research in Chat" initial={`Continue research on the recorded finding “${file.name}”. What evidence would strengthen or challenge it?`} openChat={integrations.openChat} /></div>}
+    {file && origin?.type === 'claim' && <div className={styles.contextBox}><ChatPrompt label="Discuss with Assistant" initial={`Continue research on the recorded finding “${file.name}”. What evidence would strengthen or challenge it?`} openChat={integrations.openChat} /></div>}
     {file && origin?.type === 'artifact' && file.artifact_kind && MEDIA_KINDS.includes(file.artifact_kind) && <MediaActions project_id={project_id} artifact_id={origin.id} />}
     {file && origin?.type === 'run_measurements' && <MeasurementDetails project_id={project_id} file={file} run_id={origin.id} />}
   </>

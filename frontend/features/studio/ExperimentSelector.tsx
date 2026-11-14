@@ -6,6 +6,7 @@ import {
   Button, Dialog, ErrorNotice, Field, PlusIcon, Select, TextArea, TextInput, describeError, errorCode, newCommandKey,
 } from "@/components/ui";
 import { emptyDraft } from "./plan/draft";
+import { DeskAddTile } from "@/components/ui/Desk";
 import styles from "./studio.module.css";
 
 type Props = {
@@ -17,9 +18,11 @@ type Props = {
   loadMore: () => void;
   dirty: boolean;
   archived: boolean;
+  onBeforeCreate?: () => boolean;
+  onCreateCancelled?: () => void;
 };
 
-export function ExperimentSelector({ project_id, experiments, selected, onSelect, hasMore, loadMore, dirty, archived }: Props) {
+export function ExperimentSelector({ project_id, experiments, selected, onSelect, hasMore, loadMore, dirty, archived, onBeforeCreate, onCreateCancelled }: Props) {
   const id = useId();
   const [creating, setCreating] = useState(false);
 
@@ -28,6 +31,12 @@ export function ExperimentSelector({ project_id, experiments, selected, onSelect
     if (dirty && !window.confirm("This plan has unsaved changes. Switch experiments and discard them?")) return;
     onSelect(next);
   }
+  function startCreate() {
+    if (dirty && !window.confirm("This plan has unsaved changes. Create another experiment and discard them?")) return;
+    if (onBeforeCreate && !onBeforeCreate()) return;
+    setCreating(true);
+  }
+  function closeCreate() { setCreating(false); onCreateCancelled?.(); }
 
   return (
     <div className={styles.selector}>
@@ -39,14 +48,15 @@ export function ExperimentSelector({ project_id, experiments, selected, onSelect
         </select>
       </div>
       {hasMore && <Button onClick={loadMore}>Load more</Button>}
-      <Button onClick={() => setCreating(true)} disabled={archived}><PlusIcon /> New experiment</Button>
-      <CreateExperimentDialog project_id={project_id} open={creating} onClose={() => setCreating(false)}
+      {selected ? <Button onClick={startCreate} disabled={archived}><PlusIcon /> New experiment</Button>
+        : <DeskAddTile label="New experiment" onClick={startCreate} disabled={archived} />}
+      <CreateExperimentDialog project_id={project_id} open={creating} onClose={closeCreate}
         onCreated={(x) => { setCreating(false); onSelect(x.id); }} />
     </div>
   );
 }
 
-function CreateExperimentDialog({ project_id, open, onClose, onCreated }: {
+export function CreateExperimentDialog({ project_id, open, onClose, onCreated }: {
   project_id: ID; open: boolean; onClose: () => void; onCreated: (x: Experiment) => void;
 }) {
   const create = useCreateExperiment(project_id);
@@ -77,7 +87,7 @@ function CreateExperimentDialog({ project_id, open, onClose, onCreated }: {
   return (
     <Dialog open={open} onClose={onClose} title="New experiment">
       <form className={styles.stack} noValidate onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-        <p className={styles.muted}>Start a plan by hand. You can also ask Research Chat to design one.</p>
+        <p className={styles.muted}>Start a plan by hand. You can also ask Assistant to design one.</p>
         <Field label="Title" error={touched ? titleErr : null}><TextInput value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
         <Field label="Hypothesis" error={touched ? hypErr : null}><TextArea rows={3} value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} /></Field>
         <Field label="Method">

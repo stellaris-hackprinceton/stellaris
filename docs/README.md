@@ -14,16 +14,29 @@ This is the single canonical documentation tree. Root README and agent entrypoin
 - [Experiment launch selection verification](verification/experiment-launch.md).
 - [Broad layout verification](verification/broad-layout.md).
 - [Project home design and verification](verification/project-home.md).
+- [Visual desk implementation and verification](verification/virtual-desk.md).
 - [Sketch-derived logo candidates and verification](design/logo-treatments/README.md).
 - [Logo reconstruction from the original S artwork](design/logo-reconstruction/README.md).
 
 ## Product and implementation
 
+Frontend work starts with the continuous studio direction and its preferred visual
+reference. It takes priority over earlier widget layouts and fixed theme choices.
+The experiment studio design records the currently implemented interface. The
+light/dark redesign remains the next design task, with report analysis integrated
+into that reading composition.
+
+- [Continuous studio: light and dark direction](design/continuous-studio-direction.md). Preferred composition, confirmed light/dark modes, image artifacts to disregard, and Assistant input exploration still needed.
+- [Human experience and visual redesign: open issues](design/human-experience-issues.md). User feedback on report readability, language, graph density, adjustable panels, filtering, and the unresolved theme direction.
+- [Experiment studio design](design/experiment-studio.md). Current visual system, navigation hierarchy, terminology, and responsive behavior.
+- [Experiment studio verification](verification/experiment-studio.md). Frontend checks, browser behavior, and remaining provider/deployment limits.
+
 - [Product vision](product-vision.md).
-- [Planned agent execution, organization permissions, and chat controls](agent-execution-and-organization-plan.md). Recorded future work only; implementation has not started.
-- [Research desk and widget specification](research-workspace-spec.md). Proposed card contents, layout dimensions, responsive behavior, data flow, and acceptance scenarios. Not yet implemented.
-- [Materials curated views specification](materials-views-spec.md). Proposed view layouts, saved collections/presentations, inspection, navigation, and backend prerequisites. Not yet implemented.
-- [Reports library and generation specification](reports-spec.md). Proposed report browsing, composer placement, evidence selection, and execution states. Not yet implemented.
+- [Agent execution, organization permissions, and chat controls](agent-execution-and-organization-plan.md). Implemented behavior and local verification, with current interfaces in the [agent execution contract](agent-execution-contract.md).
+- [Visual research desk direction](design/virtual-desk.md). Earlier layout direction, superseded visually by the experiment studio and continuous studio documents above.
+- [Research desk and widget specification](research-workspace-spec.md). Card contents, shelf layout, responsive behavior, data flow, and acceptance scenarios.
+- [Materials curated views specification](materials-views-spec.md). View layouts, saved collections/presentations, inspection, navigation, and backend prerequisites. Curated features remain capability-gated.
+- [Reports library and generation specification](reports-spec.md). Report browsing, saved excerpts, composer placement, evidence selection, agent-led analysis, and execution states. The studio direction above governs presentation.
 - [Frontend–backend contract](frontend-backend-contract.md). The authoritative interface includes the current development mode without authentication.
 - [Full-text paper ingestion](research-contract.md). Integrated backend support for PDF/arXiv extraction and source locators. The new Literature UI remains pending.
 - [Interactive terminal contract](terminal-contract.md). Separate isolated sessions and scratch storage. Frontend integration remains separate.

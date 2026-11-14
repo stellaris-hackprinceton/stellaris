@@ -53,7 +53,7 @@ export function AddSourceDialog({ project_id, open, onClose, onCreated }: Props)
   return (
     <Dialog open={open} onClose={onClose} title="Add a reference">
       <form className={styles.stack} onSubmit={(e) => { e.preventDefault(); void submit(); }} noValidate>
-        <p className={styles.muted}>Manual references are saved as metadata only. To search for papers, ask in Research Chat.</p>
+        <p className={styles.muted}>Manual references are saved as metadata only. To search for papers, ask in Assistant.</p>
         <Field label="Title" error={touched ? titleErr : null}><TextInput value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
         <Field label="Link" error={touched ? urlErr : null}><TextInput type="url" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" /></Field>
         <Field label="Authors" hint="One per line. Optional."><TextArea rows={3} value={authors} onChange={(e) => setAuthors(e.target.value)} /></Field>

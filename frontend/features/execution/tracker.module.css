@@ -1,17 +1,12 @@
-.tracker { display: flex; flex-direction: column; gap: 28px; max-width: 1200px; margin-inline: auto; min-width: 0; }
-.pageHeading h1 { font-size: 24px; margin: 0 0 8px; }
+.tracker { display: flex; flex-direction: column; gap: 24px; max-width: 1280px; margin-inline: auto; min-width: 0; container-type: inline-size; }
+.pageHeading h1 { font-size: 28px; line-height: 34px; font-weight: 600; margin: 0 0 8px; }
 .pageHeading p, .qualification { color: var(--color-text-muted); font-size: 14px; }
-.workflow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 0; border-block: 1px solid var(--color-border); }
-.workflow > div { display: flex; flex-direction: column; gap: 4px; }
-.workflow strong { font-size: 14px; font-weight: 600; }
-.workflow span { color: var(--color-text-muted); font-size: 12px; }
 .sectionHeading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .sectionHeading h2 { margin: 0; font-size: 18px; }
 .sectionHeading > span { color: var(--color-text-muted); font-size: 12px; }
-.active { padding: 20px; background: var(--color-surface); border: 1px solid var(--color-border); }
-.runList { list-style: none; margin: 0; padding: 0; }
-.run { display: flex; gap: 14px; padding: 20px 0; border-bottom: 1px solid var(--color-border); }
-.run:last-child { border-bottom: 0; }
+.active { padding: 24px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-panel); }
+.runList { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.run { display: flex; gap: 14px; padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); }
 .marker { flex: 0 0 10px; width: 10px; height: 10px; border: 2px solid var(--color-control-border); border-radius: 50%; margin-top: 7px; }
 .run[data-status="running"] > .marker { border-color: var(--color-accent); background: var(--color-accent); }
 .run[data-status="succeeded"] > .marker { border-color: var(--color-success); }
@@ -20,7 +15,7 @@
 .runBody { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 8px; font-size: 14px; }
 .runHeading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
 .runHeading > a { font-weight: 600; color: var(--color-text); }
-.identifier { color: var(--color-text-muted); font-size: 12px; font-weight: 400; margin-left: 4px; }
+.identifier { color: var(--color-text-muted); font: 400 12px/18px var(--font-code); margin-left: 4px; }
 .status { font-size: 12px; color: var(--color-text-muted); }
 .status[data-status="failed"] { color: var(--color-danger); }
 .status[data-status="awaiting_approval"] { color: var(--color-warning); }
@@ -31,7 +26,7 @@
 .progressRow > span { font-size: 12px; color: var(--color-text-muted); }
 .runMeta { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; }
 .runBody .failure { color: var(--color-danger); }
-.group { border-top: 1px solid var(--color-border); padding-top: 16px; }
+.group { display: flex; flex-direction: column; gap: 12px; padding: 20px; border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-surface); }
 .group h3 { margin: 0; font-size: 14px; }
 .group h3 a { color: var(--color-text); }
 .filters { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
@@ -39,4 +34,4 @@
 .filters select { font: inherit; font-size: 14px; color: var(--color-text); min-width: 180px; padding: 8px 12px; min-height: var(--control-height); border: 1px solid var(--color-control-border); background: var(--color-surface); border-radius: var(--radius-control); }
 .empty, .loading { padding-block: 20px; font-size: 14px; color: var(--color-text-muted); }
 .qualification { margin-top: 20px; }
-@container (max-width: 600px) { .workflow { align-items: stretch; flex-direction: column; gap: 12px; } .workflow > span { display: none; } .workflow > div { flex-direction: row; justify-content: space-between; gap: 16px; } .sectionHeading { align-items: flex-start; flex-direction: column; gap: 4px; } .active { padding: 16px; } }
+@container (max-width: 600px) { .sectionHeading { align-items: flex-start; flex-direction: column; gap: 4px; } .active,.group { padding: 16px; } }

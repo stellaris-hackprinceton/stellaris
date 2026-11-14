@@ -7,6 +7,7 @@ import type { ProjectView } from "./hrefs";
 import { ResearchIcon, MaterialsIcon, ExperimentIcon, GraphIcon, TrackerIcon } from "@/components/ui/icons";
 import type { ComponentType } from "react";
 import styles from "./shell.module.css";
+import { StellarisMark } from "@/components/ui/StellarisMark";
 
 // Decorative; the visible label names the destination.
 const ReportsIcon = () => (
@@ -17,12 +18,12 @@ const ReportsIcon = () => (
 );
 
 export const VIEWS: { id: ProjectView; label: string; icon: ComponentType }[] = [
-  { id: "research", label: "Research", icon: ResearchIcon },
-  { id: "materials", label: "Materials", icon: MaterialsIcon },
+  { id: "research", label: "Overview", icon: ResearchIcon },
+  { id: "materials", label: "Library", icon: MaterialsIcon },
   { id: "studio", label: "Experiments", icon: ExperimentIcon },
   { id: "reports", label: "Reports", icon: ReportsIcon },
-  { id: "graph", label: "Knowledge graph", icon: GraphIcon },
-  { id: "runs", label: "Tracker", icon: TrackerIcon },
+  { id: "graph", label: "Connections", icon: GraphIcon },
+  { id: "runs", label: "Activity", icon: TrackerIcon },
 ];
 
 /** The library and every `/reports/:artifact_id` reader keep Reports selected. */
@@ -37,7 +38,10 @@ export function ProjectNavigation({ project_id, onNavigate }: { project_id: ID; 
   const view = currentView(usePathname() ?? "", project_id);
   return (
     <nav aria-label="Project" className={styles.navigation}>
-      <Link href={hrefs.projects()} className={styles.brand} onClick={onNavigate}>Stellaris<span>Research desk</span></Link>
+      <Link href={hrefs.projects()} className={styles.brand} onClick={onNavigate}>
+        <span className={styles.brandIdentity}><StellarisMark className={styles.brandMark} />Stellaris</span>
+        <span className={styles.brandDescriptor}>Experiment studio</span>
+      </Link>
       <ul className={styles.navList}>
         {VIEWS.map((v) => (
           <li key={v.id}>

@@ -273,7 +273,7 @@ export function AnalysisSetup({ project_id, experiment: x, inputs, hasMoreArtifa
       </div>} />}
       {blocker && <div className={styles.muted}><p>{blocker}</p>
         {planDirty || planOutOfDate ? <Button onClick={() => onNavigate("plan")}>Review plan</Button>
-          : method === "bouncing_ball_v1" && videos.length === 0 || method === "python_analysis_v1" && (!code || analysisInputs.length === 0) ? <Button onClick={() => onNavigate("inputs")}>Add inputs</Button> : null}
+          : method === "bouncing_ball_v1" && videos.length === 0 || method === "python_analysis_v1" && (!code || analysisInputs.length === 0) ? <Button onClick={() => onNavigate("inputs")}>Add data</Button> : null}
       </div>}
       <div className={styles.row}>
         <Button variant="primary" disabled={Boolean(blocker) || unresolved} pending={startRun.isPending} onClick={() => void launch(false)}>Start analysis</Button>

@@ -35,7 +35,7 @@ export function ResearchDesk({ project_id }: { project_id: ID }) {
   useEffect(() => {
     const node = root.current;
     if (!node || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= 1100));
+    const observer = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= 1008));
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
@@ -68,7 +68,7 @@ export function ResearchDesk({ project_id }: { project_id: ID }) {
       <div className={styles.layout} data-inspector={inspector?.kind === "claim" && wide ? "side" : undefined}>
         <div className={styles.screen}>
           <header className={styles.header}>
-            <h1>Research</h1>
+            <h1>Overview</h1>
             {project.data?.description && <p>{project.data.description}</p>}
           </header>
           <section aria-label="Research question" className={styles.question}>
@@ -77,10 +77,10 @@ export function ResearchDesk({ project_id }: { project_id: ID }) {
           </section>
           <ActiveWork project_id={project_id} />
           <div className={styles.grid}>
-            <LiteratureWidget project_id={project_id} onOpenSource={openSource} selected={inspector?.kind === "source" ? inspector.id : null} />
+          <LiteratureWidget project_id={project_id} onOpenSource={openSource} selected={inspector?.kind === "source" ? inspector.id : null} />
             <ExperimentsWidget project_id={project_id} />
-            <FindingsWidget project_id={project_id} onOpenClaim={openClaim} onOpenCitation={openCitation} selected={inspector?.kind === "claim" ? inspector.id : null} />
             <MeasurementsWidget project_id={project_id} />
+            <FindingsWidget project_id={project_id} onOpenClaim={openClaim} onOpenCitation={openCitation} selected={inspector?.kind === "claim" ? inspector.id : null} />
             <WritingWidget project_id={project_id} />
           </div>
         </div>
@@ -92,7 +92,7 @@ export function ResearchDesk({ project_id }: { project_id: ID }) {
           <ClaimInspector project_id={project_id} claim_id={inspector.id} onOpenCitation={openCitation} />
         </aside>}
       </div>
-      <Dialog open={inspector?.kind === "source"} onClose={closeInspector} title="Literature source" className={styles.sourceDialog}>
+      <Dialog open={inspector?.kind === "source"} onClose={closeInspector} title="Source" className={styles.sourceDialog}>
         {inspector?.kind === "source" && <SourceInspector project_id={project_id} source_id={inspector.id} citation={inspector.citation} />}
       </Dialog>
       {!wide && <Sheet open={inspector?.kind === "claim"} onClose={closeInspector} title="Finding">
