@@ -19,6 +19,7 @@ This is the single canonical documentation tree. Root README and agent entrypoin
 ## Product and implementation
 
 - [Product vision](product-vision.md).
+- [Planned agent execution, organization permissions, and chat controls](agent-execution-and-organization-plan.md). Recorded future work only; implementation has not started.
 - [Research desk and widget specification](research-workspace-spec.md). Proposed card contents, layout dimensions, responsive behavior, data flow, and acceptance scenarios. Not yet implemented.
 - [Materials curated views specification](materials-views-spec.md). Proposed view layouts, saved collections/presentations, inspection, navigation, and backend prerequisites. Not yet implemented.
 - [Reports library and generation specification](reports-spec.md). Proposed report browsing, composer placement, evidence selection, and execution states. Not yet implemented.
