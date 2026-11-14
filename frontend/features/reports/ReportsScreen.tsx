@@ -40,8 +40,8 @@ export function ReportsScreen({ project_id, compose = false, experiment, evidenc
     {experiment && <p><span className={styles.chip}>Experiment context: {contextExperiment.data?.project_id === project_id ? contextExperiment.data.title : contextExperiment.error ? 'unavailable' : '…'}</span> <span className={styles.muted}>Context preselects the composer; the library below is not filtered.</span></p>}
     {open && <div hidden={collapsed}>
       <ReportComposer key={draft.key} project_id={project_id} context={draft.context} initial={draft.initial}
-        onAccepted={run => { setAccepted(ids => [run.id, ...ids.filter(id => id !== run.id)]); setOpen(false); setCollapsed(false) }}
-        onClose={() => { setOpen(false); setCollapsed(false) }} onCollapse={() => setCollapsed(true)} />
+        onAccepted={run => { setAccepted(ids => [run.id, ...ids.filter(id => id !== run.id)]); setOpen(false); setCollapsed(false); setDraft(previous => ({ key: previous.key + 1 })) }}
+        onClose={() => { setOpen(false); setCollapsed(false); setDraft(previous => ({ key: previous.key + 1 })) }} onCollapse={() => setCollapsed(true)} />
     </div>}
     {open && collapsed && <p className={styles.muted}>The report draft is hidden and kept while this page stays open. <Button onClick={() => setCollapsed(false)}>Show draft</Button></p>}
     {!open && capabilities.data && !generation && <p role="note">Report generation is unavailable on this backend. Saved reports remain readable.</p>}
