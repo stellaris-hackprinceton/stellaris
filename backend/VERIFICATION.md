@@ -39,14 +39,16 @@ complete flight was available. A partial-evidence Markdown report preserved its 
 measurements, limitations, attribution, and source link. The chart and annotated frame
 were inspected. The source video and test outputs remain outside Git under `/tmp`.
 
-## Remaining live verification
+## Live Bedrock/Nova verification
 
-Live Nova now responds and invokes the experiment tool. The latest proposal reached the
-backend but failed strict experiment validation (`INVALID_AGENT_OUTPUT`). Safe provider
-error-code classification is implemented; no credential values are exposed. Live verification
-is incomplete until a real response and backend-validated tool result succeed. Frontend
-resource, upload, run, event, and reporting endpoints are available for integration now.
+Live Nova 2 Lite verification passed through the backend using runtime configuration:
+a real response and validated experiment tool call, then cited arXiv research with a
+persisted hypothesis, simulated-video analysis, and an evidence-grounded Markdown report
+in the same project. The research run retained its log and provenance artifacts. Model
+tool enums and JSON-array validation were tightened after the first live attempts; bad
+proposal shapes now return useful tool feedback rather than escaping as internal errors.
 
-Reproduction commands are in `README.md`. Local check logs are retained under
-`/tmp/stellaris-claude/`; they are not committed. Test projects remain available because
-no destructive project-ending policy has been approved.
+No agent opened `.env` or printed credential values. Frontend files were unchanged.
+Reproduction commands are in `README.md`. Local logs remain under `/tmp/stellaris-claude/`;
+they are not committed. Test projects remain available because no destructive project-ending
+policy has been approved.

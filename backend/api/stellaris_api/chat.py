@@ -111,4 +111,3 @@ def post_message(project_id):
     if created:
         current_app.extensions["stellaris_runs"].enqueue(created[0])
     return response
-

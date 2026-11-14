@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import threading
+from typing import Literal
 import platform
 from importlib.metadata import version
 from urllib.parse import urlsplit
@@ -111,11 +112,16 @@ def make_tools():
         return "Retrieved arXiv title and abstract metadata; full papers were not inspected. Records proposed for backend validation: " + json.dumps(found, ensure_ascii=False)
 
     @tool
-    def propose_experiment(title: str, hypothesis: str, method: str, protocol_markdown: str,
+    def propose_experiment(title: str, hypothesis: str, method: Literal["physical", "computational", "hybrid"], protocol_markdown: str,
                            variables_json: str, success_criteria_json: str,
                            input_artifact_ids_json: str, calibration_json: str,
                            limitations_json: str) -> str:
-        """Propose an experiment plan. Backend validation is required before it is saved."""
+        """Propose a plan; method is physical, computational, or hybrid. JSON arguments
+        must be JSON arrays for variables, success criteria, input artifact IDs, and limitations;
+        calibration must be a JSON object. For no calibration use {"mode":"none","assumptions":[]}.
+        Variables use name, role (independent/dependent/controlled), description, unit.
+        Backend validation is required before the plan is saved.
+        """
         try:
             payload = {"title": title, "hypothesis": hypothesis, "method": method,
                        "protocol_markdown": protocol_markdown, "variables": json.loads(variables_json),
@@ -124,20 +130,36 @@ def make_tools():
                        "calibration": json.loads(calibration_json), "limitations": json.loads(limitations_json)}
         except (ValueError, TypeError):
             return "Experiment proposal rejected: JSON arguments were malformed."
+        for field in ("variables", "success_criteria", "input_artifact_ids", "limitations"):
+            if not isinstance(payload[field], list):
+                return f"Experiment proposal rejected: {field}_json must be a JSON array."
+        if not isinstance(payload["calibration"], dict):
+            return "Experiment proposal rejected: calibration_json must be a JSON object."
         if not propose("experiment", payload):
             return "The per-run proposal limit has been reached."
         return "Experiment proposal sent to the backend for strict validation. Describe it as saved only after backend confirmation in the final response."
 
     @tool
-    def propose_claim(kind: str, text: str, evidence_json: str, citations_json: str, assumptions_json: str,
+    def propose_claim(kind: Literal["observation", "inference", "hypothesis"], text: str, evidence_json: str, citations_json: str, assumptions_json: str,
                       limitations_json: str) -> str:
-        """Propose a claim. Cite sources with arxiv:<ID> keys returned by search_arxiv."""
+        """Propose a claim. All JSON arguments must be arrays. Cite with arxiv:<ID> keys;
+        each citation object must have source_id, locator, and excerpt (use null when unknown).
+        """
         try:
             payload = {"kind": kind, "text": text, "evidence": json.loads(evidence_json),
                        "citations": json.loads(citations_json), "assumptions": json.loads(assumptions_json),
                        "limitations": json.loads(limitations_json)}
         except (ValueError, TypeError):
             return "Claim proposal rejected: JSON arguments were malformed."
+        for field in ("evidence", "citations", "assumptions", "limitations"):
+            if not isinstance(payload[field], list):
+                return f"Claim proposal rejected: {field}_json must be a JSON array."
+        for citation in payload["citations"]:
+            if (not isinstance(citation, dict) or set(citation) != {"source_id", "locator", "excerpt"}
+                    or not isinstance(citation["source_id"], str) or not citation["source_id"].strip()
+                    or citation["locator"] is not None and not isinstance(citation["locator"], str)
+                    or citation["excerpt"] is not None and not isinstance(citation["excerpt"], str)):
+                return "Claim proposal rejected: each citation must be an object with source_id, locator, and excerpt."
         if not propose("claim", payload):
             return "The per-run proposal limit has been reached."
         return "Claim proposal sent to the backend for evidence and reference validation."
