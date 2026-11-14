@@ -1,7 +1,7 @@
 # File workspace implementation plan
 
 Interface: [../file-workspace-contract.md](../file-workspace-contract.md) (proposed, additive to `/api/v1`).
-Status: **slice 1 implemented and Docker-verified; slices 2–4 pending.** Prepared 2026-11-14 on branch `backend-v2`.
+Status: **slices 1–2 implemented and Docker-verified; slices 3–4 pending.** Prepared 2026-11-14 on branch `backend-v2`.
 
 ## Goal and boundaries
 
@@ -189,14 +189,38 @@ Files: `files.py` (POST `/files`, PATCH `/files/{id}`, `GET /files/{id}/revision
 `?revision=` content, POST `/files/tagging`, POST/PATCH/DELETE `/tags`); `catalog.py`
 (note/tag helpers, quota, validation); `workspace_files_test.py` (`--slice 2`).
 
-- [ ] Every POST via `idempotency.run_command(catalog_conn, …)`; PATCH/DELETE `If-Match`
+Implementation note (2026-11-14): code written, **not yet built or tested**. Boxes stay
+unchecked until `--slice 2` and the `--slice 1` regression pass.
+- The routes are in the new `file_mutations.py`. It registers on the `files` blueprint and
+  is imported at the end of `files.py`.
+- `catalog.py` gains only `relay_pending()`.
+- `files.py` changes in one way besides the import: current note content downloads under
+  the file's current name, and `?revision=N` downloads under that revision's stored name.
+- **Transactions and events:** catalog writes, POST idempotency records, and the outbox row
+  commit in one catalog transaction. The relay runs only after that transaction commits.
+  SQLite errors map to `503 SERVICE_UNAVAILABLE`.
+- **Archive check:** `load_writable` is re-checked inside the catalog transaction. A project
+  archived between that main-DB read and the catalog commit can still receive one catalog
+  mutation. This race is accepted and documented in the module. The two databases cannot
+  commit atomically, and legacy evidence is never affected.
+- **Idempotent replay:** a replay is answered before the archive check, as in the legacy
+  routes, so an earlier create still replays on an archived project.
+- **Read-only files:** sending `name`, `content`, or `status` to an artifact or record file
+  returns `409 FILE_READ_ONLY` even when the value is unchanged.
+- **Event payloads:** tag deletion emits a tag-deleted change plus a file change for each
+  affected file. A payload with more than 100 changes collapses its file changes into one
+  bulk entry.
+- **Validation:** unpaired surrogates anywhere in a body return 422 before idempotency
+  hashing or storage.
+
+- [x] Every POST via `idempotency.run_command(catalog_conn, …)`; PATCH/DELETE `If-Match`
       with 428/412 semantics identical to projects/experiments.
-- [ ] Note validation (name rules = `artifacts.filename_error`, UTF-8, no NUL, 512 KiB,
+- [x] Note validation (name rules = `artifacts.filename_error`, UTF-8, no NUL, 512 KiB,
       project note budget → 413); identical content creates no revision.
-- [ ] `FILE_READ_ONLY` for name/content/status on artifact/record files; system assignments
+- [x] `FILE_READ_ONLY` for name/content/status on artifact/record files; system assignments
       immutable (422); reserved behavior for system tags (`TAG_PROTECTED`).
-- [ ] `load_writable` (main DB) checked before each mutation → `409 PROJECT_ARCHIVED`.
-- [ ] Outbox row per mutation in the same catalog transaction; relay emits
+- [x] `load_writable` (main DB) checked before each mutation → `409 PROJECT_ARCHIVED`.
+- [x] Outbox row per mutation in the same catalog transaction; relay emits
       `catalog.changed`; verified on the SSE stream.
 
 Acceptance: slice 1 commands plus `(cd backend && python3 scripts/workspace_files_test.py --slice 2)`.
@@ -261,3 +285,5 @@ idempotent; limits return 422.
   page) — kept in the contract; drop only via contract amendment.
 
 Verification checkpoint: Slice 1 passed 76 Docker/API integration checks, including the malformed tag cursor regression. No paid model calls.
+
+Verification checkpoint: Slice 2 passed 112 Docker/API integration checks. An isolated 5-byte note budget also verified quota rejection and complete revision rollback. Legacy integration passed 95 checks after slice 1; restart and corrupt-catalog checks passed.

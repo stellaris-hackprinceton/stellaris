@@ -1,8 +1,8 @@
 """Workspace file read routes (docs/file-workspace-contract.md sections 4-8; plan slice 1).
 
-Implemented: GET /catalog, /files, /files/{id}, /files/{id}/content, /tags, /tags/{slug}.
-Mutations (notes, tagging, tag/collection/relation writes) belong to later slices and are
-deliberately not registered, so they return 405/404.
+Implemented here: GET /catalog, /files, /files/{id}, /files/{id}/content, /tags, /tags/{slug}.
+Notes, revisions, tagging, and tag mutations (slice 2) live in file_mutations.py and register
+on this blueprint. Collection and relation routes (slice 3) are not registered yet.
 
 Every route first checks project visibility in the main DB (so catalogs are only created for
 visible projects), opens the project's catalog, and projects legacy changes. The catalog
@@ -317,8 +317,11 @@ def file_content(project_id, file_id):
 
 
 def _note_content(cat, row, raw_revision, disposition: str) -> Response:
-    revision = row["content_revision"]
+    # The current content downloads under the file's current name; a historical revision
+    # downloads under the name it had when that content revision was created.
+    revision, name = row["content_revision"], row["name"]
     if raw_revision is not None:
+        name = None
         try:
             revision = int(raw_revision)
         except ValueError:
@@ -329,7 +332,7 @@ def _note_content(cat, row, raw_revision, disposition: str) -> Response:
                        (row["id"], revision)).fetchone()
     if note is None:
         raise ApiError(404, *_NOT_FOUND)
-    return _bytes_response(note["content"].encode("utf-8"), note["mime_type"], note["name"], disposition)
+    return _bytes_response(note["content"].encode("utf-8"), note["mime_type"], name or note["name"], disposition)
 
 
 @bp.get("/<project_id>/tags")
@@ -380,3 +383,7 @@ def get_tag(project_id, slug):
         raise ApiError(404, *_NOT_FOUND)
     tag = _to_tag(row, _tag_counts(cat, [slug]).get(slug, 0))
     return json_response(tag, 200, {"ETag": etag(tag["revision"])})
+
+
+# Slice 2 routes register on `bp`; imported last because they reuse the helpers above.
+from . import file_mutations  # noqa: E402,F401  pylint: disable=wrong-import-position,unused-import

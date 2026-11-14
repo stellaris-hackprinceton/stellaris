@@ -1,7 +1,7 @@
 # Stellaris file workspace contract
 
 Contract version: **1.1.0-draft (additive to `/api/v1`)**
-Status: **Read foundation implemented and Docker-verified (slice 1); mutations and collections/relations planned.** Progress is tracked in
+Status: **Catalog, notes, revisions and tagging implemented and Docker-verified (slices 1–2); collections/relations planned.** Progress is tracked in
 [backend/file-workspace-plan.md](backend/file-workspace-plan.md).
 Prepared: **November 14, 2026**
 Extends: [frontend-backend-contract.md](frontend-backend-contract.md). Its sections 3 (common
@@ -64,7 +64,8 @@ Invariants:
    disclose whether the resource exists elsewhere. Project IDs are not an authorization
    boundary. No authentication is added.
 7. **Archived projects** are readable. Every mutation in this document returns
-   `409 PROJECT_ARCHIVED`. Projection of runs that finish after archiving continues.
+   `409 PROJECT_ARCHIVED`. Idempotent replays of earlier committed commands retain their
+   original response. Projection of runs that finish after archiving continues.
 
 ## 3. Capability
 
@@ -503,6 +504,9 @@ User relations may use any other slug, such as `related`, `references`, `follows
   record and its outgoing event outbox entry. The outbox is relayed to the legacy event
   stream after commit and on restart; a crash may duplicate delivery, never the mutation. Catalog writes do not share a transaction with legacy
   records. Legacy commands never wait on the catalog.
+- **Archive boundary.** The writable check uses the main database, separately from the
+  catalog transaction. An archive that races the final check may allow one final catalog
+  mutation; original scientific evidence remains unaffected.
 - **Recovery.** A corrupt catalog returns `503 SERVICE_UNAVAILABLE`; it is never automatically
   replaced or renamed. Restore its SQLite backup before resuming. If a catalog is absent,
   the projection can be rebuilt with stable IDs, but user-authored content and metadata

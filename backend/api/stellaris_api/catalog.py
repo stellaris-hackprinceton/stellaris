@@ -327,6 +327,12 @@ def relay(main, cat, project_id: str) -> None:
         log.exception("Relaying catalog events failed for %s; they remain pending", project_id)
 
 
+def relay_pending(main, cat, project_id: str) -> None:
+    """Relay after a committed catalog mutation. Call only with no open transaction on either DB."""
+    with _project_lock(project_id):
+        relay(main, cat, project_id)
+
+
 def relay_all(config) -> None:
     """Startup: relay pending events of existing catalogs. Never creates a catalog."""
     if not os.path.isdir(config.catalog_dir):

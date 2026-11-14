@@ -142,8 +142,8 @@ def _register_system_routes(app, config, runtime, manager):
                     "markdown_reports": True,
                     "remote_compute": False,
                     "collaboration": False,
-                    # Read foundation only (slice 1): catalog, files, content, tags. Mutation
-                    # routes of the file workspace contract are not available yet.
+                    # File catalog, notes and tags are implemented; collection/link
+                    # routes are tracked in the file workspace implementation plan.
                     "workspace_files": True,
                 },
                 "uploads": {
