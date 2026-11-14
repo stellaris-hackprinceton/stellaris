@@ -12,6 +12,7 @@ This is the single canonical documentation tree. Root README and agent entrypoin
 - [Current Compose startup verification](verification/compose-startup.md).
 - [Experiment launch selection verification](verification/experiment-launch.md).
 - [Broad layout verification](verification/broad-layout.md).
+- [Project home design and verification](verification/project-home.md).
 
 ## Product and implementation
 

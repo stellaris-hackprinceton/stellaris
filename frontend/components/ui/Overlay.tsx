@@ -14,10 +14,11 @@ type OverlayProps = {
   variant: "dialog" | "sheet";
   /** Keep children mounted while closed (e.g. to preserve a draft). The closed <dialog> is not rendered visibly. */
   keepMounted?: boolean;
+  className?: string;
 };
 
 /** Native <dialog> modal: focus trap, Esc handling and focus restoration come from the platform. */
-function Overlay({ open, onClose, title, children, variant, keepMounted = false }: OverlayProps) {
+function Overlay({ open, onClose, title, children, variant, keepMounted = false, className }: OverlayProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -32,7 +33,7 @@ function Overlay({ open, onClose, title, children, variant, keepMounted = false 
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      className={cx(variant === "dialog" ? styles.dialog : styles.sheet)}
+      className={cx(variant === "dialog" ? styles.dialog : styles.sheet, className)}
       // Only report closes the user initiated (Esc); a parent-driven close already knows.
       onClose={() => { if (open) onClose(); }}
       onClick={(e) => { if (e.target === ref.current) onClose(); }}
