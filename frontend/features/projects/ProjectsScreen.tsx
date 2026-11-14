@@ -20,7 +20,7 @@ export function ProjectsScreen() {
       <header className={styles.header}>
         <div>
           <h1>Projects</h1>
-          <p className={styles.muted}>Each project keeps its question, sources, experiments, runs and reports together.</p>
+          <p className={styles.muted}>Your research questions, experiments, evidence, and reports. Each project keeps its own history.</p>
         </div>
         <Button variant="primary" onClick={() => setCreating(true)}><PlusIcon /> New project</Button>
       </header>

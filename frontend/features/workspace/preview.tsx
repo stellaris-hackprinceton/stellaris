@@ -13,7 +13,7 @@ import styles from '@/features/execution/sol.module.css'
 export function SafeMarkdown({ text }: { text: string }) {
   return <div className={styles.markdown}><ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} urlTransform={(url, key) => {
     if (key === 'src') {
-      // Only authenticated project artifact images can load automatically.
+      // Only project file images can load automatically.
       return /^\/api\/v1\/projects\/[^/]+\/artifacts\/[^/]+\/content(?:\?|$)/.test(url) ? url : ''
     }
     return /^(https?:\/\/|mailto:|\/[^/]|#)/i.test(url) ? url : ''
@@ -28,15 +28,15 @@ function TextPreview({ artifact, project_id, mime }: { artifact: Artifact, proje
   // types (JSON, for example, is attachment-only), which made inline requests for JSON fail with 400.
   const text = useQuery({ queryKey: ['project', project_id, 'artifact-text', artifact.id, artifact.sha256], queryFn: ({ signal }) => readText(artifactContentUrl(project_id, artifact.id), signal), retry: false })
   const body = text.data && mime === 'application/json' && !text.data.truncated ? formatJson(text.data.text) : text.data?.text
-  return <><ErrorNotice error={text.error} />{text.isPending && <p>Loading text preview…</p>}{text.data?.truncated && <p className={styles.notice}>This preview is limited to the first 256 KiB. Download the artifact for its complete content.</p>}{text.data && (artifact.kind === 'report' || mime === 'text/markdown' ? <SafeMarkdown text={text.data.text} /> : <pre tabIndex={0} aria-label={`Contents of ${artifact.filename}`}>{body}</pre>)}</>
+  return <><ErrorNotice error={text.error} />{text.isPending && <p>Loading text preview…</p>}{text.data?.truncated && <p className={styles.notice}>This preview is limited to the first 256 KiB. Download the file to view its complete contents.</p>}{text.data && (artifact.kind === 'report' || mime === 'text/markdown' ? <SafeMarkdown text={text.data.text} /> : <pre tabIndex={0} aria-label={`Contents of ${artifact.filename}`}>{body}</pre>)}</>
 }
 export function ArtifactPreview({ artifact, project_id }: { artifact: Artifact, project_id: string }) {
-  if (artifact.project_id !== project_id) return <p role="alert">Artifact unavailable in this project.</p>
+  if (artifact.project_id !== project_id) return <p role="alert">File unavailable in this project.</p>
   const url = artifactContentUrl(project_id, artifact.id, 'inline')
   const mime = artifact.mime_type.toLowerCase().split(';')[0]
   if (['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(mime)) return <img src={url} alt={artifact.filename} />
   if (['video/mp4', 'video/webm', 'video/ogg'].includes(mime)) return <video controls preload="metadata" src={url} aria-label={artifact.filename} />
   if (['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/webm', 'audio/ogg'].includes(mime)) return <audio controls preload="metadata" src={url} aria-label={artifact.filename} />
   if ((mime.startsWith('text/') && !['text/html', 'text/xml'].includes(mime)) || ['application/json', 'application/x-python', 'application/x-ndjson'].includes(mime)) return <TextPreview artifact={artifact} project_id={project_id} mime={mime} />
-  return <p>This format ({mime || 'unknown type'}) has no in-app preview. Use the download link to inspect it.</p>
+  return <p>This file type ({mime || 'unknown type'}) has no in-app preview. Download it to inspect its contents.</p>
 }

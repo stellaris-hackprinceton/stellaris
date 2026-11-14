@@ -1,7 +1,7 @@
 # Stellaris file workspace contract
 
 Contract version: **1.1.0-draft (additive to `/api/v1`)**
-Status: **Implemented and Docker-verified for the backend foundation. Frontend adoption remains separate.** Progress is tracked in
+Status: **Implemented and Docker-verified for the backend foundation, with frontend adoption in Materials and Knowledge graph.** See [Unified workspace interface](frontend-workspace.md). Backend progress is tracked in
 [backend/file-workspace-plan.md](backend/file-workspace-plan.md).
 Prepared: **November 14, 2026**
 Extends: [frontend-backend-contract.md](frontend-backend-contract.md). Its sections 3 (common

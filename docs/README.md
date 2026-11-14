@@ -11,12 +11,14 @@ This is the single canonical documentation tree. Root README and agent entrypoin
 - [Backend verification evidence](backend/verification.md).
 - [Current Compose startup verification](verification/compose-startup.md).
 - [Experiment launch selection verification](verification/experiment-launch.md).
+- [Broad layout verification](verification/broad-layout.md).
 
 ## Product and implementation
 
 - [Product vision](product-vision.md).
 - [Frontend–backend contract](frontend-backend-contract.md). The authoritative interface includes the current development mode without authentication.
-- [File workspace contract](file-workspace-contract.md) (proposed, additive). Covers tagged files, notes, collections, and relations. Its [implementation plan](backend/file-workspace-plan.md) has not been started yet.
+- [File workspace contract](file-workspace-contract.md). The backend foundation for tagged materials, notes, collections, and explicit relations is implemented. See its [implementation record](backend/file-workspace-plan.md).
+- [Unified workspace interface](frontend-workspace.md). Materials, Knowledge graph, Research overview, Tracker, and the shared navigation.
 - [Frontend implementation specification](frontend-implementation-spec.md). The original three-agent implementation breakdown is retained as a reference.
 - Historical frontend handoffs: [Agent A](handoffs/agent-a.md), [Agent B](handoffs/agent-b.md), [Agent C](handoffs/agent-c.md). Current startup guidance is in the Compose guide.
 

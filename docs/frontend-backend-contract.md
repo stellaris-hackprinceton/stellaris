@@ -25,7 +25,9 @@ The product document does not define exact API shapes. This draft selects the fo
 - Immutable run inputs and output artifacts, with revisions for editable project and experiment records.
 - Explicit resource links between sources, experiments, runs, measurements, and reports.
 
-**Amendment (2026-11-14), proposed and not yet implemented:** The [file workspace contract](file-workspace-contract.md) adds a free-form, tag-based file interface. It covers files, notes, tags, collections, and relations. For new workspace UI, it supersedes the rigid per-category navigation. Every route, resource, and event in this document stays in place and unchanged. These routes remain authoritative for scientific records and commands.
+**Amendment (2026-11-14), implemented:** The [file workspace contract](file-workspace-contract.md) adds a free-form, tag-based file interface. It covers files, notes, tags, collections, and relations. For new workspace UI, it supersedes the rigid per-category navigation. Every backend route, resource, and event in this document stays in place and unchanged. These routes remain authoritative for scientific records and commands.
+
+**Implementation update (2026-11-14):** The catalog backend foundation is implemented. Its frontend is named Materials and uses `/projects/:project_id/materials`. The removed `/projects/:project_id/workspace` was a frontend page, distinct from the unchanged backend workspace snapshot API. Knowledge graph draws explicit catalog relations in the browser using `/files` and `/relations`. Tracker uses existing runs and their persisted states. These views add no inferred scientific links, new graph endpoint, or independent task model.
 
 “MUST” means an implementation requirement within this proposed contract. “SHOULD” allows an exception when its consequence is documented. All routes below belong to the MVP unless explicitly marked as future work.
 

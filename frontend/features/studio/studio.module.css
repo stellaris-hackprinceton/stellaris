@@ -1,4 +1,5 @@
 .screen { display: flex; flex-direction: column; gap: var(--space-6); max-width: 1400px; container: studio / inline-size; }
+.screen [hidden] { display: none !important; }
 .stack { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-3); }
@@ -26,6 +27,21 @@
 .selector { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); flex: 1; }
 .selector .varField { min-width: min(20rem, 100%); }
 
+.context { display: flex; flex-direction: column; gap: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border); }
+.context .topBar { align-items: center; }
+.context .selector { flex: 1 1 34rem; }
+.taskGuidance { margin: 0; color: var(--color-text-muted); max-width: 78ch; }
+.savedState, .dirtyState { font-size: var(--text-label); font-weight: 600; white-space: nowrap; }
+.savedState { color: var(--color-success); }
+.dirtyState { color: var(--color-warning); }
+.taskTabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--color-border); gap: var(--space-1); }
+.taskTab { appearance: none; flex: 0 0 auto; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; padding: var(--space-2) var(--space-4); background: transparent; color: var(--color-text-muted); font: inherit; font-weight: 600; cursor: pointer; }
+.taskTab:hover { background: var(--color-surface-muted); color: var(--color-text); }
+.taskTab[aria-selected="true"] { color: var(--color-accent); border-bottom-color: var(--color-accent); background: var(--color-selection); }
+.taskTab:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.taskPanel { min-width: 0; }
+.taskActions { display: flex; justify-content: flex-end; margin-top: var(--space-4); }
+
 .columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
 @container studio (min-width: 960px) { .columns { grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); align-items: start; } }
 .colMain, .colSide { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
@@ -39,7 +55,7 @@
 .section:first-of-type { border-top: 0; padding-top: 0; }
 
 .saveBar {
-  position: sticky; top: 72px; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
+  position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
   margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-6)) 0; padding: var(--space-3) var(--space-6);
   background: var(--color-surface); border-bottom: 1px solid var(--color-border); border-radius: var(--radius-panel) var(--radius-panel) 0 0;
 }

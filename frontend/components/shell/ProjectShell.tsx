@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import type { ID } from "@/contracts/api";
 import { Sheet } from "@/components/ui";
+import { useChatDraft } from "@/features/research/chat/ChatComposer";
 import { ResearchChat } from "@/features/research/chat";
 import { ProjectHeader } from "./ProjectHeader";
 import { ProjectNavigation } from "./ProjectNavigation";
@@ -21,7 +22,12 @@ export type ProjectShellProps = {
  * ≥1280px: sidebar + content + collapsible chat rail. 768–1279px: sidebar, chat in a side sheet.
  * <768px: navigation in a menu sheet, chat in a full-height sheet.
  */
-export function ProjectShell({ project_id, children }: ProjectShellProps) {
+export function ProjectShell(props: ProjectShellProps) {
+  return <ProjectShellBody key={props.project_id} {...props} />;
+}
+
+function ProjectShellBody({ project_id, children }: ProjectShellProps) {
+  const chatDraft = useChatDraft();
   const wide = useMediaQuery("(min-width: 1280px)", true);
   const narrow = useMediaQuery("(max-width: 767px)", false);
   const [railOpen, setRailOpen] = useStoredFlag("stellaris.chatRailOpen", true);
@@ -38,7 +44,7 @@ export function ProjectShell({ project_id, children }: ProjectShellProps) {
 
   const chatOpen = wide ? railOpen : sheetOpen;
   const toggleChat = () => (wide ? setRailOpen(!railOpen) : setSheetOpen(!sheetOpen));
-  const chat = <ResearchChat project_id={project_id} showHeading={wide} />;
+  const chat = <ResearchChat draft={chatDraft} project_id={project_id} showHeading={wide} />;
 
   return (
     <div className={styles.shell} data-chat-rail={wide && railOpen ? "open" : "closed"}>
@@ -58,8 +64,8 @@ export function ProjectShell({ project_id, children }: ProjectShellProps) {
         />
         <main id="project-main" className={styles.content} tabIndex={-1}>{children}</main>
       </div>
-      {wide && railOpen && (
-        <aside className={styles.chatRail} aria-label="Research chat">{chat}</aside>
+      {wide && (
+        <aside className={styles.chatRail} aria-label="Research chat" hidden={!railOpen}>{chat}</aside>
       )}
       {!wide && (
         <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Research chat" keepMounted>{chat}</Sheet>

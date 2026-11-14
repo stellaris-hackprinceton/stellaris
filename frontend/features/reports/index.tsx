@@ -29,7 +29,7 @@ export function ReportComposer({ project_id }: { project_id: string }) {
   const rejected = start.error instanceof ApiError && [400, 403, 404, 412, 413, 415, 422, 428].includes(start.error.status)
   return <section>
     <h2>Generate a scientific report</h2>
-    <p>Select saved analysis evidence. A successful report does not imply the experiment succeeded.</p>
+    <p>Choose saved analysis runs and literature sources to cite. Reports summarize the evidence provided; successful report generation does not mean an experiment succeeded.</p>
     {project.data?.status === 'archived' && <p className={styles.notice}>Restore the project before generating new reports.</p>}
     <ErrorNotice error={experiments.error ?? sources.error ?? runs.error ?? start.error} />
     <form onSubmit={e => { e.preventDefault(); void submit() }}>
@@ -40,9 +40,9 @@ export function ReportComposer({ project_id }: { project_id: string }) {
       <PageMore has_more={experiments.has_next_page} loading={experiments.isFetchingNextPage} load={experiments.load_next_page} />
       <label>Report title<input required value={title} disabled={locked} onChange={e => setTitle(e.target.value)} /></label>
       <fieldset disabled={locked || !experiment}>
-        <legend>Analysis evidence</legend>
-        {eligible.map(r => <label key={r.id}><input type="checkbox" checked={evidence.includes(r.id)} onChange={() => setEvidence(toggle(evidence, r.id))} />{r.id} · {r.status}{r.status !== 'succeeded' ? ' · partial evidence, limitations must be reported' : ''}</label>)}
-        {!eligible.length && <p>No eligible terminal analysis runs among the loaded records.</p>}
+        <legend>Analysis runs to include</legend>
+        {eligible.map((r, index) => <label key={r.id}><input type="checkbox" checked={evidence.includes(r.id)} onChange={() => setEvidence(toggle(evidence, r.id))} />Analysis run {index + 1} · {r.status === 'succeeded' ? 'Completed' : r.status.replaceAll('_', ' ')}{r.status !== 'succeeded' ? ' · partial evidence; limitations must be reported' : ''}</label>)}
+        {!eligible.length && <p>No completed or partial analysis runs are available in the loaded activity yet.</p>}
         <PageMore has_more={runs.has_next_page} loading={runs.isFetchingNextPage} load={runs.load_next_page} />
       </fieldset>
       <fieldset disabled={locked}>
@@ -61,6 +61,6 @@ export function ReportScreen({ project_id, artifact_id }: { project_id: string, 
   if (query.error) return <main className={styles.screen}><h1>Report unavailable</h1><ErrorNotice error={query.error} /></main>
   const artifact = query.data
   if (!artifact) return <main className={styles.screen} aria-busy="true">Loading saved report…</main>
-  if (artifact.project_id !== project_id || artifact.kind !== 'report' || !['text/markdown', 'text/plain'].includes(artifact.mime_type.split(';')[0])) return <main className={styles.screen}><h1>Report unavailable</h1><p>This artifact is not a supported Markdown report in this project.</p></main>
+  if (artifact.project_id !== project_id || artifact.kind !== 'report' || !['text/markdown', 'text/plain'].includes(artifact.mime_type.split(';')[0])) return <main className={styles.screen}><h1>Report unavailable</h1><p>This file is not a supported Markdown report in this project.</p></main>
   return <main className={styles.screen}><h1>{artifact.filename}</h1><p>Saved {new Date(artifact.created_at).toLocaleString()}. Conclusions and experiment status are described in the recorded evidence.</p><div className={styles.actions}><a href={artifactContentUrl(project_id, artifact_id)}>Download Markdown</a><Link href={artifactHref(project_id, artifact_id)}>Inspect report provenance and parent evidence</Link>{artifact.run_id && <Link href={runHref(project_id, artifact.run_id)}>Report generation run</Link>}</div><ArtifactPreview project_id={project_id} artifact={artifact} /></main>
 }

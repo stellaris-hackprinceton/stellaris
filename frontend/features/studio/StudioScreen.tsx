@@ -18,7 +18,7 @@ import { FileImport } from "./upload/FileImport";
 import { mimeForFile } from "./upload/fileTypes";
 import { UploadProgressView } from "./upload/UploadProgressView";
 import { useArtifactUpload } from "./upload/useArtifactUpload";
-import { useStudioParams } from "./useStudioParams";
+import { useStudioParams, STUDIO_VIEWS } from "./useStudioParams";
 import styles from "./studio.module.css";
 
 /**
@@ -26,7 +26,7 @@ import styles from "./studio.module.css";
  * Keyed by project in the route so capture and uploads are released when the project changes.
  */
 export function StudioScreen({ project_id }: { project_id: ID }) {
-  const { experiment: expParam, run: runParam, update } = useStudioParams();
+  const { experiment: expParam, run: runParam, view, update } = useStudioParams();
   const project = useProject(project_id);
   const caps = useCapabilities();
   const list = useExperiments(project_id);
@@ -57,7 +57,7 @@ export function StudioScreen({ project_id }: { project_id: ID }) {
       ) : (
         // Re-key per experiment so local drafts, capture and uploads never leak between plans.
         <StudioBody key={exp.data.id} project_id={project_id} experimentQuery={exp} archived={archived}
-          caps={caps.data} list={list} runParam={runParam} update={update} />
+          caps={caps.data} list={list} runParam={runParam} view={view} update={update} />
       )}
     </div>
   );
@@ -70,10 +70,11 @@ type BodyProps = {
   caps: ReturnType<typeof useCapabilities>["data"];
   list: ReturnType<typeof useExperiments>;
   runParam: string | null;
+  view: "plan" | "inputs" | "analysis" | "results";
   update: ReturnType<typeof useStudioParams>["update"];
 };
 
-function StudioBody({ project_id, experimentQuery, archived, caps, list, runParam, update }: BodyProps) {
+function StudioBody({ project_id, experimentQuery, archived, caps, list, runParam, view, update }: BodyProps) {
   const x = experimentQuery.data!;
   const plan = usePlanDraft(x);
   const edit = useEditExperiment(project_id, x.id);
@@ -149,86 +150,96 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
 
   const uploadsCaps = caps?.uploads;
   const ready = up.phase === "ready" ? up.artifact : null;
+  const taskCopy = {
+    plan: "Set the hypothesis and protocol, then save your plan.",
+    inputs: "Record a video or add a file to your plan.",
+    analysis: "Choose a method and inputs, then start the run.",
+    results: "Review the run and its evidence.",
+  }[view];
+  const taskLabels = { plan: "Plan", inputs: "Inputs", analysis: "Analysis", results: "Results" };
+  function moveTo(next: typeof view) { update({ view: next }); }
 
   return (
     <>
-      <div className={styles.topBar}>
+      <header className={styles.context}>
+        <div className={styles.topBar}>
         <ExperimentSelector project_id={project_id} experiments={list.items} selected={x.id}
-          onSelect={(id) => update({ experiment: id, run: null })} hasMore={list.has_next_page} loadMore={list.load_next_page}
+          onSelect={(id) => update({ experiment: id, run: null, view: "plan" })} hasMore={list.has_next_page} loadMore={list.load_next_page}
           dirty={plan.dirty} archived={archived} />
-      </div>
-
-      <div className={styles.columns}>
-        <div className={styles.colMain}>
-          <ExperimentEditor project_id={project_id} experiment={x} etag={experimentQuery.etag} plan={plan} inputs={inputs}
-            archived={archived} refetch={experimentQuery.refetch} />
+          <span className={plan.dirty ? styles.dirtyState : styles.savedState} role="status">{plan.dirty ? "Unsaved changes" : `Saved · revision ${x.revision}`}</span>
         </div>
-
-        <div className={styles.colSide}>
-          <section className={styles.panel} aria-labelledby="studio-inputs">
-            <h3 id="studio-inputs">Add input data</h3>
-            <Tabs label="Input source" value={captureTab} onChange={setCaptureTab} items={[
-              { id: "record", label: "Record video", content: (
-                <CapturePanel uploads={uploadsCaps} disabled={archived} onUpload={uploadRecording} uploadBusy={up.busy}
-                  uploadedBlob={up.phase === "ready" ? up.input?.blob ?? null : null} />
-              ) },
-              { id: "import", label: "Import a file", content: <FileImport uploads={uploadsCaps} disabled={archived || up.busy} onUpload={uploadFile} /> },
-            ]} />
-            <UploadProgressView up={up}>
-              {ready && (
-                <div className={styles.stack}>
-                  {attachConflict && (
-                    <p className={styles.note} role="alert">The plan changed while attaching. The file is saved; attach it to the refreshed plan.</p>
-                  )}
-                  {edit.error != null && !attachConflict && <ErrorNotice {...describeError(edit.error, "File saved, but not attached")} />}
-                  <div className={styles.row}>
-                    <Button variant="primary" pending={edit.isPending} disabled={archived || plan.remoteNewer} onClick={() => void attach(ready)}>
-                      {attachConflict ? "Attach to refreshed plan" : "Attach to this plan"}
-                    </Button>
-                    <Button onClick={up.reset}>Not now</Button>
-                  </div>
-                  {plan.remoteNewer && <p className={styles.muted}>Resolve the plan revision notice first.</p>}
-                </div>
-              )}
-            </UploadProgressView>
-            {attachNote && <p className={styles.note} role="status">{attachNote}</p>}
-          </section>
-
-          <section className={styles.panel} aria-labelledby="studio-launch">
-            <h3 id="studio-launch">Run analysis</h3>
-            <AnalysisSetup project_id={project_id} experiment={x} inputs={inputs} caps={caps}
-              hasMoreArtifacts={all.has_next_page || forExp.has_next_page}
-              loadingArtifacts={all.is_fetching_next_page || forExp.is_fetching_next_page}
-              loadMoreArtifacts={() => {
-                if (all.has_next_page && !all.is_fetching_next_page) all.load_next_page();
-                if (forExp.has_next_page && !forExp.is_fetching_next_page) forExp.load_next_page();
-              }}
-              planDirty={plan.dirty} planOutOfDate={plan.remoteNewer} archived={archived}
-              refetchExperiment={experimentQuery.refetch}
-              onLaunched={(r: Run) => update({ run: r.id })} />
-          </section>
+        <p className={styles.taskGuidance}>{taskCopy}</p>
+        <div role="tablist" aria-label="Experiment tasks" className={styles.taskTabs}>
+          {STUDIO_VIEWS.map((item) => <button key={item} type="button" role="tab" aria-selected={view === item}
+            aria-controls={`studio-panel-${item}`} id={`studio-tab-${item}`} tabIndex={view === item ? 0 : -1}
+            className={styles.taskTab} onClick={() => moveTo(item)} onKeyDown={(event) => {
+              const i = STUDIO_VIEWS.indexOf(item);
+              const next = event.key === "ArrowRight" ? (i + 1) % STUDIO_VIEWS.length : event.key === "ArrowLeft" ? (i + STUDIO_VIEWS.length - 1) % STUDIO_VIEWS.length : event.key === "Home" ? 0 : event.key === "End" ? STUDIO_VIEWS.length - 1 : -1;
+              if (next >= 0) { event.preventDefault(); moveTo(STUDIO_VIEWS[next]); document.getElementById(`studio-tab-${STUDIO_VIEWS[next]}`)?.focus(); }
+            }}>{taskLabels[item]}</button>)}
         </div>
-      </div>
+      </header>
 
-      <section className={styles.results} aria-labelledby="studio-results">
+      <section id="studio-panel-plan" role="tabpanel" aria-labelledby="studio-tab-plan" tabIndex={0} hidden={view !== "plan"} className={styles.taskPanel}>
+        <ExperimentEditor project_id={project_id} experiment={x} etag={experimentQuery.etag} plan={plan} inputs={inputs}
+          archived={archived} refetch={experimentQuery.refetch} />
+        <div className={styles.taskActions}><Button variant="primary" onClick={() => moveTo("inputs")}>Continue to inputs</Button></div>
+      </section>
+
+      <section id="studio-panel-inputs" role="tabpanel" aria-labelledby="studio-tab-inputs" tabIndex={0} hidden={view !== "inputs"} className={styles.taskPanel}>
+        {view === "inputs" && <section className={styles.panel} aria-labelledby="studio-inputs">
+          <h3 id="studio-inputs">Add input data</h3>
+          <p className={styles.muted}>Leaving Inputs stops the camera and discards any recording that has not been uploaded.</p>
+          <Tabs label="Input source" value={captureTab} onChange={setCaptureTab} items={[
+            { id: "record", label: "Record video", content: view === "inputs" && captureTab === "record" ? (
+              <CapturePanel uploads={uploadsCaps} disabled={archived} onUpload={uploadRecording} uploadBusy={up.busy}
+                uploadedBlob={up.phase === "ready" ? up.input?.blob ?? null : null} />
+            ) : null },
+            { id: "import", label: "Import a file", content: captureTab === "import" ? <FileImport uploads={uploadsCaps} disabled={archived || up.busy} onUpload={uploadFile} /> : null },
+          ]} />
+          <UploadProgressView up={up}>
+            {ready && <div className={styles.stack}>
+              {attachConflict && <p className={styles.note} role="alert">The plan changed while attaching. The file is saved; attach it to the refreshed plan.</p>}
+              {edit.error != null && !attachConflict && <ErrorNotice {...describeError(edit.error, "File saved, but not attached")} />}
+              <div className={styles.row}>
+                <Button variant="primary" pending={edit.isPending} disabled={archived || plan.remoteNewer} onClick={() => void attach(ready)}>{attachConflict ? "Attach to refreshed plan" : "Attach to this plan"}</Button>
+                <Button onClick={up.reset}>Not now</Button>
+              </div>
+              {plan.remoteNewer && <p className={styles.muted}>Resolve the plan revision notice first.</p>}
+            </div>}
+          </UploadProgressView>
+          {attachNote && <p className={styles.note} role="status">{attachNote}</p>}
+          <div className={styles.taskActions}><Button variant="primary" onClick={() => moveTo("analysis")}>Continue to analysis</Button></div>
+        </section>}
+      </section>
+
+      <section id="studio-panel-analysis" role="tabpanel" aria-labelledby="studio-tab-analysis" tabIndex={0} hidden={view !== "analysis"} className={styles.taskPanel}>
+        <section className={styles.panel} aria-labelledby="studio-launch">
+          <h3 id="studio-launch">Configure analysis</h3>
+          <AnalysisSetup project_id={project_id} experiment={x} inputs={inputs} caps={caps}
+            hasMoreArtifacts={all.has_next_page || forExp.has_next_page}
+            loadingArtifacts={all.is_fetching_next_page || forExp.is_fetching_next_page}
+            loadMoreArtifacts={() => {
+              if (all.has_next_page && !all.is_fetching_next_page) all.load_next_page();
+              if (forExp.has_next_page && !forExp.is_fetching_next_page) forExp.load_next_page();
+            }}
+            planDirty={plan.dirty} planOutOfDate={plan.remoteNewer} archived={archived}
+            refetchExperiment={experimentQuery.refetch}
+            onNavigate={(next) => moveTo(next)}
+            onLaunched={(r: Run) => update({ run: r.id, view: "results" })} />
+        </section>
+      </section>
+
+      <section id="studio-panel-results" role="tabpanel" aria-labelledby="studio-tab-results" tabIndex={0} hidden={view !== "results"} className={`${styles.results} ${styles.taskPanel}`}>
         <div className={styles.resultsHead}>
           <h3 id="studio-results">Results</h3>
-          {runs.items.length > 0 && (
-            <RunPicker runs={runs.items} value={runId} onChange={(id) => update({ run: id })}
-              hasMore={runs.has_next_page} loadMore={runs.load_next_page} />
-          )}
+          {runs.items.length > 0 && <RunPicker runs={runs.items} value={runId} onChange={(id) => update({ run: id })}
+            hasMore={runs.has_next_page} loadMore={runs.load_next_page} />}
         </div>
-        {runMissing ? (
-          <EmptyState title="Run unavailable" action={<Button onClick={() => update({ run: null })}>Clear selection</Button>}>
-            That run is not an analysis of this experiment.
-          </EmptyState>
-        ) : runParam && !runFound ? (
-          <Skeleton height="8rem" />
-        ) : runId ? (
-          <ResultsPane project_id={project_id} run_id={runId} />
-        ) : (
-          <p className={styles.muted}>No analysis has been run for this plan yet. Results appear after a run is accepted.</p>
-        )}
+        {runMissing ? <EmptyState title="Run unavailable" action={<Button onClick={() => update({ run: null })}>Clear selection</Button>}>That run is not an analysis of this experiment.</EmptyState>
+          : runParam && !runFound ? <Skeleton height="8rem" />
+          : runId ? <ResultsPane project_id={project_id} run_id={runId} />
+          : <div className={styles.stack}><p className={styles.muted}>No analysis has been run for this plan yet. Results appear after a run is accepted.</p><Button variant="primary" onClick={() => moveTo("analysis")}>Configure analysis</Button></div>}
       </section>
     </>
   );

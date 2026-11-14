@@ -23,12 +23,12 @@ export function AnalysisLaunchSummary({ experiment: x, method, inputs, code, par
       <h4 className={styles.smallLabel}>This run will use</h4>
       <dl className={styles.dl}>
         <dt>Plan</dt><dd>{x.title} · revision {x.revision}</dd>
-        <dt>Method</dt><dd className={styles.mono}>{method}</dd>
+        <dt>Method</dt><dd>{isBall ? "Bouncing-ball video tracker" : "Python analysis"}<details className={styles.muted}><summary>Method ID</summary><code className={styles.mono}>{method}</code></details></dd>
         <dt>{isBall ? "Video" : "Inputs"}</dt><dd>{inputs.length ? inputs.map((a) => <span key={a.id}>{a.filename}{a.metadata.duration_ms != null && ` (${formatDuration(a.metadata.duration_ms)})`}{a.origin === "simulated" && " · simulated"} </span>) : "—"}</dd>
         {isBall ? <>
           <dt>Interval</dt><dd className="num">{Number.isFinite(start) ? start : "?"} s → {end == null ? "end of video" : `${end} s`}</dd>
-          <dt>Object hint</dt><dd>{hint || "—"}</dd>
-          <dt>Tracker scope</dt><dd>Single-ball tracker; the hint does not enable arbitrary object tracking.</dd>
+          <dt>Tracking label</dt><dd>{hint || "—"}</dd>
+          <dt>Tracker scope</dt><dd>Tracks one ball in a fixed camera view. The label does not enable tracking other objects.</dd>
           <dt>Calibration</dt><dd>{x.calibration.mode === "none" ? "None: results in pixels and dimensionless ratios" : `Reference length ${x.calibration.reference_length_m} m`}</dd>
         </> : <>
           <dt>Code</dt><dd>{code?.filename ?? "—"}</dd>

@@ -13,6 +13,8 @@ The build creates four images: frontend, API, project runtime, and scientific wo
 
 Open `http://localhost:3000`. The frontend waits for the API health check, then proxies `/api/v1` to `http://api:8000` over Docker's network. The API is also published at `http://127.0.0.1:8000` for local inspection. Both ports bind only to loopback because authentication is intentionally omitted in this development MVP.
 
+The frontend runs the Next.js development server with hot reload by default. Save a frontend component or stylesheet and the open page updates without rebuilding the image. The first page request can take longer while Next.js compiles it.
+
 No model credentials are needed to open the workspace or use provider-independent processing. Live research chat and experiment-design tools require model configuration. Feature availability comes from `/api/v1/capabilities`.
 
 ## Alternative ports
@@ -53,7 +55,21 @@ Replace 3000 if using a custom frontend port. Health reports database and Docker
 
 ## Rebuild and stop
 
-After source changes, repeat the complete build and startup commands. Compose mounts the canonical `docs/` folder read-only, so local documentation edits appear immediately without rebuilding. To stop the permanent services without deleting data:
+Frontend source changes appear through the bind mount without rebuilding. Compose uses Webpack with file polling so edits are detected through Windows Docker Desktop. Linux dependencies and Next.js build output live in separate Docker volumes, keeping them separate from host `node_modules` and `.next` directories.
+
+After changing `frontend/package.json` or `frontend/package-lock.json`, restart the frontend. Startup checks both files against the installed dependencies and runs `npm ci` when they differ. Unchanged dependencies are reused. Installing dependencies can take several minutes:
+
+```sh
+docker compose -f backend/compose.yaml restart frontend
+```
+
+After changing the frontend Dockerfile, rebuild and recreate only that service:
+
+```sh
+docker compose -f backend/compose.yaml up -d --build --no-deps --wait frontend
+```
+
+Backend, project-runtime, and worker source changes still require rebuilding the affected images. Compose mounts the canonical `docs/` folder read-only, so local documentation edits appear immediately without rebuilding. To stop the permanent services without deleting data:
 
 ```sh
 docker compose -f backend/compose.yaml stop
@@ -63,8 +79,16 @@ Project containers have a separate lifecycle. Preserve their evidence and volume
 
 ## Frontend-only development
 
-The complete Compose workflow is preferred. For hot reload, start only the API with `docker compose -f backend/compose.yaml up -d --wait api`, then run `npm ci` and `npm run dev` from `frontend/`.
+The complete Compose workflow includes hot reload and is preferred. To run the frontend on the host instead, stop the Compose frontend with `docker compose -f backend/compose.yaml stop frontend`, start only the API with `docker compose -f backend/compose.yaml up -d --wait api`, then run `npm ci` and `npm run dev` from `frontend/`.
 
 The host frontend defaults to `http://127.0.0.1:8000`. An optional `frontend/.env.local` can set `STELLARIS_API_ORIGIN` to another compatible backend. Restart Next.js after changing it. Docker builds use `http://api:8000`, an internal hostname browsers should not contact directly.
 
 All docs live in root `docs/`. A frontend route serves Markdown directly from that tree. Compose mounts it read-only at `/app/docs`. The frontend image also packages it as a fallback for deployments without that bind mount. There is no second authored documentation folder.
+
+## Production frontend image
+
+The Dockerfile retains its production `runtime` stage as the default for direct Docker builds. Build it independently of the development Compose service:
+
+```sh
+docker build -f frontend/Dockerfile --target runtime -t stellaris-frontend:production .
+```

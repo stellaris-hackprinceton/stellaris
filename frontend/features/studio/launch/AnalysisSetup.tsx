@@ -22,6 +22,7 @@ type Props = {
   archived: boolean;
   refetchExperiment: () => void;
   onLaunched: (run: Run) => void;
+  onNavigate: (view: "plan" | "inputs") => void;
 };
 
 type Method = "" | "bouncing_ball_v1" | "python_analysis_v1";
@@ -53,7 +54,7 @@ export function validateParametersJson(raw: string): { value: Record<string, Jso
 }
 
 /** Launches only the explicitly selected method and immutable saved experiment revision. */
-export function AnalysisSetup({ project_id, experiment: x, inputs, hasMoreArtifacts = false, loadingArtifacts = false, loadMoreArtifacts, caps, planDirty, planOutOfDate, archived, refetchExperiment, onLaunched }: Props) {
+export function AnalysisSetup({ project_id, experiment: x, inputs, hasMoreArtifacts = false, loadingArtifacts = false, loadMoreArtifacts, caps, planDirty, planOutOfDate, archived, refetchExperiment, onLaunched, onNavigate }: Props) {
   const id = useId();
   const startRun = useStartRun(project_id);
   const attached = x.input_artifact_ids.map((a) => inputs.get(a)).filter((a): a is Artifact => a?.project_id === project_id);
@@ -89,9 +90,9 @@ export function AnalysisSetup({ project_id, experiment: x, inputs, hasMoreArtifa
     : method === "bouncing_ball_v1" && videos.length === 0 ? "Attach a video to the saved plan first."
     : method === "bouncing_ball_v1" && !video ? "Choose the video to analyse."
     : method === "bouncing_ball_v1" && intervalError ? intervalError
-    : method === "bouncing_ball_v1" && (hint.length < 1 || hint.length > 100) ? "Describe the single object the ball tracker should follow (1–100 characters)."
-    : method === "python_analysis_v1" && !code ? "Choose an attached Python code artifact (text/x-python)."
-    : method === "python_analysis_v1" && pythonInputs.length === 0 ? "Choose at least one attached input artifact for the Python analysis."
+    : method === "bouncing_ball_v1" && (hint.length < 1 || hint.length > 100) ? "Add a tracking label (1–100 characters)."
+    : method === "python_analysis_v1" && !code ? "Choose a Python script from this project."
+    : method === "python_analysis_v1" && pythonInputs.length === 0 ? "Choose at least one input file attached to the saved plan."
     : method === "python_analysis_v1" && parsedParameters.error ? parsedParameters.error
     : null;
 
@@ -164,20 +165,20 @@ export function AnalysisSetup({ project_id, experiment: x, inputs, hasMoreArtifa
         <div className={styles.grid3}>
           <div className={styles.varField}><label htmlFor={`${id}-s`} className={styles.smallLabel}>Start (s)</label><input id={`${id}-s`} type="number" min={0} step="0.01" className={`${styles.input} ${styles.mono}`} value={ball.start} disabled={disabled} onChange={(e) => setBall({ ...ball, start: e.target.value })} /></div>
           <div className={styles.varField}><label htmlFor={`${id}-e`} className={styles.smallLabel}>End (s)</label><input id={`${id}-e`} type="number" min={0} step="0.01" className={`${styles.input} ${styles.mono}`} value={ball.end} placeholder="end of video" disabled={disabled} onChange={(e) => setBall({ ...ball, end: e.target.value })} /></div>
-          <div className={styles.varField}><label htmlFor={`${id}-h`} className={styles.smallLabel}>Object hint</label><input id={`${id}-h`} className={styles.input} value={ball.hint} disabled={disabled} onChange={(e) => setBall({ ...ball, hint: e.target.value })} /><span className={styles.muted}>The built-in tracker follows one ball; this hint does not enable arbitrary object tracking.</span></div>
+          <div className={styles.varField}><label htmlFor={`${id}-h`} className={styles.smallLabel}>Tracking label</label><input id={`${id}-h`} aria-describedby={`${id}-hint-help`} className={styles.input} value={ball.hint} disabled={disabled} onChange={(e) => setBall({ ...ball, hint: e.target.value })} /><span id={`${id}-hint-help`} className={styles.muted}>The tracker follows one ball in a fixed camera view. This label does not enable tracking other objects.</span></div>
         </div>
         {intervalError && video && <p className={styles.fieldError} role="alert">{intervalError}</p>}
       </>}
 
       {method === "python_analysis_v1" && <>
         <div className={styles.varField}>
-          <label htmlFor={`${id}-code`} className={styles.smallLabel}>Project Python code artifact</label>
+          <label htmlFor={`${id}-code`} className={styles.smallLabel}>Python script</label>
           <select id={`${id}-code`} className={styles.input} value={codeId} disabled={disabled} onChange={(e) => setCodeId(e.target.value)}>
-            <option value="">Choose project Python code</option>{pythonFiles.map((a) => <option key={a.id} value={a.id}>{a.filename}</option>)}
+            <option value="">Choose a Python script</option>{pythonFiles.map((a) => <option key={a.id} value={a.id}>{a.filename}</option>)}
           </select>
         </div>
         <fieldset className={styles.fieldset} disabled={disabled}>
-          <legend className={styles.smallLabel}>Input artifacts</legend>
+          <legend className={styles.smallLabel}>Input files</legend>
           {attached.filter((a) => a.id !== code?.id).map((a) => <label key={a.id} className={styles.radio}><input type="checkbox" checked={selectedInputs.includes(a.id)} onChange={(e) => setSelectedInputs((old) => e.target.checked ? [...old, a.id] : old.filter((value) => value !== a.id))} /><span>{a.filename} <span className={styles.muted}>({a.kind})</span></span></label>)}
           {attached.length === 0 && <p className={styles.muted}>No saved-plan inputs are loaded yet.</p>}
           {hasMoreArtifacts && <div className={styles.row}><Button disabled={loadingArtifacts || disabled} pending={loadingArtifacts} onClick={loadMoreArtifacts}>Load more files</Button><span className={styles.muted}>Only loaded project files appear here; run inputs must also be attached to the saved plan.</span></div>}
@@ -197,7 +198,10 @@ export function AnalysisSetup({ project_id, experiment: x, inputs, hasMoreArtifa
         {unresolved && <Button onClick={() => void launch(true)} pending={startRun.isPending}>Retry submission</Button>}
         <Button disabled={startRun.isPending} onClick={() => { key.current = null; setUnresolved(false); startRun.reset(); }}>Dismiss</Button>
       </div>} />}
-      {blocker && <p className={styles.muted}>{blocker}</p>}
+      {blocker && <div className={styles.muted}><p>{blocker}</p>
+        {planDirty || planOutOfDate ? <Button onClick={() => onNavigate("plan")}>Review plan</Button>
+          : method === "bouncing_ball_v1" && videos.length === 0 || method === "python_analysis_v1" && (!code || pythonInputs.length === 0) ? <Button onClick={() => onNavigate("inputs")}>Add inputs</Button> : null}
+      </div>}
       <div className={styles.row}>
         <Button variant="primary" disabled={Boolean(blocker) || unresolved} pending={startRun.isPending} onClick={() => void launch(false)}>Start analysis</Button>
         {accepted && <span className={styles.row} role="status"><StatusBadge tone="info">Accepted · {accepted.status}</StatusBadge><Link href={hrefs.run(project_id, accepted.id)}>Follow this run</Link></span>}

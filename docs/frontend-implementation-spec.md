@@ -9,6 +9,8 @@ Current operation: run the application through the [Docker Compose guide](docker
 
 Visual direction revised **November 14, 2026**: section 4 replaces the original visual defaults with a sharp research desk direction requested by the user. These are design requirements for subsequent interface work, not a claim that the current frontend implements them.
 
+**Unified workspace amendment, November 14, 2026:** [Unified workspace interface](frontend-workspace.md) supersedes the older section-based navigation and four-tab Research screen below. The user approved frontend adoption of the implemented catalog, a visual knowledge graph of explicit relations, a research overview, and a run-based Tracker. The frontend `/workspace` route is removed without an alias. `/materials` is its replacement. Scientific backend routes, including the backend workspace snapshot, remain unchanged. Earlier implementation assignments are historical.
+
 ## 1. Context carried forward from this chat
 
 Stellaris is the research platform described in the supplied HackPrinceton 2026 document. Its frontend connects a scientific question to literature, an experiment plan, real experimental inputs, inspectable measurements, and a scientific report in one persistent project.
@@ -48,7 +50,7 @@ The completed frontend lets a researcher perform this sequence:
 
 The primary delivery path is the bouncing-ball example. Other features may appear only when the backend reports support and the relevant frontend workflow exists. A backend feature flag alone does not promise a complete frontend workflow.
 
-The MVP does not implement live media streaming, microphone capture, HPC controls, collaboration, notebooks, PDF/DOCX export, knowledge graphs, or a freeform diagram editor. Research Canvas is a structured research view. Charts initially display backend-authored image artifacts. Generated Python can be inspected or uploaded as an artifact, but a browser IDE is outside this scope.
+The MVP does not implement live media streaming, microphone capture, HPC controls, collaboration, notebooks, PDF/DOCX export, inferred semantic graphs, or a freeform diagram editor. Knowledge graph visualizes explicit catalog relations. Research is a project overview. Charts display backend-authored image artifacts. Generated Python can be inspected or uploaded as an artifact, but a browser IDE is outside this scope.
 
 ## 3. Architecture and selected stack
 
@@ -95,7 +97,8 @@ ProjectRuntime supplies session/capability state, project identity, connectivity
 - `/projects/[projectId]/studio` selects or creates an experiment, collects media, saves setup, and starts analysis. Query parameters `experiment` and `run` preserve selection.
 - `/projects/[projectId]/runs` lists run history.
 - `/projects/[projectId]/runs/[runId]` shows execution, logs, approvals, and scientific results.
-- `/projects/[projectId]/workspace` browses persisted artifacts and previews selected files. Query parameter `artifact` preserves selection.
+- `/projects/[projectId]/materials` browses catalog materials, tags, collections, and notes. Query parameter `file` preserves selection. Scientific artifact links may select by `artifact`.
+- `/projects/[projectId]/graph` visualizes catalog files and explicit directed relations.
 - `/projects/[projectId]/reports/[artifactId]` previews a saved Markdown report with evidence links and a download action.
 
 Opaque IDs must be encoded in URLs. A selected object is validated against the route's project before display. Missing or inaccessible resources show a project-local unavailable state. Route files and shared layouts are owned only by Agent C.
@@ -104,11 +107,15 @@ Opaque IDs must be encoded in URLs. A selected object is validated against the r
 
 ### Visual direction: precision research desk
 
+Preserve the original inset, rounded navigation selection. The blue left accent is a rectangular strip clipped by the selection's outer rounded rectangle. Its inner/right edge stays flat. Do not use an inset shadow that curves that inner edge, or replace the inset links with full-width divided rows. The user's screenshot clarification supersedes the connected-frame proposal.
+
 Stellaris should feel like a precise instrument for sustained research. Use a compact, orderly workspace with crisp edges, aligned information, readable evidence, and an obvious next action. Power comes from visible context, efficient inspection, and predictable controls. Familiar labels and progressive disclosure keep the same interface approachable on a first visit.
 
 Use graphite navigation beside a light neutral work surface. Keep the main experiment, evidence, or report visually dominant. Give chat a quieter supporting rail. Structure the workspace with straight dividers and shared panel boundaries. Reserve separate bordered containers for genuinely independent content. Avoid a stack of rounded cards, decorative gradients, glow, glass effects, and oversized dashboard statistics.
 
 ### Attention and workflow hierarchy
+
+Primary navigation uses **Research**, **Materials**, **Experiments**, **Knowledge graph**, and **Tracker** in one sidebar. Materials uses the catalog rather than fixed category screens. Tracker includes research, analysis, and report runs at the existing `/runs` paths. The old frontend `/workspace` route is removed. Within Experiments, retain the task labels **Plan**, **Inputs**, **Analysis**, and **Results**. Use “Python script” and “input files” in launch controls. Reserve pipeline identifiers, hashes, and resource IDs for technical details where they help inspection. A completed run describes execution state, not scientific confirmation.
 
 - **Orient:** keep project name, current area, and relevant experiment or run identity in a compact, stable header. Show active navigation with text, a background change, and a solid edge marker.
 - **Focus:** let the active task occupy most of the center. In Research, this is the research brief and its evidence. In Studio, it is the current setup or recording. In Execution, it is run state and available results. In Workspace, it is the selected artifact. In Reports, it is the saved document.
@@ -124,7 +131,7 @@ The desktop desk has three stable regions, from left to right: project navigatio
 
 The center has a compact context row, the working surface, and the task's actions next to the content they affect. In Studio, keep the experiment selector at the top, followed by plan/setup, input collection, and explicit launch configuration. Results use the full center width beneath the setup. Additional columns are allowed only when the center itself has enough space. A wide browser with navigation and chat open must not force the experiment into two cramped inner columns. Use workspace container width, rather than browser width, to decide that split.
 
-For the next layout pass, replace Studio's long stack of open forms with task views labeled **Plan**, **Inputs**, **Analysis**, and **Results** within the same central workspace. Keep the selected experiment and right-hand chat stable while changing views. Place the current view's primary action and any prerequisite warning beside its work. Preserve unsaved plan text across these switches and make the next useful view easy to reach. These task views are a proposed layout refinement, not part of the launch bug fix or a new set of backend run states.
+Studio now replaces its long stack of open forms with task views labeled **Plan**, **Inputs**, **Analysis**, and **Results** within the same central workspace. Keep the selected experiment and right-hand chat stable while changing views. Place the current view's primary action and any prerequisite warning beside its work. Preserve unsaved plan text across these switches and make the next useful view easy to reach. These task views use the URL parameter `view` with values `plan`, `inputs`, `analysis`, and `results`. They are interface navigation, not backend run states. Verification is recorded in [Broad layout verification](verification/broad-layout.md).
 
 Supporting source details and provenance belong beside or within the selected central content. Do not add a permanent fourth rail that competes with chat. On smaller screens, the same right-hand chat becomes a dismissible sheet and then a full-height conversation, with a clear return to the selected work.
 

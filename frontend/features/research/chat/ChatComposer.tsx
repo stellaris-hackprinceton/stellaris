@@ -11,7 +11,16 @@ type Props = {
   project_id: ID;
   archived: boolean;
   artifacts: Map<ID, Artifact>;
+  draft: ReturnType<typeof useChatDraft>;
 };
+
+export function useChatDraft() {
+  const [text, setText] = useState("");
+  const [attachments, setAttachments] = useState<ID[]>([]);
+  const keyRef = useRef<{ key: string; body: string } | null>(null);
+  const [failed, setFailed] = useState<unknown>(null);
+  return { text, setText, attachments, setAttachments, keyRef, failed, setFailed };
+}
 
 const ERROR_TEXT: Record<string, string> = {
   PROJECT_ARCHIVED: "This project is archived. Restore it to send messages.",
@@ -23,13 +32,10 @@ const ERROR_TEXT: Record<string, string> = {
  * Text stays in the box until the server accepts it. One idempotency key per send attempt:
  * a retry of the same text reuses it; editing the text after a failure starts a new action.
  */
-export function ChatComposer({ project_id, archived, artifacts }: Props) {
+export function ChatComposer({ project_id, archived, artifacts, draft }: Props) {
   const submit = useSubmitMessage(project_id);
   const id = useId();
-  const [text, setText] = useState("");
-  const [attachments, setAttachments] = useState<ID[]>([]);
-  const keyRef = useRef<{ key: string; body: string } | null>(null);
-  const [failed, setFailed] = useState<unknown>(null);
+  const { text, setText, attachments, setAttachments, keyRef, failed, setFailed } = draft;
 
   const body = JSON.stringify([text.trim(), attachments]);
   const canSend = !archived && text.trim().length > 0 && !submit.isPending;
@@ -88,9 +94,9 @@ export function ChatComposer({ project_id, archived, artifacts }: Props) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder={archived ? "Project archived" : "Ask about literature, or ask for an experiment design…"}
+        placeholder={archived ? "Project archived" : "Ask a question or plan an experiment…"}
         disabled={archived}
-        rows={3}
+        rows={2}
         aria-describedby={`${id}-hint`}
       />
       <div className={styles.composerBar}>

@@ -37,8 +37,8 @@ export async function responseError(response: Response): Promise<ApiError> {
   return error
 }
 export async function request<T>(path: string, options: {
-  method?: 'GET' | 'POST' | 'PATCH', body?: unknown, signal?: AbortSignal,
-  command?: CommandOptions, edit?: EditOptions
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: unknown, signal?: AbortSignal,
+  command?: CommandOptions, edit?: EditOptions, deleteOptions?: EditOptions | { signal?: AbortSignal }
 } = {}): Promise<ApiResult<T>> {
   const method = options.method ?? 'GET'
   const headers = new Headers({ Accept: 'application/json' })
@@ -55,12 +55,14 @@ export async function request<T>(path: string, options: {
     if (!options.edit?.etag) throw new Error('A loaded ETag is required.')
     headers.set('If-Match', options.edit.etag)
   }
+  if (method === 'DELETE' && options.deleteOptions && 'etag' in options.deleteOptions) headers.set('If-Match', options.deleteOptions.etag)
   const response = await fetch(apiUrl(path), {
     method, headers, credentials: 'same-origin', cache: 'no-store',
-    signal: options.signal ?? options.command?.signal ?? options.edit?.signal,
+    signal: options.signal ?? options.command?.signal ?? options.edit?.signal ?? options.deleteOptions?.signal,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   })
   if (!response.ok) throw await responseError(response)
+  if (response.status === 204) return { data: undefined as T, etag: response.headers.get('ETag'), request_id: response.headers.get('X-Request-ID') }
   return { data: await response.json() as T, etag: response.headers.get('ETag'), request_id: response.headers.get('X-Request-ID') }
 }
 export async function readText(path: string, signal?: AbortSignal) {

@@ -41,6 +41,19 @@ test('authenticated PATCH preserves CSRF and the loaded ETag', async () => {
   await request('/projects/project-id', { method: 'PATCH', body: { name: 'Changed' }, edit: { etag: '"4"' } })
 })
 
+test('DELETE preserves the session, optional ETag, and empty 204 response', async () => {
+  setCsrfToken('actual-token')
+  mock.method(globalThis, 'fetch', async (_url, options) => {
+    assert.equal(options.method, 'DELETE')
+    assert.equal(options.headers.get('X-CSRF-Token'), 'actual-token')
+    assert.equal(options.headers.get('If-Match'), '"7"')
+    return new Response(null, { status: 204, headers: { 'X-Request-ID': 'delete-request' } })
+  })
+  const result = await request('/projects/project-id/files/file-id', { method: 'DELETE', deleteOptions: { etag: '"7"' } })
+  assert.equal(result.data, undefined)
+  assert.equal(result.request_id, 'delete-request')
+})
+
 test('clearing the session removes development write permission', async () => {
   setCsrfToken('', 'development_none')
   setCsrfToken(null)
