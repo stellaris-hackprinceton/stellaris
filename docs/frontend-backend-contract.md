@@ -25,6 +25,8 @@ The product document does not define exact API shapes. This draft selects the fo
 - Immutable run inputs and output artifacts, with revisions for editable project and experiment records.
 - Explicit resource links between sources, experiments, runs, measurements, and reports.
 
+**Amendment (2026-11-14), proposed and not yet implemented:** The [file workspace contract](file-workspace-contract.md) adds a free-form, tag-based file interface. It covers files, notes, tags, collections, and relations. For new workspace UI, it supersedes the rigid per-category navigation. Every route, resource, and event in this document stays in place and unchanged. These routes remain authoritative for scientific records and commands.
+
 “MUST” means an implementation requirement within this proposed contract. “SHOULD” allows an exception when its consequence is documented. All routes below belong to the MVP unless explicitly marked as future work.
 
 ## 2. Responsibilities at the boundary
