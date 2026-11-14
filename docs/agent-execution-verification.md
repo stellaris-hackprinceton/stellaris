@@ -88,3 +88,7 @@ uploaded file and removal of the misplaced experiment button. No model calls wer
 User clarification: restored Desk as the default Materials view. Upload file remains
 available on Desk and all other Materials views; All materials still exposes the raw
 inventory. A quick isolated WebKit check confirmed Desk and its upload dialog.
+
+Simplified Materials upload: Upload file opens the native picker and selection uploads
+immediately, with no origin questionnaire or second upload action. Isolated WebKit
+verified an actual JSON upload; TypeScript and scoped ESLint passed. No model calls.

@@ -92,11 +92,12 @@ archived runtimes are not resurrected. Existing archived containers are not auto
 stopped or deleted. Workspace volumes and scientific records survive container cleanup.
 This does not add idle shutdown or a project/data deletion endpoint.
 
-## Experiment data uploads
+## Project file uploads
 
 Materials exposes Upload file, storing project-scoped files without requiring an
-experiment. It opens the existing file import flow, preserving origin declarations,
-upload validation and limits. Materials defaults to Desk, with Upload file available there. All materials exposes the
+experiment. Clicking Upload file opens the native file picker and uploads the selected
+file immediately, without a data-type questionnaire. New generic uploads are recorded as
+reference material rather than asserted observations. Upload validation and limits remain. Materials defaults to Desk, with Upload file available there. All materials exposes the
 raw inventory of files, saved scripts, outputs and records. Experiments reference this shared
 project storage rather than own a separate hidden file store. JSON is accepted as a dataset or document and retains
 the existing strict, finite-number JSON validation (16 MiB parser limit). CSV, text and
