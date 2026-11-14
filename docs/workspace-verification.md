@@ -43,6 +43,9 @@ HPC remains disabled. No credentials were inspected.
   connection with **no page errors**. WebKit reported canceled-stream messages during
   deliberate full-document navigations in the broader test; these did not reproduce
   during normal navigation.
+- Saving and reopening the real paper's Literature collection preserved its
+  `literature` presentation and `status=all` filter. The frontend was restarted after
+  the production build before this final browser check.
 
 The earlier catalog/collection regressions and shell smoke test used clearly labeled
 test projects. After the user requested no synthetic data, remaining browser checks
