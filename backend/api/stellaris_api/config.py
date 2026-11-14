@@ -50,6 +50,20 @@ class Config:
     # Workspace file catalogs: one SQLite file per project on the API volume.
     catalog_dir: str
     max_note_bytes: int
+    # Slurm + Apptainer remote execution (ADR-0001). Disabled when slurm_host is empty or
+    # the cluster is unreachable; capabilities report actual availability.
+    slurm_host: str
+    slurm_port: int
+    slurm_user: str
+    slurm_key_dir: str
+    slurm_authorized_keys_dir: str
+    slurm_scratch: str
+    slurm_cluster_kind: str
+    slurm_cluster_label: str
+    slurm_unsquash: bool
+    slurm_max_queue_wait_s: int
+    slurm_max_concurrent_runs: int
+    approval_ttl_s: int
 
 
 def load_config() -> Config:
@@ -91,4 +105,19 @@ def load_config() -> Config:
         # Backend-owned, never mounted into project or worker containers.
         catalog_dir=_env("STELLARIS_CATALOG_DIR", "/data/catalogs"),
         max_note_bytes=int(_env("STELLARIS_MAX_NOTE_BYTES", str(64 * 1024 * 1024))),
+        slurm_host=os.environ.get("STELLARIS_SLURM_HOST", "").strip(),
+        slurm_port=int(_env("STELLARIS_SLURM_PORT", "22")),
+        slurm_user=_env("STELLARIS_SLURM_USER", "stellaris"),
+        # Private key and pinned host key live only in the API's data volume.
+        slurm_key_dir=_env("STELLARIS_SLURM_KEY_DIR", "/data/hpc"),
+        # The public key is published here for the local simulated cluster's sshd.
+        slurm_authorized_keys_dir=os.environ.get("STELLARIS_SLURM_AUTHORIZED_KEYS_DIR", "").strip(),
+        slurm_scratch=_env("STELLARIS_SLURM_SCRATCH", "/state/scratch/stellaris"),
+        slurm_cluster_kind=_env("STELLARIS_SLURM_CLUSTER_KIND", "local_simulated"),
+        slurm_cluster_label=_env("STELLARIS_SLURM_CLUSTER_LABEL", "Local simulated Slurm cluster"),
+        # Docker Desktop's FUSE cannot exec from squashfuse mounts, so SIFs are unpacked per job.
+        slurm_unsquash=_env("STELLARIS_SLURM_UNSQUASH", "true").lower() in ("1", "true", "yes"),
+        slurm_max_queue_wait_s=int(_env("STELLARIS_SLURM_MAX_QUEUE_WAIT_S", "600")),
+        slurm_max_concurrent_runs=int(_env("STELLARIS_SLURM_MAX_CONCURRENT_RUNS", "4")),
+        approval_ttl_s=int(_env("STELLARIS_APPROVAL_TTL_S", "3600")),
     )

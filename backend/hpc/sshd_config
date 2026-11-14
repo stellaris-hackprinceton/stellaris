@@ -1,0 +1,9 @@
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+AllowUsers stellaris
+AuthorizedKeysFile /etc/stellaris-keys/authorized_keys
+AllowTcpForwarding no
+X11Forwarding no
+PermitTunnel no
+HostKey /state/ssh/ssh_host_ed25519_key

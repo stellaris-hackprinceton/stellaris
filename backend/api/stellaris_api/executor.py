@@ -153,6 +153,10 @@ class RunContext:
         self.input = self.run["input"]
         self.experiment_id = row["experiment_id"]
         self._cancel = manager._cancel_event(run_id)
+        if row["status"] == "cancelling":  # Resumed after a restart with cancellation already requested.
+            self._cancel.set()
+        self.suspended = False  # Set by a handler that is waiting for an approval decision.
+        self.cluster = getattr(manager, "cluster", None)
         self._last_progress = 0.0
         self.warnings = []
         self.staged = []
@@ -321,7 +325,9 @@ class RunManager:
         self.config = config
         self.runtime = runtime
         self.handlers = {}
+        self.cluster = None  # hpc.SlurmCluster, set by the app when configured.
         self._queue = queue.Queue()
+        self._remote_queue = queue.Queue()  # Slurm runs hold a slot while polling; keep them separate.
         self._cancel_events = {}
         self._lock = threading.Lock()
         self._threads = []
@@ -332,12 +338,46 @@ class RunManager:
 
     def start(self) -> None:
         for i in range(max(1, self.config.max_concurrent_runs)):
-            thread = threading.Thread(target=self._loop, name=f"stellaris-run-{i}", daemon=True)
+            thread = threading.Thread(target=self._loop, args=(self._queue,), name=f"stellaris-run-{i}", daemon=True)
             thread.start()
             self._threads.append(thread)
+        for i in range(max(1, self.config.slurm_max_concurrent_runs)):
+            thread = threading.Thread(target=self._loop, args=(self._remote_queue,), name=f"stellaris-remote-{i}",
+                                      daemon=True)
+            thread.start()
+            self._threads.append(thread)
+        threading.Thread(target=self._sweep_approvals, name="stellaris-approvals", daemon=True).start()
 
-    def enqueue(self, run_id: str) -> None:
-        self._queue.put(run_id)
+    def enqueue(self, run_id: str, remote: bool = False) -> None:
+        (self._remote_queue if remote else self._queue).put((run_id, False))
+
+    def resume(self, run_id: str) -> None:
+        """Continue a run that is already `running`/`cancelling` (approved, or reattaching after
+        a restart). Only remote runs are resumable."""
+        self._remote_queue.put((run_id, True))
+
+    def _sweep_approvals(self) -> None:
+        from . import approvals
+        while True:
+            time.sleep(30)
+            try:
+                conn = db.connect(self.config.db_path)
+                try:
+                    approvals.sweep_expired(conn)
+                finally:
+                    conn.close()
+            except Exception:
+                log.exception("Approval expiry sweep failed")
+
+    def execute_now(self, run_id: str) -> None:
+        """Execute a queued run synchronously on the calling thread (agent-requested paper
+        ingestion). Bypasses the queue so a run holding an executor slot cannot deadlock
+        waiting for another slot."""
+        try:
+            self._execute(run_id)
+        finally:
+            with self._lock:
+                self._cancel_events.pop(run_id, None)
 
     def request_cancel(self, run_id: str) -> None:
         self._cancel_event(run_id).set()
@@ -356,24 +396,26 @@ class RunManager:
         self._worker_check = (time.monotonic(), value)
         return value
 
-    def _loop(self) -> None:
+    def _loop(self, source) -> None:
         while True:
-            run_id = self._queue.get()
+            run_id, resume = source.get()
             try:
-                self._execute(run_id)
+                self._execute(run_id, resume=resume)
             except Exception:
                 log.exception("Run %s crashed the executor loop", run_id)
             finally:
                 with self._lock:
                     self._cancel_events.pop(run_id, None)
 
-    def _execute(self, run_id: str) -> None:
+    def _execute(self, run_id: str, resume: bool = False) -> None:
         conn = db.connect(self.config.db_path)
         try:
             with transaction(conn):
                 row = conn.execute("SELECT status, kind FROM runs WHERE id = ?", (run_id,)).fetchone()
-                if row is None or row["status"] != "queued":
+                if row is None or row["status"] != ("queued" if not resume else row["status"]):
                     return  # Cancelled while queued, or already handled.
+                if resume and row["status"] not in ("running", "cancelling"):
+                    return
                 kind = row["kind"]
                 handler = self.handlers.get(kind)
                 if handler is None:
@@ -381,14 +423,17 @@ class RunManager:
                                   error={"code": "FEATURE_UNAVAILABLE",
                                          "message": f"No executor is registered for {kind} runs.", "retryable": False})
                     return
-                runs.save_run(conn, run_id, status="running", started_at=now_ts(), phase="starting",
-                              progress={"fraction": 0.0, "message": "Starting."})
+                if not resume:
+                    runs.save_run(conn, run_id, status="running", started_at=now_ts(), phase="starting",
+                                  progress={"fraction": 0.0, "message": "Starting."})
         finally:
             conn.close()
 
         ctx = RunContext(self, run_id)
         try:
             handler(ctx)
+            if ctx.suspended:
+                return  # Awaiting approval; a decision re-enqueues the run.
             if not ctx.finished:
                 raise RunFailure("INTERNAL_ERROR", "The run handler returned without finishing the run.")
         except RunFailure as exc:

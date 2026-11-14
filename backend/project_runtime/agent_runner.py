@@ -2,10 +2,13 @@
 
 import asyncio
 import json
+import math
 import os
 import re
 import sys
 import threading
+import time
+from collections import Counter
 from typing import Literal
 import platform
 from importlib.metadata import version
@@ -25,6 +28,10 @@ from botocore.exceptions import ClientError
 _write_lock = threading.Lock()
 _SAFE_ERROR_CODE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 AGENT_RECURSION_LIMIT = 200
+MAX_TOOL_CHARS = 12_000
+INGEST_WAIT_S = 400
+MAX_AGENT_INGESTIONS = 2
+_TOKEN = re.compile(r"[a-z0-9]+")
 
 
 def emit(event):
@@ -182,10 +189,37 @@ def experiment_problems(payload, known_artifacts):
     return problems
 
 
-def make_tools(artifact_ids=None):
+def _unversioned(arxiv_key):
+    return re.sub(r"v\d+$", "", arxiv_key or "")
+
+
+def _outline(entry):
+    paper = entry["paper"]
+    lines = [f"Full text of {entry['title']!r} (cite as source_id {entry['citation_key']!r}). Sections:"]
+    for section in paper["sections"]:
+        lines.append(f"- {section['id']}: {section['locator']} {section['title']} ({len(section['paragraphs'])} paragraphs)")
+    if paper.get("references"):
+        lines.append(f"{len(paper['references'])} bibliography entries extracted.")
+    return "\n".join(lines)[:MAX_TOOL_CHARS]
+
+
+def make_tools(artifact_ids=None, papers=None, run_id=""):
     known_artifacts = set(artifact_ids or ())
+    papers = dict(papers or {})
     search_count = 0
     proposal_count = 0
+    ingest_count = 0
+
+    def find_paper(source):
+        source = (source or "").strip()
+        if source in papers:
+            return papers[source]
+        for entry in papers.values():
+            key = entry["citation_key"]
+            if source == key or (key.startswith("arxiv:") and source.startswith("arxiv:")
+                                 and _unversioned(key) == _unversioned(source)):
+                return entry
+        return None
 
     def propose(kind, payload):
         nonlocal proposal_count
@@ -256,6 +290,78 @@ def make_tools(artifact_ids=None):
         return message
 
     @tool
+    def read_paper(source: str, section: str = "", start_paragraph: int = 1) -> str:
+        """Read supplied full text by section ID/title, returning exact paragraph locators."""
+        entry = find_paper(source)
+        if entry is None:
+            return f"No full text is available for {source!r}."
+        if not section.strip():
+            return _outline(entry)
+        wanted = section.strip().lower()
+        match = next((s for s in entry["paper"]["sections"] if wanted in
+                      (s["id"].lower(), (s.get("number") or "").lower(), s["locator"].lower(), s["title"].lower(),
+                       s["locator"].lstrip("§").lower())), None)
+        if match is None:
+            return f"No section {section!r}. " + _outline(entry)
+        out, used = [f"{match['locator']} {match['title']}"], 0
+        start = max(1, int(start_paragraph or 1))
+        for i, para in enumerate(match["paragraphs"][start - 1:], start=start):
+            line = f"[{para['locator']}] {para['text']}"
+            if used + len(line) > MAX_TOOL_CHARS:
+                out.append(f"(Continue with start_paragraph={i}.)")
+                break
+            out.append(line); used += len(line)
+        return "\n\n".join(out)
+
+    @tool
+    def search_paper(query: str, source: str = "") -> str:
+        """Deterministic keyword search in supplied full-text paragraphs; results include exact locators."""
+        entries = [find_paper(source)] if source.strip() else list(papers.values())
+        entries = [e for e in entries if e]
+        terms = _TOKEN.findall(query.lower())
+        if not entries:
+            return "No full-text papers are available."
+        if not terms:
+            return "The query has no searchable terms."
+        docs = [(e, p, Counter(_TOKEN.findall(p["text"].lower())))
+                for e in entries for s in e["paper"]["sections"] for p in s["paragraphs"]]
+        n = len(docs); avg = sum(sum(c.values()) for _, _, c in docs) / max(1, n)
+        df = Counter(t for _, _, c in docs for t in set(terms) if t in c)
+        scores = []
+        for entry, para, counts in docs:
+            length = sum(counts.values())
+            score = sum(math.log(1 + (n - df[t] + .5) / (df[t] + .5)) * counts[t] * 2.5 /
+                        (counts[t] + 1.5 * (.25 + .75 * length / max(avg, 1))) for t in terms if counts[t])
+            if score: scores.append((score, entry, para))
+        scores.sort(key=lambda x: -x[0])
+        return "\n\n".join(f"{e['citation_key']} [{p['locator']}] {p['text'][:800]}" for _, e, p in scores[:8])[:MAX_TOOL_CHARS] or "No paragraphs matched."
+
+    @tool
+    def request_full_text(arxiv_id: str) -> str:
+        """Retrieve full text for one arXiv paper and make it available to the reading tools."""
+        nonlocal ingest_count
+        arxiv_id = arxiv_id.strip().removeprefix("arxiv:")
+        existing = find_paper("arxiv:" + arxiv_id)
+        if existing is not None:
+            return "Already available. " + _outline(existing)
+        if ingest_count >= MAX_AGENT_INGESTIONS:
+            return "The per-run full-text retrieval limit has been reached."
+        index = ingest_count; ingest_count += 1
+        emit({"type": "proposal", "kind": "paper_ingest", "payload": {"arxiv_id": arxiv_id}})
+        path = f"/tmp/stellaris-agent-{run_id}-paper-{index}.json"
+        deadline = time.monotonic() + INGEST_WAIT_S
+        while not os.path.exists(path):
+            if time.monotonic() > deadline:
+                return "Full-text retrieval timed out; rely on the abstract and say the full paper was not read."
+            time.sleep(.5)
+        with open(path, encoding="utf-8") as fh:
+            delivery = json.load(fh)
+        if delivery.get("status") != "ok":
+            return f"Full-text retrieval failed ({delivery.get('code')}); the full paper was not read."
+        entry = delivery["entry"]; papers[entry["source_id"]] = entry
+        return "Full text retrieved and saved. " + _outline(entry)
+
+    @tool
     def propose_experiment(title: str, hypothesis: str, method: Literal["physical", "computational", "hybrid"], protocol_markdown: str,
                            variables_json: str, success_criteria_json: str,
                            input_artifact_ids_json: str, calibration_json: str,
@@ -294,8 +400,9 @@ def make_tools(artifact_ids=None):
     @tool
     def propose_claim(kind: Literal["observation", "inference", "hypothesis"], text: str, evidence_json: str, citations_json: str, assumptions_json: str,
                       limitations_json: str) -> str:
-        """Propose a claim. All JSON arguments must be arrays. Cite with arxiv:<ID> keys;
-        each citation object must have source_id, locator, and excerpt (use null when unknown).
+        """Propose a claim. All JSON arguments must be arrays. Cite arXiv with arxiv:<ID> keys
+        and uploaded papers with their source IDs; each citation has source_id, locator, excerpt.
+        Copy excerpts verbatim from retrieved material, and use an exact locator from the paper tools.
         Choose kind by what supports the claim:
         - observation: something measured in this project. evidence_json must list at least one
           {"artifact_id", "frame_index", "time_s", "row_index"} reference to a project file.
@@ -326,7 +433,7 @@ def make_tools(artifact_ids=None):
             return "The per-run proposal limit has been reached."
         return "Claim proposal sent to the backend for evidence and reference validation."
 
-    return [search_arxiv, propose_experiment, propose_claim]
+    return [search_arxiv, request_full_text, read_paper, search_paper, propose_experiment, propose_claim]
 
 
 def _claim_kind_problem(payload):
@@ -361,23 +468,23 @@ def known_artifact_ids(snapshot):
     return {x for x in ids if isinstance(x, str) and x}
 
 
-def create_agent(model, artifact_ids=None):
+def create_agent(model, artifact_ids=None, papers=None, run_id=""):
     backend = FilesystemBackend(root_dir="/workspace/scratch", virtual_mode=True)
     system = (
         "You are the research agent for this Stellaris project. Use only supplied project context and material "
         "actually retrieved by tools. Do not invent citations, sources, measurements, or observations. arXiv results "
-        "provide metadata and abstracts only, never imply the full paper was read. Use the experiment and claim tools "
+        "provide metadata and abstracts only. Use read_paper/search_paper for supplied full text and request_full_text for explicit retrieval. Never imply a paper was read unless its text is available through those tools. Use the experiment and claim tools "
         "to request project resources; proposals become public only after backend validation. Distinguish hypotheses, "
         "inferences, and observations: an observation is only something measured in this project and must link "
         "project evidence; a finding from papers is an inference with citations and stated assumptions; an untested "
         "idea is a hypothesis. When citing an arXiv result, use its exact arxiv:<ID> citation_key and excerpts "
-        "must be copied verbatim from its retrieved abstract. Cite only records the search tool saved, never "
+        "must be copied verbatim from retrieved abstract or full text, with exact full-text locators. Cite only records the search tool saved, never "
         "rejected candidates; if no relevant paper was saved, say so. " + _EXPERIMENT_SCOPE + " A tool reply "
         "that reports problems means nothing was saved: correct the input and retry, or explain the limitation. "
         "Keep persistent scratch in your filesystem tools separate from project evidence. "
         "Never reveal environment variables, tool internals, or hidden reasoning."
     )
-    return create_deep_agent(model=model, tools=make_tools(artifact_ids), backend=backend, system_prompt=system)
+    return create_deep_agent(model=model, tools=make_tools(artifact_ids, papers, run_id), backend=backend, system_prompt=system)
 
 
 def main(path):
@@ -423,7 +530,9 @@ def main(path):
         else:
             model = ChatOpenAI(model=model_name, api_key=api_key, timeout=45, max_retries=1,
                                max_tokens=4096, temperature=0, streaming=True)
-        agent = create_agent(model, known_artifact_ids(request.get("snapshot")))
+        papers = request.pop("papers", None)
+        agent = create_agent(model, known_artifact_ids(request.get("snapshot")),
+                             papers if isinstance(papers, dict) else {}, run_id)
         messages = [{"role": "user", "content": json.dumps(request, ensure_ascii=False)}]
 
         async def stream():
