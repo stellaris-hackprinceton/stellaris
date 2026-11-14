@@ -81,7 +81,6 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
   const edit = useEditExperiment(project_id, x.id);
   const up = useArtifactUpload(project_id);
   const [captureTab, setCaptureTab] = useState("record");
-  const [focusImport, setFocusImport] = useState(false);
   const [attachNote, setAttachNote] = useState<string | null>(null);
   const [attachConflict, setAttachConflict] = useState(false);
 
@@ -159,15 +158,7 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
     results: "Review the run and its evidence.",
   }[view];
   const taskLabels = { plan: "Plan", inputs: "Inputs", analysis: "Analysis", results: "Results" };
-  function moveTo(next: typeof view) {
-    if (next !== "inputs") setFocusImport(false);
-    update({ view: next });
-  }
-  function uploadDataFile() {
-    setCaptureTab("import");
-    setFocusImport(true);
-    moveTo("inputs");
-  }
+  function moveTo(next: typeof view) { update({ view: next }); }
 
   return (
     <>
@@ -177,7 +168,6 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
           onSelect={(id) => update({ experiment: id, run: null, view: "plan" })} hasMore={list.has_next_page} loadMore={list.load_next_page}
           dirty={plan.dirty} archived={archived} />
           <span className={plan.dirty ? styles.dirtyState : styles.savedState} role="status">{plan.dirty ? "Unsaved changes" : `Saved · revision ${x.revision}`}</span>
-          <Button variant="primary" disabled={archived} onClick={uploadDataFile}>Upload data file</Button>
         </div>
         <p className={styles.taskGuidance}>{taskCopy}</p>
         <div role="tablist" aria-label="Experiment tasks" className={styles.taskTabs}>
@@ -209,8 +199,7 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
               <CapturePanel uploads={uploadsCaps} disabled={archived} onUpload={uploadRecording} uploadBusy={up.busy}
                 uploadedBlob={up.phase === "ready" ? up.input?.blob ?? null : null} />
             ) : null },
-            { id: "import", label: "Import a file", content: captureTab === "import" ? <FileImport uploads={uploadsCaps} disabled={archived || up.busy} onUpload={uploadFile}
-              autoFocus={focusImport} onPickerFocused={() => setFocusImport(false)} /> : null },
+            { id: "import", label: "Import a file", content: captureTab === "import" ? <FileImport uploads={uploadsCaps} disabled={archived || up.busy} onUpload={uploadFile} /> : null },
           ]} />
           <UploadProgressView up={up}>
             {ready && <div className={styles.stack}>

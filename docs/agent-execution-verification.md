@@ -75,3 +75,12 @@ file import flow. JSON datasets/documents now use the existing strict validator.
 Isolated WebKit uploaded the real document-counts.json dataset, declared its generated
 origin and attached it to the paper-structure experiment. The saved implementation was
 preserved and no page errors or model requests occurred.
+
+## Materials upload correction
+
+Moved the generic upload action from the experiment header into Materials. Uploads
+are project-scoped and do not require or change an experiment. Materials now defaults
+to the raw All materials list; curated views remain optional. The actual JSON dataset
+uploaded through the new dialog appears in the catalog without an experiment association.
+TypeScript and scoped ESLint passed; isolated WebKit verified the raw default, visible
+uploaded file and removal of the misplaced experiment button. No model calls were made.

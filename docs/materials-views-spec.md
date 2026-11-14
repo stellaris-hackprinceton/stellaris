@@ -63,7 +63,7 @@ Include artifact kinds `image`, `video`, and `dataset`, combined with OR. Defaul
 - Video: saved poster if one exists. Otherwise use a video-type placeholder with duration when available. Do not generate a poster service or autoplay a collection of recordings.
 - Dataset: name, MIME/format, size, origin, and associated experiment/run when recorded. Do not guess row counts or chart arbitrary columns.
 
-The inspector shows safe media playback or the existing bounded text/CSV preview, parent artifacts, and provenance links. **Open in Experiment Studio** requires an existing recorded experiment association. **Import experiment input** opens Studio's explicit selection/upload flow, without uploading or attaching on click. Audio capture and new modalities stay outside the bouncing-ball MVP.
+The inspector shows safe media playback or the existing bounded text/CSV preview, parent artifacts, and provenance links. **Open in Experiment Studio** requires an existing recorded experiment association. **Upload file** imports a project material directly, without requiring an experiment. Audio capture and new modalities stay outside the bouncing-ball MVP.
 
 ### Findings
 
@@ -107,7 +107,7 @@ Use `/projects/:project_id/materials` with:
 - Existing `collection`, `q`, `tag`, and `file` parameters.
 - `sort=created_at|updated_at|name`, `order=asc|desc`, and `status=active|trashed|all`.
 
-Explicit valid URL parameters override a collection's saved presentation. Missing parameters inherit it, then the preset default. An unknown view falls back to Desk with a small “Unknown view” notice. Unknown filters or unavailable collections show a recoverable error, not a silently different collection.
+Explicit valid URL parameters override a collection's saved presentation. Missing parameters inherit it, then the preset default. An unknown view falls back to All materials with a small “Unknown view” notice. Unknown filters or unavailable collections show a recoverable error, not a silently different collection.
 
 Existing `source`, `claim`, and `artifact` links remain valid. Resolve to catalog identity within the project, independently of current search filters. Open a linked item even if it is outside the visible view, with “Opened from a link. This item is outside the current view.” Closing preserves the browse state. Never page through an unrelated filtered list indefinitely looking for a linked origin.
 
@@ -133,3 +133,7 @@ Cache selection by project, normalized filters, sort, and order. Use shared scie
 - More than 24 matches paginate in the same order and grouping labels remain honest. Changing a filter starts a new cursor sequence.
 - Source/artifact deep links open despite an unrelated current search. Closing and Back restore the original context.
 - Archived, missing, failed, and unsupported states remain distinguishable. All primary actions work by keyboard at narrow width and 200% zoom.
+
+Implementation amendment: Materials now defaults to All materials when no view or saved
+collection presentation is selected. It serves as the raw project inventory; curated
+presets remain optional filters. Upload file lives in Materials and needs no experiment.

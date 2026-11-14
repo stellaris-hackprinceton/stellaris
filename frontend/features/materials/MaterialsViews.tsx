@@ -15,6 +15,7 @@ import { AddSourceDialog } from '@/features/research/canvas/AddSourceDialog'
 import { MaterialInspector } from './MaterialInspector'
 import { CollectionEditor } from './CollectionEditor'
 import { MaterialCard, MeasurementRow, materialTypeLabel } from './MaterialCard'
+import { MaterialUpload } from './MaterialUpload'
 import { MEDIA_KINDS, VIEW_OPTIONS, browseKey, describeFilter, matchesPreset, parseBrowseState, resolvedPresentation, savedViewFilter, viewFilters, viewLabel, type BrowseState, type SortField, type SortOrder } from './views'
 import styles from './materials.module.css'
 
@@ -167,7 +168,7 @@ export function MaterialsViews({ project_id, integrations = {} }: { project_id: 
     navigate({ view, sort: null, order: null, ...(keepFile ? {} : { file: null }) }, 'push')
   }
   const openCollection = (id: string) => { inspectorPushed.current = false; navigate({ collection: id, view: null, sort: null, order: null, file: null, ...Object.fromEntries(ORIGIN_PARAMS.map(k => [k, null])) }, 'push') }
-  const clearCollection = () => navigate({ collection: null, view: state.view === 'desk' ? null : state.view, sort: state.explicit.sort ? state.sort : null, order: state.explicit.order ? state.order : null }, 'push')
+  const clearCollection = () => navigate({ collection: null, view: state.view === 'all' ? null : state.view, sort: state.explicit.sort ? state.sort : null, order: state.explicit.order ? state.order : null }, 'push')
   const clearFilters = () => navigate({ q: null, tag: null, status: null }, 'replace')
 
   // Focus returns to the originating card when inspection closes (including browser Back).
@@ -198,7 +199,7 @@ export function MaterialsViews({ project_id, integrations = {} }: { project_id: 
   } else if (!collectionReady) content = <p role="status" className={styles.empty}>Loading collection…</p>
   else if (isDesk) content = <DeskView project_id={project_id} recent={recent} notes={recentNotes} expanded={deskExpanded} setExpanded={setDeskExpanded} collections={collections.items} openCollection={openCollection} go={v => changeView(v)} onInspect={inspect} selectedId={selectedId} filtered={filtered} clearFilters={clearFilters} />
   else content = <FullView project_id={project_id} state={state} list={list} onInspect={inspect} onViewAll={() => changeView('all')} openChat={integrations.openChat} selectedId={selectedId} filtered={filtered} clearFilters={clearFilters} archived={archived} collection={collection.data ?? null}
-    emptyAction={state.view === 'notes' ? <button type="button" disabled={archived} onClick={() => setCreatingNote(true)}>New note</button> : state.view === 'literature' ? <button type="button" disabled={archived} onClick={() => setAddingSource(true)}>Add source</button> : state.view === 'media-data' ? <Link href={`${projectHref(project_id)}/studio?view=inputs`}>Import experiment input in Studio</Link> : null} />
+    emptyAction={state.view === 'notes' ? <button type="button" disabled={archived} onClick={() => setCreatingNote(true)}>New note</button> : state.view === 'literature' ? <button type="button" disabled={archived} onClick={() => setAddingSource(true)}>Add source</button> : null} />
 
   return <section ref={pageRef} className={`${styles.page} ${styles.viewsPage}`}>
     <header className={styles.heading}>
@@ -207,6 +208,7 @@ export function MaterialsViews({ project_id, integrations = {} }: { project_id: 
         {archived && <p className={styles.notice}>Restore project to add or generate material.</p>}
       </div>
       <div className={styles.actions}>
+        <MaterialUpload project_id={project_id} archived={archived} />
         <button type="button" disabled={archived} onClick={() => { setCreatingNote(true) }}>New note</button>
         {(isDesk || state.view === 'literature') && !integrations.addSourceActions && <button type="button" disabled={archived} onClick={() => setAddingSource(true)}>Add source</button>}
         {(isDesk || state.view === 'literature') && integrations.addSourceActions}
@@ -217,7 +219,7 @@ export function MaterialsViews({ project_id, integrations = {} }: { project_id: 
     {narrowSelect
       ? <label className={styles.viewSelect}>View<select value={state.view} onChange={e => changeView(e.target.value as ViewPreset)}>{VIEW_OPTIONS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></label>
       : <nav aria-label="Materials views" className={styles.viewTabs}>{VIEW_OPTIONS.map(v => <button key={v.id} type="button" aria-current={state.view === v.id ? 'page' : undefined} onClick={() => changeView(v.id)}>{v.label}</button>)}</nav>}
-    {state.unknownView && <p className={styles.notice} role="status">Unknown view. Showing Desk.</p>}
+    {state.unknownView && <p className={styles.notice} role="status">Unknown view. Showing All materials.</p>}
     {state.invalid.length > 0 && <p className={styles.notice} role="alert">Unrecognized {state.invalid.join(', ')} in the link. Defaults are shown instead. <button type="button" onClick={() => navigate({ sort: null, order: null, status: null }, 'replace')}>Reset these parameters</button></p>}
 
     <CollectionsDisclosure project_id={project_id} archived={archived} collections={collections} openCollection={openCollection} activeId={state.collection} />
@@ -284,7 +286,7 @@ function DeskView({ project_id, recent, notes, expanded, setExpanded, collection
     <section className={styles.widget} aria-labelledby="desk-recent">
       <header className={styles.widgetHeader}><h2 id="desk-recent">Recently added</h2></header>
       {recent.is_loading ? <p role="status" className={styles.empty}>Loading materials…</p> : recent.error ? <ListError list={recent} /> : !shown.length
-        ? <p className={styles.empty}>{filtered ? <>No materials match these filters. <button type="button" onClick={clearFilters}>Clear filters</button></> : 'Nothing has been added yet. Add a source, create a note, or import experiment input in Studio.'}</p>
+        ? <p className={styles.empty}>{filtered ? <>No materials match these filters. <button type="button" onClick={clearFilters}>Clear filters</button></> : 'Nothing has been added yet. Add a source, create a note, or upload a file to Materials.'}</p>
         : <div className={styles.cardGrid}>{shown.map(f => <MaterialCard key={f.id} project_id={project_id} file={f} onInspect={onInspect} selected={selectedId === f.id} />)}</div>}
       {(expanded || recent.items.length > 6) && <div className={styles.widgetFooter}><button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? 'Collapse' : 'Expand'}</button><button type="button" onClick={() => go('all')}>View all</button></div>}
     </section>
@@ -315,7 +317,7 @@ function DeskView({ project_id, recent, notes, expanded, setExpanded, collection
 
 const EMPTY_VIEW: Record<ViewPreset, string> = {
   desk: '', literature: 'No sources saved yet. Add a reference or find literature in Chat.', notes: 'No notes yet. Notes organize your thinking; they are not scientific evidence.',
-  'media-data': 'No images, videos, or datasets yet. Import experiment input in Studio.', findings: 'Findings appear when research or analysis saves a claim.',
+  'media-data': 'No images, videos, or datasets yet. Upload a file to Materials.', findings: 'Findings appear when research or analysis saves a claim.',
   measurements: 'Analyze an experiment to save measurements.', all: 'No materials yet.',
 }
 
@@ -557,7 +559,6 @@ function MediaActions({ project_id, artifact_id }: { project_id: string, artifac
   const studio = `${projectHref(project_id)}/studio`
   return <div className={`${styles.contextBox} ${styles.actions}`}>
     {a.data?.experiment_id ? <Link href={`${studio}?experiment=${encodeURIComponent(a.data.experiment_id)}&view=inputs`}>Open in Experiment Studio</Link> : a.data ? <span className={styles.meta}>No recorded experiment association.</span> : null}
-    <Link href={`${studio}?view=inputs`}>Import experiment input</Link>
   </div>
 }
 
