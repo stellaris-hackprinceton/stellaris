@@ -10,7 +10,7 @@ export const VIEW_OPTIONS: { id: ViewPreset, label: string }[] = [
   { id: 'media-data', label: 'Media & data' }, { id: 'findings', label: 'Findings' },
   { id: 'measurements', label: 'Measurements' }, { id: 'all', label: 'All materials' },
 ]
-export const viewLabel = (v: ViewPreset) => VIEW_OPTIONS.find(o => o.id === v)?.label ?? 'All materials'
+export const viewLabel = (v: ViewPreset) => VIEW_OPTIONS.find(o => o.id === v)?.label ?? 'Desk'
 const VIEWS = new Set<string>(VIEW_OPTIONS.map(v => v.id))
 const SORTS = new Set<string>(['created_at', 'updated_at', 'name'])
 const ORDERS = new Set<string>(['asc', 'desc'])
@@ -55,13 +55,13 @@ export type BrowseState = {
 
 /**
  * URL precedence (spec §5): explicit valid URL values, then the open collection's saved presentation,
- * then the preset default. Unknown view → All materials with a notice. Invalid sort/order/status are reported.
+ * then the preset default. Unknown view → Desk with a notice. Invalid sort/order/status are reported.
  */
 export function parseBrowseState(search: URLSearchParams, collection: Collection | null | undefined): BrowseState {
   const rawView = search.get('view'), rawSort = search.get('sort'), rawOrder = search.get('order'), rawStatus = search.get('status')
   const saved = collection ? resolvedPresentation(collection) : null
   const viewValid = rawView !== null && VIEWS.has(rawView)
-  const view: ViewPreset = viewValid ? rawView as ViewPreset : rawView !== null ? 'all' : saved?.preset ?? 'all'
+  const view: ViewPreset = viewValid ? rawView as ViewPreset : rawView !== null ? 'desk' : saved?.preset ?? 'desk'
   const fallback = saved ? { sort: saved.sort, order: saved.order } : presetDefaultSort(view)
   const sortValid = rawSort !== null && SORTS.has(rawSort), orderValid = rawOrder !== null && ORDERS.has(rawOrder)
   const invalid: string[] = []

@@ -84,3 +84,7 @@ to the raw All materials list; curated views remain optional. The actual JSON da
 uploaded through the new dialog appears in the catalog without an experiment association.
 TypeScript and scoped ESLint passed; isolated WebKit verified the raw default, visible
 uploaded file and removal of the misplaced experiment button. No model calls were made.
+
+User clarification: restored Desk as the default Materials view. Upload file remains
+available on Desk and all other Materials views; All materials still exposes the raw
+inventory. A quick isolated WebKit check confirmed Desk and its upload dialog.

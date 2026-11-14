@@ -168,7 +168,7 @@ export function MaterialsViews({ project_id, integrations = {} }: { project_id: 
     navigate({ view, sort: null, order: null, ...(keepFile ? {} : { file: null }) }, 'push')
   }
   const openCollection = (id: string) => { inspectorPushed.current = false; navigate({ collection: id, view: null, sort: null, order: null, file: null, ...Object.fromEntries(ORIGIN_PARAMS.map(k => [k, null])) }, 'push') }
-  const clearCollection = () => navigate({ collection: null, view: state.view === 'all' ? null : state.view, sort: state.explicit.sort ? state.sort : null, order: state.explicit.order ? state.order : null }, 'push')
+  const clearCollection = () => navigate({ collection: null, view: state.view === 'desk' ? null : state.view, sort: state.explicit.sort ? state.sort : null, order: state.explicit.order ? state.order : null }, 'push')
   const clearFilters = () => navigate({ q: null, tag: null, status: null }, 'replace')
 
   // Focus returns to the originating card when inspection closes (including browser Back).
@@ -219,7 +219,7 @@ export function MaterialsViews({ project_id, integrations = {} }: { project_id: 
     {narrowSelect
       ? <label className={styles.viewSelect}>View<select value={state.view} onChange={e => changeView(e.target.value as ViewPreset)}>{VIEW_OPTIONS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></label>
       : <nav aria-label="Materials views" className={styles.viewTabs}>{VIEW_OPTIONS.map(v => <button key={v.id} type="button" aria-current={state.view === v.id ? 'page' : undefined} onClick={() => changeView(v.id)}>{v.label}</button>)}</nav>}
-    {state.unknownView && <p className={styles.notice} role="status">Unknown view. Showing All materials.</p>}
+    {state.unknownView && <p className={styles.notice} role="status">Unknown view. Showing Desk.</p>}
     {state.invalid.length > 0 && <p className={styles.notice} role="alert">Unrecognized {state.invalid.join(', ')} in the link. Defaults are shown instead. <button type="button" onClick={() => navigate({ sort: null, order: null, status: null }, 'replace')}>Reset these parameters</button></p>}
 
     <CollectionsDisclosure project_id={project_id} archived={archived} collections={collections} openCollection={openCollection} activeId={state.collection} />
