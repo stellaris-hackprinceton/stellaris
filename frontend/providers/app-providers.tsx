@@ -25,12 +25,12 @@ function SessionGate({ children }: { children: ReactNode }) {
   }, [client])
   useLayoutEffect(() => {
     if (!session.data) return
-    setCsrfToken(session.data.csrf_token)
+    setCsrfToken(session.data.csrf_token, session.data.auth_mode)
   }, [session.data, client])
   async function reconnect() {
     const resolved = await session.refetch()
     if (!resolved.error && resolved.data) {
-      setCsrfToken(resolved.data.csrf_token)
+      setCsrfToken(resolved.data.csrf_token, resolved.data.auth_mode)
       setExpired(false)
       await client.invalidateQueries({ queryKey: keys.capabilities })
     }

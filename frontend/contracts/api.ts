@@ -1,4 +1,4 @@
-// Wire schemas from public/docs/frontend-backend-contract.md.
+// Wire schemas from docs/frontend-backend-contract.md at the repository root.
 export type ID = string
 export type Timestamp = string
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
@@ -6,6 +6,7 @@ export type Page<T> = { items: T[], next_cursor: string | null }
 export type Session = {
   user: { id: ID, display_name: string },
   csrf_token: string,
+  auth_mode?: 'development_none',
   contract_version: "1.0.0-draft"
 }
 

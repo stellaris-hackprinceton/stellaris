@@ -2,7 +2,7 @@
 
 Status: **Merged frontend components are connected. Live backend integration and authenticated workflow verification remain pending.**
 
-This handoff implements the accepted Sol plan and the [frontend specification](../frontend-implementation-spec.md) against the [API contract](../frontend-backend-contract.md). No backend endpoints, mock server, fixture data, automated tests, or Claude-owned features were added. Nothing was committed, pushed, or deployed.
+This handoff implements the accepted Sol plan and the [frontend specification](../frontend-implementation-spec.md) against the [API contract](../archive/frontend-backend-contract-original.md). No backend endpoints, mock server, fixture data, automated tests, or Claude-owned features were added. Nothing was committed, pushed, or deployed.
 
 ## Implemented modules
 

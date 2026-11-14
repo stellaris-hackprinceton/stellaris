@@ -5,6 +5,8 @@ Status: **Implementation plan. No frontend implementation or agent execution is 
 Prepared: **November 13, 2026**  
 Companion document: [Frontend–backend contract](frontend-backend-contract.md), version `1.0.0-draft`.
 
+Current operation: run the application through the [Docker Compose guide](docker-compose.md). This document preserves the original three-agent implementation breakdown. The [current shared contract](frontend-backend-contract.md) supersedes authentication assumptions in the original frontend draft. All documentation paths are relative to the repository root unless stated otherwise.
+
 ## 1. Context carried forward from this chat
 
 Stellaris is the research platform described in the supplied HackPrinceton 2026 document. Its frontend connects a scientific question to literature, an experiment plan, real experimental inputs, inspectable measurements, and a scientific report in one persistent project.
@@ -19,13 +21,13 @@ The requested team is exactly three implementation agents:
 
 These names identify assignment slots. The responsibilities do not depend on a claim about which model is strongest or whether a particular model name is available in a launcher. Two separate Claude sessions fill A and B even if both use the same model.
 
-The canonical shared location for these documents is **`frontend/public/docs/` in the Stellaris repository**. All implementation paths below are relative to the existing `frontend/` root. An initialized Next.js application already exists there. Extend that application rather than creating a second scaffold.
+The canonical shared location for these documents is **`docs/` in the Stellaris repository**. All implementation paths below are relative to the existing `frontend/` root. An initialized Next.js application already exists there. Extend that application rather than creating a second scaffold.
 
 Stellaris workflow rules:
 
 - Automated tests, builds, application launches, and browser verification are allowed for Stellaris, as clarified by the user on November 14, 2026.
 - Verify changes through focused source review and appropriate automated or application checks. Distinguish verified results from behavior that still needs live backend or human review.
-- Keep shared Stellaris specifications and agent handoffs in `public/docs/` so they can be committed and used by all three agents.
+- Keep shared Stellaris specifications and agent handoffs in root `docs/` so they can be committed and used by all three agents.
 - Respect the three-agent file ownership boundaries defined in this specification.
 
 ## 2. Product outcome and scope
@@ -168,7 +170,7 @@ src/
     execution/                         C: history, progress, logs, approvals
     workspace/                         C: artifacts and generic preview
     reports/                           C: report composition and saved preview
-public/docs/handoffs/
+docs/handoffs/
   agent-a.md                           A
   agent-b.md                           B
   agent-c.md                           C
@@ -308,7 +310,7 @@ Manual reference entry uses the existing source-creation route. Paper discovery 
 
 ### A's completion evidence
 
-Publish the shared component exports and tokens, then deliver all three public screen/shell exports. Inspect imports, rendering branches, keyboard affordances, empty states, long source titles, streaming status, archive state, and safe Markdown handling through source review. Record files, remaining issues, and any unverified visual claims in `public/docs/handoffs/agent-a.md`.
+Publish the shared component exports and tokens, then deliver all three public screen/shell exports. Inspect imports, rendering branches, keyboard affordances, empty states, long source titles, streaming status, archive state, and safe Markdown handling through source review. Record files, remaining issues, and any unverified visual claims in `docs/handoffs/agent-a.md`.
 
 ## 7. Agent B: Experiment Studio and scientific results
 
@@ -382,7 +384,7 @@ Build the exported `ResultsPane` with `MeasurementTable`, `SeriesSelector`, `Evi
 
 ### B's completion evidence
 
-Deliver StudioScreen and ResultsPane, the local capture/upload cleanup paths, saved-revision launch behavior, and the calibration limitation. Inspect every media lifecycle exit, retry branch, evidence link, unit label, and missing-value branch through source review. Record unresolved browser behavior for human review in `public/docs/handoffs/agent-b.md`.
+Deliver StudioScreen and ResultsPane, the local capture/upload cleanup paths, saved-revision launch behavior, and the calibration limitation. Inspect every media lifecycle exit, retry branch, evidence link, unit label, and missing-value branch through source review. Record unresolved browser behavior for human review in `docs/handoffs/agent-b.md`.
 
 ## 8. Agent C: shared integration, execution, workspace, reports
 
@@ -443,7 +445,7 @@ A report link appears only after its artifact is committed. Preview the saved ar
 
 Mount all public exports, reconcile query/event behavior with feature usage, inspect capability gates, and ensure route selection survives refresh. Ask the owning agent to fix feature-local defects while their session is active. A cross-owner file edit requires an explicit ownership handoff, not silent concurrent editing.
 
-Record implementation versions, API assumptions, exact remaining backend gaps, source-review findings, and unfinished behavior in `public/docs/handoffs/agent-c.md`. C's integrated delivery is complete only when A and B's required exports are connected to live contract data and no placeholder success/results remain.
+Record implementation versions, API assumptions, exact remaining backend gaps, source-review findings, and unfinished behavior in `docs/handoffs/agent-c.md`. C's integrated delivery is complete only when A and B's required exports are connected to live contract data and no placeholder success/results remain.
 
 ## 9. Execution order and handoff gates
 
@@ -451,7 +453,7 @@ This sequence allows useful parallel work while protecting shared files.
 
 ### Gate 0: choose the application checkout and freeze interfaces
 
-Before feature implementation, open the existing Stellaris frontend root and read its applicable repository instructions, including its bundled Next.js documentation guidance. Give all three agents the supplied product document, this spec, and the companion contract from `public/docs/`.
+Before feature implementation, open the existing Stellaris frontend root and read its applicable repository instructions, including its bundled Next.js documentation guidance. Give all three agents the product document, this spec, and the companion contract from root `docs/`.
 
 Agent C extends the existing project skeleton and publishes TypeScript API types, request types, query-hook signatures, runtime context shape, and route imports. Agent A publishes the shared token file, UI export names, and shell interface. Agent B publishes the StudioScreen/ResultsPane entry points and local capture/upload state definitions.
 

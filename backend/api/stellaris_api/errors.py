@@ -1,4 +1,4 @@
-"""Contract-shaped JSON error envelope (Contracts.md section 9)."""
+"""Contract-shaped JSON error envelope (docs/frontend-backend-contract.md section 9)."""
 
 import logging
 

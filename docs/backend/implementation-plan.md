@@ -1,6 +1,6 @@
 # Backend implementation status
 
-Scope: the research → experiment → measurement → Markdown-report MVP in `Contracts.md`,
+Scope: the research → experiment → measurement → Markdown-report MVP in `docs/frontend-backend-contract.md`,
 with the user-approved no-auth local deployment and Docker topology in `AGENTS.md`.
 
 - [x] API foundation, SQLite project state, idempotency, ETags, dynamic persistent project containers.
@@ -9,7 +9,7 @@ with the user-approved no-auth local deployment and Docker topology in `AGENTS.m
 - [x] Measurements, charts, annotated evidence, logs, provenance, cancellation and restart recovery.
 - [x] Evidence-based Markdown reports, source citations, simulated-data labeling.
 - [x] Project-container Deep Agents/chat integration with persistent scratch and provider-free graph/transport verification.
-- [x] Combined local Docker verification and documentation audit; see VERIFICATION.md.
+- [x] Combined local Docker verification and documentation audit; see [verification.md](verification.md).
 - [x] Live Bedrock/Nova verification: cited research, validated plan, simulated-video analysis, and report succeeded in one project.
 
 Verification evidence and commands are summarized in `README.md`; do not infer that a

@@ -1,5 +1,7 @@
 # Stellaris frontend–backend contract
 
+Archived original frontend draft. Use [the current shared contract](../frontend-backend-contract.md) for implementation. In particular, the backend currently supplies an explicit development mode without authentication.
+
 Contract version: **1.0.0-draft**  
 Status: **Proposed implementation specification. No implementation is implied.**  
 Prepared: **November 13, 2026**  

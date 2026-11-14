@@ -1,4 +1,4 @@
-"""Runs, results, measurements, and logs (Contracts.md sections 5-7).
+"""Runs, results, measurements, and logs (docs/frontend-backend-contract.md sections 5-7).
 
 Acceptance: POST /runs validates the request, builds the complete immutable input snapshot
 (experiment revision, artifact hashes/metadata, parameters, executed pipeline code, selected

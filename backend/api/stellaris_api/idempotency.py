@@ -1,4 +1,4 @@
-"""Idempotency-Key bookkeeping for JSON POST commands (Contracts.md section 3).
+"""Idempotency-Key bookkeeping for JSON POST commands (docs/frontend-backend-contract.md section 3).
 
 States:
   in_progress  a request holds the key; others get 409 COMMAND_IN_PROGRESS until the lease ends

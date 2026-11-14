@@ -7,7 +7,7 @@ Read and follow this file when the user asks you to use Claude, get a second opi
 This is a local CLI workflow, not an installed plugin. It requires Codex and an authenticated Claude Code CLI in the same execution environment, with access to the repository. A cloud session cannot assume access to a laptop's Claude installation.
 
 For automatic discovery, add this line to the repository's AGENTS.md:
-> Read CC-Instructions.md before delegating to Claude Code.
+> Read docs/agents/claude-code.md before delegating to Claude Code.
 
 Do not modify AGENTS.md merely because you read this file; do so when setting up this workflow at the user's request.
 

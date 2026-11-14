@@ -1,3 +1,7 @@
+# Archived Next.js starter instructions
+
+This scaffolder README is retained for history. Use the [Stellaris Docker Compose guide](../docker-compose.md) to run the application.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

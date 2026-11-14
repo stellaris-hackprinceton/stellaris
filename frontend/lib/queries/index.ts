@@ -25,7 +25,7 @@ export function useSession() {
       await client.cancelQueries({ predicate: q => q.queryKey[0] !== 'session' })
       client.removeQueries({ predicate: q => q.queryKey[0] !== 'session' })
     }
-    setCsrfToken(resolved.csrf_token)
+    setCsrfToken(resolved.csrf_token, resolved.auth_mode)
     return resolved
   }, retry: false, staleTime: 60000, refetchOnWindowFocus: true })
 }

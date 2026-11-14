@@ -1,4 +1,4 @@
-"""Uploads, artifacts, content downloads, and artifact publication helpers (Contracts.md section 6).
+"""Uploads, artifacts, content downloads, and artifact publication helpers (docs/frontend-backend-contract.md section 6).
 
 Storage:
   * In-flight upload bytes: <upload_tmp_dir>/<upload_id>.<random>.part (API volume), renamed to

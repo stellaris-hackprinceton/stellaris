@@ -2,7 +2,7 @@
 """Stellaris pipeline bouncing_ball_v1 (runs inside the isolated scientific worker).
 
 Input : /input/manifest.json (worker manifest; read-only) and the one input video it lists.
-Output: /output/result.json (worker result schema, Contracts.md section 10), derived artifacts
+Output: /output/result.json (worker result schema, docs/frontend-backend-contract.md section 10), derived artifacts
         (track CSV, summary JSON, annotated PNG frames, chart PNG), and /output/provenance.json
         (worker-reported method details; embedded by the backend in the run provenance).
 

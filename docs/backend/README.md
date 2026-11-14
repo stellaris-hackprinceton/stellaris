@@ -1,30 +1,32 @@
 # Stellaris backend
 
 Flask API, SQLite metadata, dynamic Docker project containers, isolated scientific workers,
-and a LangChain Deep Agents research runtime. `frontend/` is outside this implementation.
-The wire resources and events are defined in [`../Contracts.md`](../Contracts.md).
+and a LangChain Deep Agents research runtime. The frontend and API run together through the same Compose configuration.
+The wire resources and events are defined in the [shared contract](../frontend-backend-contract.md).
 
 ## Run locally
 
-Docker must be running. From this directory:
+Docker must be running. From the repository root:
 
 ```sh
-docker compose --profile build-only build
-docker compose up -d api
+docker compose -f backend/compose.yaml --profile build-only build
+docker compose -f backend/compose.yaml up -d --wait
 curl --fail http://127.0.0.1:8000/api/v1/health
 ```
 
-One Compose file builds three images. Only the API is a permanent Compose service.
+One Compose file builds four images. The frontend and API are permanent Compose services.
 Creating a project dynamically creates its persistent project container and named volume;
 analysis creates a temporary worker and input volume, removed after collection.
 The API listens on `127.0.0.1:8000` by default. Authentication is intentionally omitted.
 `GET /api/v1/session` provides a local development identity for client compatibility.
 Mutations validate supplied browser origins; a development frontend should proxy `/api`.
 
+Open the app on port 3000. Compose supplies the internal API origin. See the [Compose guide](../docker-compose.md) for alternative ports, frontend hot reload, and troubleshooting.
+
 Populate `backend/.env` yourself with the Bedrock variables listed below when ready for
 live research-agent testing. Agents must never inspect that file. Variable names and
 optional settings are documented in `.env.example`. Recreate the API after configuration
-changes (`docker compose up -d --force-recreate api`). No LangChain API key is required;
+changes (`docker compose -f backend/compose.yaml up -d --force-recreate api` from the repository root). No LangChain API key is required;
 LangSmith tracing is optional. The current provider is AWS Bedrock with Amazon Nova.
 
 ```dotenv
@@ -88,7 +90,7 @@ or evidence deletion is implemented because the project-ending policy is not yet
 
 ## Verification
 
-The scripts use HTTP and Docker, without a personal browser or other personal applications.
+Run the commands below from `backend/`. The scripts use HTTP and Docker, without a personal browser or other personal applications.
 They create test projects whose containers and data are retained for inspection.
 Synthetic fixtures and their results are explicitly marked **simulated**.
 
@@ -109,4 +111,4 @@ Perspective, lens distortion, occlusion, and blur can invalidate measurements; i
 annotated evidence and limitations. Uncalibrated results remain in pixels or dimensionless ratios.
 Live Bedrock/Nova behavior requires separately supplied configuration and live verification.
 
-Observed results and remaining live-provider verification are recorded in `VERIFICATION.md`.
+Observed results and remaining live-provider verification are recorded in [verification.md](verification.md).
