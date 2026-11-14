@@ -31,6 +31,12 @@ code artifact/execution. File operations and executed source must refer to the s
 saved files. Package downloads/network access remain disabled. Existing libraries and
 installed commands can be used; missing dependencies must be reported honestly.
 
+Studio shows implementation status beside the saved plan, including runtime, filename
+and a link to inspect attached code. “Ask agent for script” opens a draft request targeted
+to that existing experiment; sending the request remains explicit. Creating/designing an
+experiment asks the agent to attach code when feasible unless the user requests plan-only
+work. Generating code does not itself start an analysis run.
+
 ## Organization
 
 `GET /projects/:id/agent-settings` returns

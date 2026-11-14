@@ -13,6 +13,7 @@ import type { Recording } from "./capture/useCamera";
 import { ExperimentSelector } from "./ExperimentSelector";
 import { AnalysisSetup } from "./launch/AnalysisSetup";
 import { ExperimentEditor } from "./plan/ExperimentEditor";
+import { ExperimentImplementation } from "./plan/ExperimentImplementation";
 import { usePlanDraft } from "./plan/usePlanDraft";
 import { FileImport } from "./upload/FileImport";
 import { mimeForFile } from "./upload/fileTypes";
@@ -179,6 +180,9 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
             }}>{taskLabels[item]}</button>)}
         </div>
       </header>
+
+      <ExperimentImplementation project_id={project_id} experiment={x} archived={archived}
+        dirty={plan.dirty} remoteNewer={plan.remoteNewer} enabled={caps?.features.agent_code_execution === true} />
 
       <section id="studio-panel-plan" role="tabpanel" aria-labelledby="studio-tab-plan" tabIndex={0} hidden={view !== "plan"} className={styles.taskPanel}>
         <ExperimentEditor project_id={project_id} experiment={x} etag={experimentQuery.etag} plan={plan} inputs={inputs}

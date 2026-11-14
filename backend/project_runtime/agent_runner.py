@@ -394,8 +394,11 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
         to this request, otherwise []. calibration_json must be exactly
         {"mode":"none","assumptions":[...]}: the agent cannot measure reference-length calibration, so
         state in assumptions which reference object of known length the user should calibrate in Studio.
-        Describe a general research experiment appropriate to the user's question. Do not assume
-        the project is about bouncing balls. Backend validation is required before it is saved.
+        This tool saves a plan only; it does not create or attach executable code. On success, take its real
+        experiment_id and call save_experiment_implementation when fulfilling an experiment design/create request,
+        unless the user explicitly asks for a plan only or code is infeasible.
+        Do not describe the experiment as runnable until that tool returns a real code_artifact_id. Do not assume
+        the project is about bouncing balls. Backend validation is required before the plan is saved.
         """
         try:
             payload = {"title": title, "hypothesis": hypothesis, "method": method,
@@ -417,7 +420,13 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
         reply = backend_tool("propose_experiment", payload)
         if not reply.get("ok"):
             return "Experiment was not saved: " + str(reply.get("error", "backend rejected the request"))
-        return "Experiment saved: " + json.dumps(reply.get("result", {}), ensure_ascii=False)
+        result = reply.get("result")
+        if not isinstance(result, dict) or not isinstance(result.get("experiment_id"), str):
+            return "The plan may have been saved, but the backend did not return its experiment ID. Do not claim it is runnable."
+        return (f"Plan saved as experiment_id {result['experiment_id']} (revision {result.get('revision')}); "
+                "no implementation is attached yet. Next call save_experiment_implementation with this exact "
+                "experiment_id. Do not say runnable until that tool returns a code_artifact_id. Skip code only "
+                "when the user explicitly asked for a plan only or you explain a concrete blocker.")
 
     @tool
     def save_experiment_implementation(experiment_id: str, language: Literal["python", "javascript", "shell"],
@@ -437,7 +446,10 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
             "experiment_id": experiment_id, "runtime": language, "source": source, "filename": filename})
         if not reply.get("ok"):
             return "Implementation was not saved: " + str(reply.get("error", "backend rejected the request"))
-        return "Implementation saved: " + json.dumps(reply.get("result", {}), ensure_ascii=False)
+        result = reply.get("result")
+        if not isinstance(result, dict) or not isinstance(result.get("code_artifact_id"), str):
+            return "The backend did not confirm a code artifact ID; do not claim an implementation was attached."
+        return "Implementation saved and attached to the experiment: " + json.dumps(result, ensure_ascii=False)
 
     @tool
     def execute_analysis(experiment_id: str, code_artifact_id: str, input_artifact_ids_json: str = "[]") -> str:
@@ -595,10 +607,15 @@ def create_agent(model, artifact_ids=None, papers=None, run_id="", chat_generati
         "must be copied verbatim from retrieved abstract or full text, with exact full-text locators. Cite only records the search tool saved, never "
         "rejected candidates; if no relevant paper was saved, say so. " + _EXPERIMENT_SCOPE + " A tool reply "
         "that reports problems means nothing was saved: correct the input and retry, or explain the limitation. "
-        "For computational questions, when a valid experiment can be run with the supplied artifacts or without "
-        "fabricating inputs, write an implementation, save it, execute it, and use the returned run status and "
-        "output artifacts to explain what happened. If execution fails, inspect the actual error and correct/retry "
-        "when feasible. Do not turn generated outputs into observations unless the backend records measurements. "
+        "When creating or designing an experiment, include an executable implementation by default when feasible, "
+        "unless the user explicitly requests a plan only or a concrete blocker makes code infeasible. Treat the "
+        "saved plan and implementation as separate deliverables: after the plan tool returns an experiment_id, save "
+        "code against that exact ID, and claim code is attached only after save_experiment_implementation returns a real "
+        "code_artifact_id. If inputs are missing, produce a script that reports missing data honestly when feasible, "
+        "or explain why a runnable implementation is not possible; never fabricate observations. If the user asks "
+        "Execute code only when the user requests a run/analysis or the requested workflow clearly requires results. When executed, inspect actual "
+        "status and outputs and correct/retry failures when feasible. Do not turn generated outputs into observations "
+        "unless the backend records measurements. "
         "Generated scripts may read /input/manifest.json and the listed read-only /input/artifacts files, and may "
         "write only under /output. They must write /output/result.json with exactly the measurements, claims, "
         "artifacts, and warnings arrays; follow the execute_analysis tool's item schemas and cite only real input "

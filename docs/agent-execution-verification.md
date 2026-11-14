@@ -58,3 +58,12 @@ worker execution were verified separately using the real generated code and data
 Isolated WebKit also confirmed Clear chat removes displayed history and draft text,
 survives a page reload, and preserves the real source and experiment. No page errors
 were observed during the controls, literature or clear-chat checks.
+
+## Script discoverability follow-up
+
+Studio now exposes attached/missing implementation status on every experiment tab,
+including actual filename/runtime and a View script link. An explicit action prepares
+a chat request to generate or revise code on the selected experiment, without creating
+a replacement or executing it. Isolated WebKit verified both states against the existing
+hand-gesture plans and checked the exact experiment/artifact targets. No model request
+was sent. Agent instructions now distinguish a saved plan from confirmed attached code.
