@@ -1,0 +1,248 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import type { Artifact, ID, Run } from "@/contracts/api";
+import {
+  useArtifacts, useCapabilities, useEditExperiment, useExperiment, useExperiments, useProject, useRuns,
+} from "@/lib/queries";
+import {
+  Button, EmptyState, ErrorNotice, Skeleton, StatusBadge, Tabs, TimestampLabel, describeError, errorCode,
+} from "@/components/ui";
+import { ResultsPane } from "@/features/results";
+import { CapturePanel } from "./capture/CapturePanel";
+import type { Recording } from "./capture/useCamera";
+import { ExperimentSelector } from "./ExperimentSelector";
+import { AnalysisSetup } from "./launch/AnalysisSetup";
+import { ExperimentEditor } from "./plan/ExperimentEditor";
+import { usePlanDraft } from "./plan/usePlanDraft";
+import { FileImport } from "./upload/FileImport";
+import { UploadProgressView } from "./upload/UploadProgressView";
+import { useArtifactUpload } from "./upload/useArtifactUpload";
+import { useStudioParams } from "./useStudioParams";
+import styles from "./studio.module.css";
+
+/**
+ * Experiment Studio. Uses useSearchParams, so the route must render it inside <Suspense> (Agent C).
+ * Keyed by project in the route so capture and uploads are released when the project changes.
+ */
+export function StudioScreen({ project_id }: { project_id: ID }) {
+  const { experiment: expParam, run: runParam, update } = useStudioParams();
+  const project = useProject(project_id);
+  const caps = useCapabilities();
+  const list = useExperiments(project_id);
+  const selectedId = expParam ?? list.items[0]?.id ?? null;
+  const exp = useExperiment(project_id, selectedId);
+  const archived = project.data?.status === "archived";
+
+  if (list.error != null && list.items.length === 0) {
+    return <ErrorNotice {...describeError(list.error, "Experiments could not be loaded")} action={<Button onClick={list.refetch}>Try again</Button>} />;
+  }
+  if (list.is_loading) return <Skeleton height="20rem" />;
+
+  return (
+    <div className={styles.screen}>
+      <h2 className="sr-only">Experiment Studio</h2>
+      {list.items.length === 0 && !expParam ? (
+        <>
+          <ExperimentSelector project_id={project_id} experiments={[]} selected={null} onSelect={(id) => update({ experiment: id, run: null })}
+            hasMore={false} loadMore={() => {}} dirty={false} archived={archived} />
+          <EmptyState title="No experiment plans yet">Create one here, or ask Research Chat to design an experiment for your question.</EmptyState>
+        </>
+      ) : exp.error != null && !exp.data ? (
+        <EmptyState title="Experiment unavailable" action={<Button onClick={() => update({ experiment: null, run: null })}>Show the first experiment</Button>}>
+          This experiment does not exist in this project or could not be loaded.
+        </EmptyState>
+      ) : !exp.data ? (
+        <Skeleton height="20rem" />
+      ) : (
+        // Re-key per experiment so local drafts, capture and uploads never leak between plans.
+        <StudioBody key={exp.data.id} project_id={project_id} experimentQuery={exp} archived={archived}
+          caps={caps.data} list={list} runParam={runParam} update={update} />
+      )}
+    </div>
+  );
+}
+
+type BodyProps = {
+  project_id: ID;
+  experimentQuery: ReturnType<typeof useExperiment>;
+  archived: boolean;
+  caps: ReturnType<typeof useCapabilities>["data"];
+  list: ReturnType<typeof useExperiments>;
+  runParam: string | null;
+  update: ReturnType<typeof useStudioParams>["update"];
+};
+
+function StudioBody({ project_id, experimentQuery, archived, caps, list, runParam, update }: BodyProps) {
+  const x = experimentQuery.data!;
+  const plan = usePlanDraft(x);
+  const edit = useEditExperiment(project_id, x.id);
+  const up = useArtifactUpload(project_id);
+  const [captureTab, setCaptureTab] = useState("record");
+  const [attachNote, setAttachNote] = useState<string | null>(null);
+  const [attachConflict, setAttachConflict] = useState(false);
+
+  // Resolve attached inputs from the experiment-filtered list plus the general list.
+  const forExp = useArtifacts(project_id, { experiment_id: x.id });
+  const all = useArtifacts(project_id, {});
+  const inputs = useMemo(() => {
+    const m = new Map<ID, Artifact>();
+    for (const a of [...all.items, ...forExp.items]) m.set(a.id, a);
+    if (up.artifact) m.set(up.artifact.id, up.artifact);
+    return m;
+  }, [all.items, forExp.items, up.artifact]);
+
+  const runs = useRuns(project_id, { experiment_id: x.id, kind: "analysis" });
+  // A linked run must be an analysis of this experiment; keep paging until found or exhausted.
+  const runFound = runParam != null && runs.items.some((r) => r.id === runParam);
+  const { has_next_page: moreRuns, is_fetching_next_page: fetchingRuns, load_next_page: loadRuns } = runs;
+  useEffect(() => {
+    if (runParam && !runFound && moreRuns && !fetchingRuns) loadRuns();
+  }, [runParam, runFound, moreRuns, fetchingRuns, loadRuns]);
+  const runMissing = runParam != null && !runFound && !runs.is_loading && !moreRuns;
+  const runId = runParam ? (runFound ? runParam : null) : runs.items[0]?.id ?? null;
+
+  function uploadRecording(r: Recording) {
+    const ext = r.mime_type.includes("mp4") ? "mp4" : "webm";
+    up.start({
+      blob: r.blob,
+      request: {
+        filename: `recording-${r.recorded_at.replace(/[:.]/g, "-")}.${ext}`,
+        mime_type: r.mime_type, size_bytes: r.blob.size, kind: "video", origin: "observed", experiment_id: x.id,
+        capture: { method: "browser_camera", recorded_at: r.recorded_at, recording_permission_confirmed: true },
+      },
+    });
+  }
+
+  function uploadFile(file: File, kind: Artifact["kind"] & ("document" | "dataset" | "image" | "video" | "audio" | "code"), origin: "observed" | "simulated" | "reference" | "generated") {
+    up.start({
+      blob: file,
+      request: {
+        filename: file.name, mime_type: file.type.split(";")[0], size_bytes: file.size, kind, origin, experiment_id: x.id,
+        capture: { method: "file_upload", recorded_at: null, recording_permission_confirmed: false },
+      },
+    });
+  }
+
+  /** Attach a ready artifact through an experiment save. A conflict keeps the artifact and offers a retry. */
+  async function attach(a: Artifact) {
+    setAttachNote(null);
+    if (plan.draft?.input_artifact_ids.includes(a.id) || x.input_artifact_ids.includes(a.id)) { up.reset(); return; }
+    if (plan.dirty) {
+      plan.setDraft((d) => ({ ...d, input_artifact_ids: [...d.input_artifact_ids, a.id] }));
+      setAttachNote(`“${a.filename}” was added to your unsaved plan. Save the plan to attach it.`);
+      up.reset();
+      return;
+    }
+    if (!experimentQuery.etag) return;
+    try {
+      const res = await edit.mutateAsync({ body: { input_artifact_ids: [...x.input_artifact_ids, a.id] }, etag: experimentQuery.etag });
+      plan.markSaved(res.data);
+      setAttachConflict(false);
+      up.reset();
+    } catch (err) {
+      if (errorCode(err) === "REVISION_CONFLICT") { setAttachConflict(true); experimentQuery.refetch(); }
+    }
+  }
+
+  const uploadsCaps = caps?.uploads;
+  const ready = up.phase === "ready" ? up.artifact : null;
+
+  return (
+    <>
+      <div className={styles.topBar}>
+        <ExperimentSelector project_id={project_id} experiments={list.items} selected={x.id}
+          onSelect={(id) => update({ experiment: id, run: null })} hasMore={list.has_next_page} loadMore={list.load_next_page}
+          dirty={plan.dirty} archived={archived} />
+      </div>
+
+      <div className={styles.columns}>
+        <div className={styles.colMain}>
+          <ExperimentEditor project_id={project_id} experiment={x} etag={experimentQuery.etag} plan={plan} inputs={inputs}
+            archived={archived} refetch={experimentQuery.refetch} />
+        </div>
+
+        <div className={styles.colSide}>
+          <section className={styles.panel} aria-labelledby="studio-inputs">
+            <h3 id="studio-inputs">Add input data</h3>
+            <Tabs label="Input source" value={captureTab} onChange={setCaptureTab} items={[
+              { id: "record", label: "Record video", content: (
+                <CapturePanel uploads={uploadsCaps} disabled={archived} onUpload={uploadRecording} uploadBusy={up.busy}
+                  uploadedBlob={up.phase === "ready" ? up.input?.blob ?? null : null} />
+              ) },
+              { id: "import", label: "Import a file", content: <FileImport uploads={uploadsCaps} disabled={archived || up.busy} onUpload={uploadFile} /> },
+            ]} />
+            <UploadProgressView up={up}>
+              {ready && (
+                <div className={styles.stack}>
+                  {attachConflict && (
+                    <p className={styles.note} role="alert">The plan changed while attaching. The file is saved; attach it to the refreshed plan.</p>
+                  )}
+                  {edit.error != null && !attachConflict && <ErrorNotice {...describeError(edit.error, "File saved, but not attached")} />}
+                  <div className={styles.row}>
+                    <Button variant="primary" pending={edit.isPending} disabled={archived || plan.remoteNewer} onClick={() => void attach(ready)}>
+                      {attachConflict ? "Attach to refreshed plan" : "Attach to this plan"}
+                    </Button>
+                    <Button onClick={up.reset}>Not now</Button>
+                  </div>
+                  {plan.remoteNewer && <p className={styles.muted}>Resolve the plan revision notice first.</p>}
+                </div>
+              )}
+            </UploadProgressView>
+            {attachNote && <p className={styles.note} role="status">{attachNote}</p>}
+          </section>
+
+          <section className={styles.panel} aria-labelledby="studio-launch">
+            <h3 id="studio-launch">Run analysis</h3>
+            <AnalysisSetup project_id={project_id} experiment={x} inputs={inputs} caps={caps}
+              planDirty={plan.dirty} planOutOfDate={plan.remoteNewer} archived={archived}
+              refetchExperiment={experimentQuery.refetch}
+              onLaunched={(r: Run) => update({ run: r.id })} />
+          </section>
+        </div>
+      </div>
+
+      <section className={styles.results} aria-labelledby="studio-results">
+        <div className={styles.resultsHead}>
+          <h3 id="studio-results">Results</h3>
+          {runs.items.length > 0 && (
+            <RunPicker runs={runs.items} value={runId} onChange={(id) => update({ run: id })}
+              hasMore={runs.has_next_page} loadMore={runs.load_next_page} />
+          )}
+        </div>
+        {runMissing ? (
+          <EmptyState title="Run unavailable" action={<Button onClick={() => update({ run: null })}>Clear selection</Button>}>
+            That run is not an analysis of this experiment.
+          </EmptyState>
+        ) : runParam && !runFound ? (
+          <Skeleton height="8rem" />
+        ) : runId ? (
+          <ResultsPane project_id={project_id} run_id={runId} />
+        ) : (
+          <p className={styles.muted}>No analysis has been run for this plan yet. Results appear after a run is accepted.</p>
+        )}
+      </section>
+    </>
+  );
+}
+
+function RunPicker({ runs, value, onChange, hasMore, loadMore }: {
+  runs: Run[]; value: ID | null; onChange: (id: ID) => void; hasMore: boolean; loadMore: () => void;
+}) {
+  const current = runs.find((r) => r.id === value);
+  return (
+    <div className={styles.row}>
+      <label className={styles.smallLabel} htmlFor="studio-run-picker">Run</label>
+      <select id="studio-run-picker" className={`${styles.input} ${styles.autoWidth}`} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
+        {runs.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.created_at.slice(0, 16).replace("T", " ")} UTC · {r.status}
+            {r.input.kind === "analysis" ? ` · plan rev ${r.input.experiment_revision}` : ""}
+          </option>
+        ))}
+      </select>
+      {hasMore && <Button onClick={loadMore}>Older runs</Button>}
+      {current && <span className={styles.muted}>Started <TimestampLabel iso={current.created_at} /></span>}
+      {current && current.input.kind === "analysis" && <StatusBadge tone="neutral">Evidence from plan revision {current.input.experiment_revision}</StatusBadge>}
+    </div>
+  );
+}
