@@ -67,3 +67,10 @@
 .pickerItem .muted { grid-column: 2; }
 .pickerName { overflow-wrap: anywhere; font-weight: 600; font-size: var(--text-label); }
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.agentControls { padding: 0 16px 12px; background: var(--color-surface); }
+.controlRow { display: flex; flex-wrap: wrap; gap: 8px; }
+.agentControls .controlRow button { min-height: 28px; padding: 3px 8px; font-size: 11px; }
+.pendingRequests { margin-top: 8px; font-size: 13px; }
+.pendingRequests pre { max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.pendingRequests section { border-top: 1px solid var(--color-border); padding: 8px 0; }

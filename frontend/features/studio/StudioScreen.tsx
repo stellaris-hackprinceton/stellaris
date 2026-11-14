@@ -216,7 +216,7 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
       <section id="studio-panel-analysis" role="tabpanel" aria-labelledby="studio-tab-analysis" tabIndex={0} hidden={view !== "analysis"} className={styles.taskPanel}>
         <section className={styles.panel} aria-labelledby="studio-launch">
           <h3 id="studio-launch">Configure analysis</h3>
-          <AnalysisSetup project_id={project_id} experiment={x} inputs={inputs} caps={caps}
+          <AnalysisSetup key={`${x.id}:${x.implementation?.code_artifact_id ?? ""}`} project_id={project_id} experiment={x} inputs={inputs} caps={caps}
             hasMoreArtifacts={all.has_next_page || forExp.has_next_page}
             loadingArtifacts={all.is_fetching_next_page || forExp.is_fetching_next_page}
             loadMoreArtifacts={() => {

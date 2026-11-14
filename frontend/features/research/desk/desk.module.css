@@ -59,6 +59,7 @@ a.title { text-decoration: none; }
 .inspector { position: sticky; top: 0; max-height: 100dvh; overflow-y: auto; padding: var(--space-4); border-left: 1px solid var(--color-border); background: var(--color-surface); }
 .inspectorHead { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-2); }
 .inspectorHead h2 { margin: 0; font-size: 20px; overflow-wrap: anywhere; }
+dialog.sourceDialog { width: min(1200px, calc(100vw - 2 * var(--space-4))); height: calc(100dvh - 2 * var(--space-4)); max-height: calc(100dvh - 2 * var(--space-4)); overflow-y: auto; }
 .stack { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; font-size: 14px; }
 .dl dt { color: var(--color-text-muted); }

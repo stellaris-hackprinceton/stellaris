@@ -1,6 +1,10 @@
 // Wire schemas from docs/frontend-backend-contract.md at the repository root.
 export type ID = string
 export type Timestamp = string
+export type CodeRuntime = 'python' | 'javascript' | 'shell'
+export type AgentSettings = { project_id: ID, organization_permission: 'off' | 'ask' | 'allow', revision: number, updated_at: Timestamp }
+export type OrganizationRequest = { id: ID, project_id: ID, status: 'pending' | 'applied' | 'rejected' | 'failed', operation: Record<string, Json>, revision: number, created_at: Timestamp, updated_at: Timestamp, error: { code: string, message: string } | null }
+export type ChatClear = { project_id: ID, generation: number, cleared_at: Timestamp }
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
 export type Page<T> = { items: T[], next_cursor: string | null }
 export type Session = {
@@ -25,7 +29,9 @@ export type Capabilities = {
     // Research extension (docs/research-contract.md). Missing means false.
     full_text_papers?: boolean,
     // Proposed curated views extension (file-workspace-contract §16). Missing means false.
-    workspace_views?: boolean
+    workspace_views?: boolean,
+    agent_controls?: boolean,
+    agent_code_execution?: boolean
   },
   uploads: {
     accepted_mime_types: string[],
@@ -35,6 +41,7 @@ export type Capabilities = {
   },
   execution: {
     allowed_backends: ("isolated_python")[],
+    runtimes?: { id: CodeRuntime, label: string }[],
     max_wall_time_s: number,
     max_memory_mb: number,
     max_cpu_cores: number,
@@ -78,6 +85,7 @@ export type Message = {
   last_chunk_index: number | null,
   created_at: Timestamp,
   updated_at: Timestamp
+  chat_generation?: number
 }
 
 export type Source = {
@@ -173,6 +181,7 @@ export type Experiment = {
   input_artifact_ids: ID[],
   calibration: Calibration,
   limitations: string[],
+  implementation?: { runtime: CodeRuntime, code_artifact_id: ID, pipeline: 'script_analysis_v1' } | null,
   revision: number,
   created_at: Timestamp,
   updated_at: Timestamp
@@ -198,7 +207,8 @@ export type Artifact = {
     frame_count?: number,
     nominal_frame_rate_fps?: number,
     recorded_at?: Timestamp,
-    uploaded_at?: Timestamp
+    uploaded_at?: Timestamp,
+    runtime?: CodeRuntime
   },
   created_at: Timestamp
 }
@@ -216,7 +226,8 @@ export type RunInput =
       experiment_id: ID,
       experiment_revision: number,
       input_artifact_ids: ID[],
-      pipeline: "bouncing_ball_v1" | "python_analysis_v1",
+      pipeline: "bouncing_ball_v1" | "python_analysis_v1" | "script_analysis_v1",
+      runtime?: CodeRuntime,
       code_artifact_id: ID | null,
       parameters: { [key: string]: Json }
     }
@@ -361,10 +372,13 @@ export type Approval = {
 }
 
 export type EventPayloads = {
+  'agent.settings.updated': { settings: AgentSettings },
+  'organization.request.updated': { request: OrganizationRequest },
+  'chat.cleared': ChatClear,
   "project.updated": { project: Project },
   "message.created": { message: Message },
   "message.delta": {
-    message_id: ID, chunk_index: number, text: string
+    message_id: ID, chunk_index: number, text: string, chat_generation?: number
   },
   "message.updated": { message: Message },
   "source.created": { source: Source },

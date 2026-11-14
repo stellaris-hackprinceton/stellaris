@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ID } from "@/contracts/api";
-import { Button, Sheet } from "@/components/ui";
+import { Button, Dialog, Sheet } from "@/components/ui";
 import { useProject } from "@/lib/queries";
 import { QuestionSection } from "../canvas/QuestionSection";
 import { ActiveWork } from "./ActiveWork";
@@ -65,7 +65,7 @@ export function ResearchDesk({ project_id }: { project_id: ID }) {
 
   return (
     <div ref={root} className={styles.root}>
-      <div className={styles.layout} data-inspector={inspector && wide ? "side" : undefined}>
+      <div className={styles.layout} data-inspector={inspector?.kind === "claim" && wide ? "side" : undefined}>
         <div className={styles.screen}>
           <header className={styles.header}>
             <h1>Research</h1>
@@ -84,18 +84,18 @@ export function ResearchDesk({ project_id }: { project_id: ID }) {
             <WritingWidget project_id={project_id} />
           </div>
         </div>
-        {inspector && wide && <aside className={styles.inspector} aria-label="Research inspector">
+        {inspector?.kind === "claim" && wide && <aside className={styles.inspector} aria-label="Research inspector">
           <div className={styles.inspectorHead}>
-            <h2>{inspector.kind === "source" ? "Literature source" : "Finding"}</h2>
+            <h2>Finding</h2>
             <Button onClick={closeInspector}>Close</Button>
           </div>
-          {inspector.kind === "source"
-            ? <SourceInspector project_id={project_id} source_id={inspector.id} citation={inspector.citation} />
-            : <ClaimInspector project_id={project_id} claim_id={inspector.id} onOpenCitation={openCitation} />}
+          <ClaimInspector project_id={project_id} claim_id={inspector.id} onOpenCitation={openCitation} />
         </aside>}
       </div>
-      {!wide && <Sheet open={!!inspector} onClose={closeInspector} title={inspector?.kind === "source" ? "Literature source" : "Finding"}>
+      <Dialog open={inspector?.kind === "source"} onClose={closeInspector} title="Literature source" className={styles.sourceDialog}>
         {inspector?.kind === "source" && <SourceInspector project_id={project_id} source_id={inspector.id} citation={inspector.citation} />}
+      </Dialog>
+      {!wide && <Sheet open={inspector?.kind === "claim"} onClose={closeInspector} title="Finding">
         {inspector?.kind === "claim" && <ClaimInspector project_id={project_id} claim_id={inspector.id} onOpenCitation={openCitation} />}
       </Sheet>}
     </div>

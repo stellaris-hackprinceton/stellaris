@@ -6,6 +6,7 @@ import { Button, ErrorNotice, Skeleton, describeError } from "@/components/ui";
 import { ResearchIcon, ExperimentIcon, GraphIcon, ExternalIcon } from "@/components/ui/icons";
 import { ChatComposer, useChatDraft } from "./ChatComposer";
 import { MessageList } from "./MessageList";
+import { AgentControls } from "./AgentControls";
 import { useArtifactMap, useClaimMap } from "./lookups";
 import styles from "./chat.module.css";
 
@@ -23,6 +24,16 @@ export function ResearchChat({ project_id, draft, showHeading = false }: Researc
   const messages = useMessages(project_id);
   const claims = useClaimMap(project_id);
   const artifacts = useArtifactMap(project_id);
+  const { setText, setAttachments, setFailed, keyRef } = draft;
+  useEffect(() => {
+    const clear = (event: Event) => {
+      const detail = (event as CustomEvent<{ project_id?: string }>).detail;
+      if (detail?.project_id !== project_id) return;
+      setText(""); setAttachments([]); setFailed(null); keyRef.current = null;
+    };
+    window.addEventListener('stellaris:chat-cleared', clear);
+    return () => window.removeEventListener('stellaris:chat-cleared', clear);
+  }, [project_id, setText, setAttachments, setFailed, keyRef]);
 
   // Messages are oldest-first: keep loading pages until the newest persisted message is present.
   const { has_next_page, is_fetching_next_page, load_next_page } = messages;
@@ -52,7 +63,7 @@ export function ResearchChat({ project_id, draft, showHeading = false }: Researc
           <div className={styles.suggestions}>
             {[
               { icon: ResearchIcon, label: "Explore the literature", prompt: "Find relevant public arXiv literature for this project's research question and explain what the retrieved abstracts support." },
-              { icon: ExperimentIcon, label: "Design an experiment", prompt: "Help me design a bouncing-ball experiment for this project, including the protocol, calibration, and sources of uncertainty." },
+              { icon: ExperimentIcon, label: "Design an experiment", prompt: "Design an experiment for this project's question and save its runnable implementation. Use the actual available inputs and supported runtime, identify missing evidence or dependencies, and never invent observations." },
               { icon: GraphIcon, label: "Review the evidence", prompt: "Review the saved evidence in this project. What can we conclude, and what still needs investigation?" },
             ].map(({ icon: Icon, label, prompt }) => <button key={label} disabled={project.data?.status === "archived"} onClick={() => {
               draft.setText(previous => previous.trim() ? `${previous}\n\n${prompt}` : prompt);
@@ -64,6 +75,7 @@ export function ResearchChat({ project_id, draft, showHeading = false }: Researc
         <MessageList messages={messages.items} claims={claims} artifacts={artifacts} loadingNewer={has_next_page} />
       )}
       <ChatComposer draft={draft} project_id={project_id} archived={project.data?.status === "archived"} artifacts={artifacts} />
+      <AgentControls project_id={project_id} archived={project.data?.status === 'archived'} busy={messages.items.some(message => message.status === 'streaming')} />
     </section>
   );
 }

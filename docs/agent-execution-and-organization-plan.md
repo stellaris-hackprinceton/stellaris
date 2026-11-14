@@ -1,6 +1,6 @@
 # Agent execution, organization permissions, and chat controls
 
-Status: **Recorded future work only. Do not start implementation until requested.**
+Status: **Implemented and locally verified.**
 Recorded November 14, 2026, from the user's decisions and inspection of the live app.
 
 ## Confirmed direction
@@ -16,9 +16,9 @@ Recorded November 14, 2026, from the user's decisions and inspection of the live
   sort/group them, assign tags, and manage organization.
 - Add an organization-permission button cycler to the agent side panel.
 - Add a Clear chat action to that panel.
-- This document records the work; it does not authorize starting it now.
+- The user subsequently authorized implementation with Luna subagents.
 
-## Current implementation and gaps
+## Starting implementation and gaps (before this change)
 
 - `backend/project_runtime/requirements.txt` pins `deepagents==0.7.38`.
 - `agent_runner.py` uses `FilesystemBackend` for project scratch. Its custom tools
@@ -136,8 +136,7 @@ and how a mode change affects an already executing organization action.
   Never inspect `.env` files or host profiles. Runtime may load configured credentials;
   keep paid model checks minimal and report which actually ran.
 - Use the user's current agent preference and commit/push verified slices when the
-  user resumes implementation. No implementation, builds, deployments or model calls
-  are part of recording this plan.
+  user resumes implementation. Implementation and bounded live checks are now authorized.
 
 ## Framework references
 
@@ -146,5 +145,23 @@ and how a mode change affects an already executing organization action.
 - [Deep Agents backends](https://docs.langchain.com/oss/python/deepagents/backends):
   filesystem, composite routing and sandbox/backend extension concepts.
 
-These are official framework references, not proof that those capabilities are already
-connected in Stellaris. Check compatibility with the pinned version when work resumes.
+These are framework references. Stellaris uses explicit LangChain publication/execution tools
+with the existing trusted worker controller, rather than a native SandboxBackend shell.
+
+## Implemented delivery
+
+The additive [agent execution contract](agent-execution-contract.md) defines the shipped
+interfaces. Deep Agents can publish immutable implementations and execute Python,
+JavaScript or shell scripts using actual worker capabilities. Studio selects saved
+implementations; the bouncing-ball tracker remains an explicit optional method.
+Each execution gets read-only declared inputs and publishes validated outputs; retained
+output artifacts can be declared as inputs for later runs. This does not add a persistent
+interactive execution shell or arbitrary package installation.
+
+Organization uses logical catalog tags and collections, with backend-enforced Off, Ask
+and Allow permissions (default Ask). It does not move immutable evidence on disk. Clear
+chat archives the conversation, advances its generation and resets agent scratch context;
+active agent runs block it. Compact controls appear below the composer and explain their
+behavior on hover. Literature opens in a large dialog instead of the side inspector.
+
+Verification and limitations are recorded in [agent execution verification](agent-execution-verification.md).

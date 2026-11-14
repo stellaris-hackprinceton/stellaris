@@ -3,6 +3,7 @@ import type { LogEntry, Message, ProjectEvent, Run, Workspace } from '@/contract
 import type { ApiResult } from '@/contracts/requests'
 import { api } from '@/lib/api'
 import { invalidateCatalog } from '@/lib/catalog'
+import { applyChatClear, generationKey, requestsKey, settingsKey } from '@/lib/agent-controls'
 import { keys, type CachedPages } from '@/lib/queries'
 import { preferCurrent } from '@/lib/queries/reconcile'
 
@@ -21,8 +22,14 @@ function upsert<R extends { id: string }>(client: QueryClient, p: string, resour
 export async function applyProjectEvent(client: QueryClient, event: ProjectEvent, signal?: AbortSignal) {
   if (signal?.aborted) return
   const p = event.project_id
+  const currentGeneration = client.getQueryData<number>(generationKey(p)) ?? 0
+  if ((event.type === 'message.created' || event.type === 'message.updated') && (event.payload.message.chat_generation ?? 0) < currentGeneration) return
+  if (event.type === 'message.delta' && (event.payload.chat_generation ?? 0) < currentGeneration) return
   const invalidate = (resource: string) => client.invalidateQueries({ queryKey: ['project', p, resource] })
   switch (event.type) {
+    case 'chat.cleared': await applyChatClear(client, event.payload); return
+    case 'agent.settings.updated': void client.invalidateQueries({ queryKey: settingsKey(p) }); return
+    case 'organization.request.updated': void client.invalidateQueries({ queryKey: requestsKey(p) }); await invalidateCatalog(client, p); return
     case 'run.created': case 'run.updated': {
       const previous = client.getQueryData<ApiResult<Run>>(keys.detail(p, 'runs', event.payload.run.id))?.data
       if (previous && previous.revision > event.payload.run.revision) return
@@ -56,6 +63,7 @@ export async function applyProjectEvent(client: QueryClient, event: ProjectEvent
       if (!message || chunk_index !== (message.last_chunk_index ?? -1) + 1) {
         const result = await api.messages.get(p, message_id, signal)
         if (signal?.aborted) return
+        if ((result.data.chat_generation ?? 0) < (client.getQueryData<number>(generationKey(p)) ?? 0)) return
         upsert(client, p, 'messages', result.data)
       } else upsert(client, p, 'messages', { ...message, content_markdown: message.content_markdown + text, last_chunk_index: chunk_index })
       return
