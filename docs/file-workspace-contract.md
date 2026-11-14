@@ -104,7 +104,7 @@ type WorkspaceFile = {
   editable: { name: boolean, content: boolean, tags: true },
   status: "active" | "trashed",   // always "active" for artifact/record files
   tags: FileTag[],                // sorted by slug
-  collection_ids: ID[],           // sorted
+  collection_ids: ID[],           // sorted explicit memberships only; saved filters are evaluated separately
   content_revision: number | null,// notes: current content revision (1-based); others null
   revision: number,               // catalog metadata revision; ETag
   created_at: Timestamp,          // legacy created_at for projected files
@@ -356,7 +356,8 @@ returns `404 RESOURCE_NOT_FOUND`.
 - `GET /tags/{slug}` → `200 Tag` and `ETag`.
 - `PATCH /tags/{slug}` `{ label?, color? }` requires `If-Match` → `200 Tag`.
 - `DELETE /tags/{slug}` requires `If-Match` → `204`. This removes all user assignments of the
-  tag. A system tag returns `409 TAG_PROTECTED`.
+  tag. A system tag returns `409 TAG_PROTECTED`. Every affected file gets a new revision
+  and a file change event (a bulk invalidation is allowed).
 
 ### Collections
 
@@ -383,10 +384,19 @@ Membership semantics:
 - Trashed notes keep their memberships. Default listings hide trashed notes (section 8).
 - `filter: null` (default) uses explicit membership. A non-null `filter` evaluates the
   documented file filters dynamically. No recursive collection filters are allowed.
-- `GET /files?collection_id=…` intersects a saved filter with any supplied file filters.
-  `file_count` uses the collection filter (active only for explicit collections).
+- `FileFilter.tags` maps to repeatable `tag` query parameters. Its own omitted `status`
+  defaults to `active`. On a saved collection request, omitted query filters add no extra
+  constraint; explicit query filters intersect the saved filter. Status is a set:
+  intersecting `all` with `trashed` yields `trashed`, while `active` with `trashed` is empty.
+- `file_count` counts the files returned by `/files?collection_id=…` with no extra filters
+  or pagination. Explicit collection counts exclude trashed notes; saved collections use
+  their saved status. Counts are derived and are not covered by metadata ETags.
+- Explicit membership changes bump each affected file's revision and emit file changes;
+  the collection metadata revision remains unchanged. A file's `collection_ids` lists only
+  explicit memberships, never dynamic saved-filter membership.
 - PATCH may change a saved filter, or switch modes only if the explicit membership is empty;
   otherwise return `409 COLLECTION_NOT_EMPTY`. No membership is silently discarded.
+  Omitted `filter` leaves it unchanged; explicit `filter: null` selects explicit mode.
 
 ### Relations
 
@@ -520,8 +530,11 @@ Delivery rules:
   any projection pass that created or changed files or system relations.
 - Delivery is at least once and may be duplicated. Catalog events may arrive after legacy
   events about the same underlying change. The event carries IDs, not full objects.
-- On receiving the event, refetch the named resources. Apply the result only if its
-  `revision` is newer than the client's copy.
+- On receiving the event, refetch affected resources and lists, including derived tag and
+  collection counts. Equal-revision responses may refresh derived counts; only responses
+  with an older revision must be discarded. Bulk events invalidate the whole named list.
+- No-op PATCHes, already-present membership operations, and idempotent replays emit no new
+  events. The original committed mutation may still be redelivered by the outbox.
 - Clients that ignore this event type stay correct by refetching lists, as the base
   contract allows. Legacy event types and payloads are unchanged.
 
