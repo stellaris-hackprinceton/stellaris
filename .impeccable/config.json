@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/components/shell/shell.module.css"
+        ],
+        "createdAt": "2026-11-14T23:53:22.656Z",
+        "reason": "docs/design/experiment-studio.md and frontend-implementation-spec.md specify a solid violet edge marker for current navigation"
+      }
+    ]
+  }
+}

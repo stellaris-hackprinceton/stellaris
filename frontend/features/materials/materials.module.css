@@ -41,7 +41,7 @@
 .body pre { max-height: 420px; overflow: auto; padding: 12px; background: var(--color-background); white-space: pre-wrap; }
 .body p:first-child { margin-top:0; }
 .actions,.inline { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
-.notice { border-left:3px solid var(--color-warning); padding:9px 12px; background:var(--color-background); }
+.notice { border:1px solid var(--color-warning); border-radius:var(--radius-control); padding:9px 12px; background:var(--color-warning-surface); }
 .record { border-top:1px solid var(--color-border); margin-top:14px; padding-top:10px; }
 .record dl { display:grid; grid-template-columns:minmax(105px,.35fr) minmax(0,1fr); gap:7px 12px; }
 .record dt { color:var(--color-text-muted); }
