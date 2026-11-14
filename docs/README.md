@@ -19,6 +19,8 @@ This is the single canonical documentation tree. Root README and agent entrypoin
 
 ## Product and implementation
 
+- [Continuous studio: light and dark direction](design/continuous-studio-direction.md). Preferred composition, confirmed light/dark modes, image artifacts to disregard, and Assistant input exploration still needed.
+- [Human experience and visual redesign: open issues](design/human-experience-issues.md). User feedback on report readability, language, graph density, adjustable panels, filtering, and the unresolved theme direction.
 - [Experiment studio design](design/experiment-studio.md). Current visual system, navigation hierarchy, terminology, and responsive behavior.
 - [Experiment studio verification](verification/experiment-studio.md). Frontend checks, browser behavior, and remaining provider/deployment limits.
 

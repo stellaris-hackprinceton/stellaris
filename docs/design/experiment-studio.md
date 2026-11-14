@@ -1,5 +1,8 @@
 # Experiment studio design
 
+This document records the implemented light interface. The newer [continuous studio direction](continuous-studio-direction.md) records the preferred composition for a future light/dark redesign. Its implementation is not claimed here.
+
+
 Approved November 14, 2026. This direction supersedes the palette, rounded shelves, navigation presentation, and labels in the earlier [visual desk direction](virtual-desk.md). Scientific contracts, resource identifiers, and existing workflows remain unchanged.
 
 ## Identity and shared styles
