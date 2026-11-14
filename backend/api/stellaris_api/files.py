@@ -2,7 +2,7 @@
 
 Implemented here: GET /catalog, /files, /files/{id}, /files/{id}/content, /tags, /tags/{slug}.
 Notes, revisions, tagging, and tag mutations (slice 2) live in file_mutations.py and register
-on this blueprint. Collection and relation routes (slice 3) are not registered yet.
+on this blueprint. Collection and relation routes use the file_collections blueprint.
 
 Every route first checks project visibility in the main DB (so catalogs are only created for
 visible projects), opens the project's catalog, and projects legacy changes. The catalog
@@ -182,8 +182,8 @@ def _query_filters():
     return filters, sort, order
 
 
-def _apply_filters(filters: dict, where: list, params: list) -> None:
-    status = filters.get("status", "active")
+def _apply_filters(filters: dict, where: list, params: list, *, default_status: bool = True) -> None:
+    status = filters.get("status", "active" if default_status else "all")
     if status != "all":
         where.append("f.status = ?")
         params.append(status)
@@ -202,18 +202,20 @@ def _apply_filters(filters: dict, where: list, params: list) -> None:
         params.extend([*tags, len(tags)])
 
 
-def _collection_filters(cat, collection_id: str, where: list, params: list) -> None:
+def _collection_filters(cat, collection_id: str, where: list, params: list) -> bool:
+    """Add membership constraints; return whether a saved filter supplies the default status."""
     row = cat.execute("SELECT filter FROM collections WHERE id = ?", (collection_id,)).fetchone()
     if row is None:
         raise ApiError(404, *_NOT_FOUND)
     if row["filter"] is None:
         where.append("f.id IN (SELECT file_id FROM collection_files WHERE collection_id = ?)")
         params.append(collection_id)
-        return
+        return False
     saved = json.loads(row["filter"])  # FileFilter uses `tags`; query filters use `tag`.
     if "tags" in saved:
         saved = {**{k: v for k, v in saved.items() if k != "tags"}, "tag": sorted(set(saved["tags"]))}
     _apply_filters(saved, where, params)
+    return True
 
 
 # -- routes ------------------------------------------------------------------------------
@@ -248,9 +250,10 @@ def list_files(project_id):
 
     cat = _open(project_id)
     where, params = [], []
-    _apply_filters(filters, where, params)
+    saved_collection = False
     if "collection_id" in filters:
-        _collection_filters(cat, filters["collection_id"], where, params)
+        saved_collection = _collection_filters(cat, filters["collection_id"], where, params)
+    _apply_filters(filters, where, params, default_status=not saved_collection)
     column, direction = SORT_COLUMNS[sort], order.upper()
     if after is not None:
         op = ">" if order == "asc" else "<"

@@ -1,7 +1,7 @@
 # Stellaris file workspace contract
 
 Contract version: **1.1.0-draft (additive to `/api/v1`)**
-Status: **Catalog, notes, revisions and tagging implemented and Docker-verified (slices 1–2); collections/relations planned.** Progress is tracked in
+Status: **Implemented and Docker-verified for the backend foundation. Frontend adoption remains separate.** Progress is tracked in
 [backend/file-workspace-plan.md](backend/file-workspace-plan.md).
 Prepared: **November 14, 2026**
 Extends: [frontend-backend-contract.md](frontend-backend-contract.md). Its sections 3 (common
@@ -461,7 +461,7 @@ The backend never invents, infers, or ranks links.
 | Collections | At most 200 per project and 10,000 files per collection. Membership requests take 1–100 `file_ids`. |
 | Relation `type` | Tag slug pattern. The reserved system types `derived_from`, `produced_by`, `cites`, and `uses_evidence` are rejected with `422`. |
 | Relation `note` | At most 1,000 characters, or `null`. |
-| Relations | `from_file_id` must differ from `to_file_id`. At most 20,000 per project. |
+| Relations | `from_file_id` must differ from `to_file_id`. At most 20,000 user-authored relations per project; recorded system provenance is preserved without this organizational cap. |
 
 Request bodies reject unknown fields with `422 VALIDATION_FAILED`. JSON Pointer paths
 identify each failing field.
@@ -566,3 +566,26 @@ All other statuses and codes follow the base contract's section 9.
   consolidated. Detect support through `features.workspace_files`.
 - A future agent tool that reads or writes notes or tags requires a contract amendment. It
   must keep the rule that notes are not evidence.
+
+## 15. Frontend integration examples
+
+Use the existing same-origin `/api/v1/projects/{project_id}` prefix and the common error
+handling, idempotency keys, and ETags. These are request examples, not new operations:
+
+```text
+GET /files?tag=research&sort=name&order=asc
+POST /files  {"name":"idea.md","content":"A proposed question","tags":["follow-up"]}
+PATCH /files/{file_id}  {"content":"Revised question"}   # If-Match: latest file ETag
+POST /collections  {"name":"Open hypotheses","filter":{"tags":["hypotheses"],"status":"active"}}
+POST /relations  {"from_file_id":"<file A>","to_file_id":"<file B>","type":"related"}
+```
+
+Read file metadata before choosing a renderer. Fetch `/files/{id}/content` as attachment
+for JSON, decode it as text, and render it safely; Markdown must disable raw HTML. The
+`editable` fields distinguish notes from read-only scientific resources. Listen for
+`catalog.changed`, invalidate affected lists/counts, and refetch; these events contain IDs,
+not complete resources. Do not treat a user tag or relation as scientific evidence.
+
+A future graph can use paged files as nodes and paged relations as edges. Filter both sets
+to the intended visible files in the client; an edge is directed from `from_file_id` to
+`to_file_id`. No graph rendering or automatic semantic-link feature is implemented.

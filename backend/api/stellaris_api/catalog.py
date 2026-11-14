@@ -27,6 +27,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from . import catalog_projection as proj
+from . import catalog_relations as rel
 from . import db
 from .db import transaction
 from .events import record_event
@@ -243,19 +244,21 @@ def _sync_locked(main, cat, project_id: str) -> None:
     rendered = meta_get(cat, "render_version")
     with transaction(main, immediate=False):  # One consistent legacy snapshot; committed before any write.
         sequence = proj.legacy_sequence(main, project_id)
-        if synced == str(sequence) and rendered == str(proj.RENDER_VERSION) and meta_get(cat, "last_sync_error") is None:
+        if (synced == str(sequence) and rendered == str(proj.RENDER_VERSION) and meta_get(cat, "last_sync_error") is None
+                and meta_get(cat, "relation_projection_version") == str(rel.PROJECTION_VERSION)):
             return
         entries = proj.collect(main, project_id, projected)
+        edges = rel.collect(main, project_id)
     with transaction(cat):
         changes = [c for c in (_upsert(cat, e) for e in entries) if c]
+        changes.extend(rel.sync(cat, project_id, edges))
         _meta_set(cat, "synced_event_sequence", sequence)
         _meta_set(cat, "render_version", proj.RENDER_VERSION)
+        _meta_set(cat, "relation_projection_version", rel.PROJECTION_VERSION)
         _meta_set(cat, "last_synced_at", now_ts())
         _meta_set(cat, "last_sync_error", None)
         if changes:
-            if len(changes) > MAX_EVENT_CHANGES:
-                changes = [{"entity": "file", "id": None, "revision": None, "deleted": False, "bulk": True}]
-            enqueue_event(cat, changes)
+            enqueue_event(cat, rel.compact(changes, MAX_EVENT_CHANGES))
 
 
 def _upsert(cat, entry: dict):

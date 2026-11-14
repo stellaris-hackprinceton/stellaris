@@ -6,7 +6,7 @@ import uuid
 
 from flask import Flask, g, request
 
-from . import agent_runs, analysis, artifacts, catalog, chat, db, experiments, files, idempotency, reports, research, runs, worker
+from . import agent_runs, analysis, artifacts, catalog, chat, db, experiments, file_collections, files, idempotency, reports, research, runs, worker
 from .config import load_config
 from .errors import ApiError, register_error_handlers
 from .executor import RunManager
@@ -41,7 +41,7 @@ def create_app(config=None) -> Flask:
     app.extensions["stellaris_runs"] = manager
 
     register_error_handlers(app)
-    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp, files.bp):
+    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp, files.bp, file_collections.bp):
         app.register_blueprint(blueprint)
     _register_guards(app, config)
     _register_system_routes(app, config, runtime, manager)
@@ -142,8 +142,7 @@ def _register_system_routes(app, config, runtime, manager):
                     "markdown_reports": True,
                     "remote_compute": False,
                     "collaboration": False,
-                    # File catalog, notes and tags are implemented; collection/link
-                    # routes are tracked in the file workspace implementation plan.
+                    # Additive file catalog, revisioned notes, tags, collections and links.
                     "workspace_files": True,
                 },
                 "uploads": {

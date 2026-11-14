@@ -1,7 +1,7 @@
 # File workspace implementation plan
 
 Interface: [../file-workspace-contract.md](../file-workspace-contract.md) (proposed, additive to `/api/v1`).
-Status: **slices 1–2 implemented and Docker-verified; slices 3–4 pending.** Prepared 2026-11-14 on branch `backend-v2`.
+Status: **all four slices implemented and Docker-verified; frontend adoption is a separate task.** Prepared 2026-11-14 on branch `backend-v2`.
 
 ## Goal and boundaries
 
@@ -233,19 +233,20 @@ system removal → 422; tag filter AND semantics; archived project → 409 for e
 
 ### Slice 3 — Collections and relations (user + recorded provenance)
 
-Files: `files.py` (collections and relations routes); `catalog.py` (system relation
-projection, limits); `workspace_files_test.py` (`--slice 3`).
+Files: `file_collections.py` (collections and relation routes), `catalog_relations.py`
+(recorded provenance projection), integration edits in `files.py`, `catalog.py` and `app.py`,
+and `backend/scripts/workspace_collections_test.py`.
 
-- [ ] Collections CRUD with optional saved filter, set-membership add/remove for explicit collections, `GET /files?collection_id=`; deleting a
+- [x] Collections CRUD with optional saved filter, set-membership add/remove for explicit collections, `GET /files?collection_id=`; deleting a
       collection never touches files.
-- [ ] User relations: directed, no self-loops, duplicate triple returns 200 existing, reserved
+- [x] User relations: directed, no self-loops, duplicate triple returns 200 existing, reserved
       system types rejected, cross-project IDs → 422.
-- [ ] System relations projected during sync from `parent_artifact_ids`, `run_id`
+- [x] System relations projected during sync from `parent_artifact_ids`, `run_id`
       (`produced_by`, once the run file exists), claim citations and evidence/measurements;
       deterministic IDs; `RELATION_PROTECTED` on delete.
-- [ ] `GET /relations` filters `file_id` + `direction`, `type`, `created_by`, paged.
+- [x] `GET /relations` filters `file_id` + `direction`, `type`, `created_by`, paged.
 
-Acceptance: slice 1 commands plus `(cd backend && python3 scripts/workspace_files_test.py --slice 3)`.
+Acceptance: slice 1 commands plus `(cd backend && python3 scripts/workspace_collections_test.py)`.
 Script checks: report artifact `derived_from` its chart/measurement inputs exactly as
 recorded in `parent_artifact_ids` and no other system edges appear; re-sync creates no
 duplicate edges; user relation round-trip and direction filters; collection membership
@@ -253,10 +254,10 @@ idempotent; limits return 422.
 
 ### Slice 4 — Documentation and verification close-out (docs only)
 
-- [ ] Mark contract status per implemented slice; record actual check counts in
+- [x] Mark contract status per implemented slice; record actual check counts in
       `docs/backend/verification.md`; update `docs/backend/README.md` (catalog location,
       backup note, recovery procedure) and `docs/backend/implementation-plan.md`.
-- [ ] Hand the contract to frontend teammates; frontend work is a separate, authorized task.
+- [x] Publish the contract and integration examples for frontend teammates; frontend work is a separate task.
 
 ## Compatibility and recovery
 
@@ -270,20 +271,22 @@ idempotent; limits return 422.
   may report the safe last_sync_error with 200, but does not assert fresh projection.
 - Main-DB event purge does not affect sync (uses only the max sequence and ID diffs).
 
-## Uncertainties to resolve during implementation
+## Practical limits
 
-- Diff-based sync scans all project legacy IDs whenever the event sequence moves (including
-  after the catalog's own relayed events). Expected fine at MVP scale; add per-type
-  high-water marks only if measured to be slow.
-- `artifacts.artifact_content` is a Flask view called directly for delegation; if that proves
-  awkward, extract its body into a shared helper inside slice 1's `artifacts.py` edit
-  (the only permitted legacy-module change: a pure refactor with identical behavior).
-- Measurements CSV size is bounded only by worker output limits; if rendering exceeds
-  16 MiB, mark the file unavailable (`503` on content) rather than truncating silently —
-  confirm with the user if this occurs.
-- Whether the frontend wants `collection_ids` on every file (cost: one indexed query per
-  page) — kept in the contract; drop only via contract amendment.
+- Projection reconciles legacy IDs and recorded provenance when legacy events change. It is
+  intentionally simple at current project sizes; add incremental indexes only if measured
+  performance warrants them. No content embeddings, graph database, or graph UI was added.
+- Structured record downloads render current legacy state; under concurrent experiment edits,
+  content may be newer than earlier metadata. Immutable artifacts and accepted run snapshots
+  remain unchanged. Files are an API abstraction; notes/revisions live in SQLite and records
+  are rendered JSON/CSV, while artifact bytes remain in the project filesystem.
+- Catalog user data requires the API-volume backup; rebuilding scientific projections does
+  not recover lost notes or user organization. Corrupt catalogs fail visibly.
+- Archive/cross-database timing, at-least-once event delivery, and live paging behavior are
+  documented in the contract. No paid model calls were made for this feature.
 
 Verification checkpoint: Slice 1 passed 76 Docker/API integration checks, including the malformed tag cursor regression. No paid model calls.
 
 Verification checkpoint: Slice 2 passed 112 Docker/API integration checks. An isolated 5-byte note budget also verified quota rejection and complete revision rollback. Legacy integration passed 95 checks after slice 1; restart and corrupt-catalog checks passed.
+
+Final integration checkpoint: 76 catalog checks + 112 notes/tagging checks + 86 collection/relation checks; 95 existing backend checks passed. Offline Deep Agents flow, citation projection, quota rollback, corruption handling, and restart persistence were also verified. Heartbeat delay was skipped in the legacy suite.

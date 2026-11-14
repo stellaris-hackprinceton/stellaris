@@ -120,6 +120,9 @@ Synthetic fixtures and their results are explicitly marked **simulated**.
 ```sh
 python3 scripts/smoke_test.py
 python3 scripts/integration_test.py
+python3 scripts/workspace_files_test.py --slice 1
+python3 scripts/workspace_files_test.py --slice 2
+python3 scripts/workspace_collections_test.py
 python3 scripts/pipeline_test.py
 docker compose exec -T api python - < scripts/check_worker_validation.py
 docker compose exec -T api python - < scripts/check_audit_storage.py

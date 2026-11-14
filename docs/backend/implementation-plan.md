@@ -18,3 +18,17 @@ checked implementation item has received live provider testing.
 Still intentionally undecided: what ends a project's duration and permits container teardown.
 Archiving retains both the running container and evidence. Authentication is deferred by the
 user; remote/public deployment is outside the current local configuration.
+
+
+## File workspace foundation (2026-11-14)
+
+- [x] Per-project SQLite catalogs and repeatable projection of existing evidence and records.
+- [x] File/content listing, filters, stable pagination and default/user tags.
+- [x] Editable notes with retained revisions, optimistic concurrency and bounded storage.
+- [x] Manual and saved-filter collections, explicit user links and recorded provenance edges.
+- [x] Frontend contract, integration examples and Docker/API verification.
+
+Follow [file-workspace-plan.md](file-workspace-plan.md) and the
+[file workspace contract](../file-workspace-contract.md). Frontend adoption and graph UI
+are separate work. The diagnosed ball-pipeline mismatch is documented in
+[experiment-pipeline-mismatch.md](experiment-pipeline-mismatch.md).
