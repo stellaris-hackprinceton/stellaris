@@ -66,3 +66,5 @@ new integrations are included in this rewrite.
 - No paid application-model calls, live arXiv retrieval, frontend edits, or host credential
   inspection occurred in this verification pass. Live remote execution, privileged demo-cluster
   startup and live agent-driven paper retrieval are separate checks.
+
+User decision after integration: keep HPC disabled for now. A clearly labeled Slurm mock may be added for a future demo; no mock or live scheduler is enabled by this change.
