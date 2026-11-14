@@ -247,7 +247,7 @@ def slice1(args):
     print("2. Lazy backfill")
     status, _, cat = api("GET", f"/projects/{A}/catalog")
     expected = legacy_counts(A)
-    check(status == 200 and cat["workspace_files"] is True and cat["schema_version"] == 1
+    check(status == 200 and cat["workspace_files"] is True and cat["schema_version"] == 2
           and cat["last_sync_error"] is None and cat["last_synced_at"], "GET /catalog returns CatalogStatus")
     check(cat["projected"] == expected, f"projected counts equal legacy counts {expected}")
     check(cat["notes"] == {"count": 0, "retained_bytes": 0, "max_bytes": cat["notes"]["max_bytes"]}

@@ -35,7 +35,7 @@ from .http import TIMESTAMP_FORMAT, dumps, now_ts
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 PROJECT_ID = re.compile(r"^prj_[0-9a-f]{32}$")
 _CATALOG_FILE = re.compile(r"^(prj_[0-9a-f]{32})\.sqlite3$")
 MAX_EVENT_CHANGES = 100
@@ -44,7 +44,8 @@ OUTBOX_RETENTION_S = 24 * 3600
 SYNC_ERROR = {"code": "SYNC_FAILED",
               "message": "Projecting legacy records into the file catalog failed. Retry later; details are in the server log."}
 
-# The full v1 schema is created at once so later slices need no migration.
+# The v1 base schema. A new catalog applies it and then every migration below in the same
+# transaction, so new and upgraded catalogs always have an identical schema.
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     """CREATE TABLE IF NOT EXISTS files (
@@ -114,6 +115,18 @@ SCHEMA = (
         id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT NOT NULL, created_at TEXT NOT NULL, relayed_at TEXT
     )""",
 )
+
+# Additive, transactional upgrades keyed by the version they produce (contract section 16.4).
+# Each runs inside the caller's transaction; user_version is set only after all succeed.
+MIGRATIONS = {
+    2: (
+        # Authoritative underlying artifact kind (artifact files only; NULL for records/notes).
+        "ALTER TABLE files ADD COLUMN artifact_kind TEXT",
+        # Saved CollectionPresentation as canonical JSON; NULL when none was saved.
+        "ALTER TABLE collections ADD COLUMN presentation TEXT",
+        "CREATE INDEX IF NOT EXISTS files_artifact_kind ON files (artifact_kind, created_at, id)",
+    ),
+}
 
 # Columns a projection pass may update. User-owned state (user tags, status, notes,
 # collections, relations) is never touched by projection.
@@ -185,14 +198,25 @@ def _ensure_schema(conn, project_id: str, *, seed: bool) -> None:
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version > SCHEMA_VERSION:
         raise CatalogUnavailable(f"catalog for {project_id} has newer schema version {version}")
-    if version == 0 or seed:
+    if version < SCHEMA_VERSION or seed:
+        # One transaction: a failed migration rolls back completely and leaves the previous
+        # version (and user_version) intact. There is never an automatic downgrade.
         with transaction(conn):
             ts = now_ts()
-            if conn.execute("PRAGMA user_version").fetchone()[0] == 0:
+            current = conn.execute("PRAGMA user_version").fetchone()[0]
+            if current > SCHEMA_VERSION:
+                raise CatalogUnavailable(f"catalog for {project_id} has newer schema version {current}")
+            if current == 0:
                 for statement in SCHEMA:
                     conn.execute(statement)
                 conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('project_id', ?)", (project_id,))
                 conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('created_at', ?)", (ts,))
+            elif current < SCHEMA_VERSION and meta_get(conn, "project_id") != project_id:
+                raise CatalogUnavailable(f"catalog file for {project_id} belongs to a different project")
+            for target in range(max(current, 1) + 1, SCHEMA_VERSION + 1):
+                for statement in MIGRATIONS[target]:
+                    conn.execute(statement)
+            if current < SCHEMA_VERSION:
                 conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             for slug in proj.SYSTEM_TAGS:  # Idempotent; also adds default tags introduced later.
                 conn.execute("INSERT OR IGNORE INTO tags (slug, label, color, system, revision, created_at, updated_at) "
@@ -237,24 +261,35 @@ def sync(main, cat, project_id: str) -> None:
 
 
 def _sync_locked(main, cat, project_id: str) -> None:
-    projected = {(r["origin_type"], r["origin_id"]): (r["origin_revision"], r["render_version"])
-                 for r in cat.execute("SELECT origin_type, origin_id, origin_revision, render_version FROM files "
-                                      "WHERE origin_type IS NOT NULL")}
+    projected = {(r["origin_type"], r["origin_id"]): (r["origin_revision"], r["render_version"], r["artifact_kind"])
+                 for r in cat.execute("SELECT origin_type, origin_id, origin_revision, render_version, artifact_kind "
+                                      "FROM files WHERE origin_type IS NOT NULL")}
     synced = meta_get(cat, "synced_event_sequence")
     rendered = meta_get(cat, "render_version")
     with transaction(main, immediate=False):  # One consistent legacy snapshot; committed before any write.
         sequence = proj.legacy_sequence(main, project_id)
+        # projection_version forces one pass over upgraded catalogs even without new legacy
+        # events, so artifact kinds are backfilled before any kind-filtered request is served.
         if (synced == str(sequence) and rendered == str(proj.RENDER_VERSION) and meta_get(cat, "last_sync_error") is None
-                and meta_get(cat, "relation_projection_version") == str(rel.PROJECTION_VERSION)):
+                and meta_get(cat, "relation_projection_version") == str(rel.PROJECTION_VERSION)
+                and meta_get(cat, "projection_version") == str(proj.PROJECTION_VERSION)):
             return
         entries = proj.collect(main, project_id, projected)
         edges = rel.collect(main, project_id)
     with transaction(cat):
-        changes = [c for c in (_upsert(cat, e) for e in entries) if c]
+        changes, backfilled = [], False
+        for entry in entries:
+            change, filled = _upsert(cat, entry)
+            backfilled = backfilled or filled
+            if change:
+                changes.append(change)
+        if backfilled:  # Revision-preserving metadata completion: ask clients to refetch file lists.
+            changes.append({"entity": "file", "id": None, "revision": None, "deleted": False, "bulk": True})
         changes.extend(rel.sync(cat, project_id, edges))
         _meta_set(cat, "synced_event_sequence", sequence)
         _meta_set(cat, "render_version", proj.RENDER_VERSION)
         _meta_set(cat, "relation_projection_version", rel.PROJECTION_VERSION)
+        _meta_set(cat, "projection_version", proj.PROJECTION_VERSION)
         _meta_set(cat, "last_synced_at", now_ts())
         _meta_set(cat, "last_sync_error", None)
         if changes:
@@ -262,30 +297,47 @@ def _sync_locked(main, cat, project_id: str) -> None:
 
 
 def _upsert(cat, entry: dict):
-    """Insert or refresh one projected file plus its system tags. Returns a CatalogChange or None."""
+    """Insert or refresh one projected file plus its system tags.
+
+    Returns (CatalogChange or None, backfilled). `backfilled` is True when a missing
+    artifact_kind was filled in on an existing file (schema 2 upgrade). That completion keeps
+    the file's revision, dates, and content unchanged; the artifact kind is immutable."""
     row = cat.execute("SELECT * FROM files WHERE origin_type = ? AND origin_id = ?",
                       (entry["origin_type"], entry["origin_id"])).fetchone()
     if row is None:
         cat.execute(
             "INSERT INTO files (id, file_kind, origin_type, origin_id, origin_revision, name, name_key, mime_type, "
             "size_bytes, content_sha256, scientific_origin, status, content_revision, render_version, revision, "
-            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NULL, ?, 1, ?, ?)",
+            "created_at, updated_at, artifact_kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NULL, ?, 1, ?, ?, ?)",
             (entry["id"], entry["file_kind"], entry["origin_type"], entry["origin_id"], entry["origin_revision"],
              entry["name"], entry["name_key"], entry["mime_type"], entry["size_bytes"], entry["content_sha256"],
-             entry["scientific_origin"], entry["render_version"], entry["created_at"], entry["updated_at"]),
+             entry["scientific_origin"], entry["render_version"], entry["created_at"], entry["updated_at"],
+             entry["artifact_kind"]),
         )
         _assign_system_tags(cat, entry)
-        return {"entity": "file", "id": entry["id"], "revision": 1, "deleted": False}
+        return {"entity": "file", "id": entry["id"], "revision": 1, "deleted": False}, False
     if row["id"] != entry["id"]:
         raise RuntimeError(f"catalog file {row['id']} does not have its deterministic id {entry['id']}")
+    backfilled = False
+    if row["artifact_kind"] != entry["artifact_kind"]:
+        if row["artifact_kind"] is not None:
+            raise RuntimeError(f"catalog file {row['id']} has artifact kind {row['artifact_kind']!r}, "
+                               f"but its artifact records {entry['artifact_kind']!r}")
+        cat.execute("UPDATE files SET artifact_kind = ? WHERE id = ?", (entry["artifact_kind"], row["id"]))
+        backfilled = True
     changed = {c: entry[c] for c in PROJECTED_COLUMNS if row[c] != entry[c]}
+    # Catalog organization (for example explicit collection membership) can be newer
+    # than the immutable origin. Reprojection must not undo that timestamp or turn
+    # an artifact-kind backfill into a visible file revision.
+    if changed.get("updated_at", row["updated_at"]) < row["updated_at"]:
+        changed.pop("updated_at", None)
     tags_changed = _assign_system_tags(cat, entry)
     if not changed and not tags_changed:
-        return None
+        return None, backfilled
     revision = row["revision"] + 1
     assignments = "".join(f"{column} = ?, " for column in changed)
     cat.execute(f"UPDATE files SET {assignments}revision = ? WHERE id = ?", [*changed.values(), revision, row["id"]])
-    return {"entity": "file", "id": row["id"], "revision": revision, "deleted": False}
+    return {"entity": "file", "id": row["id"], "revision": revision, "deleted": False}, backfilled
 
 
 def _assign_system_tags(cat, entry: dict) -> bool:

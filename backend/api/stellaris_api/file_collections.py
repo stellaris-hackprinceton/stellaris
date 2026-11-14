@@ -54,7 +54,13 @@ MAX_DESCRIPTION = 2000
 MAX_RELATIONS = 20_000
 MAX_NOTE = 1000
 MAX_ID = 100
-FILTER_FIELDS = ("tags", "file_kind", "origin_type", "status", "q")
+FILTER_FIELDS = ("tags", "artifact_kinds", "file_kind", "origin_type", "status", "q")
+# CollectionPresentation (contract section 16.1): all three members required, nothing else.
+PRESENTATION_FIELDS = {
+    "preset": ("desk", "literature", "notes", "media-data", "findings", "measurements", "all"),
+    "sort": tuple(wf.SORT_COLUMNS),
+    "order": wf.ORDERS,
+}
 DIRECTIONS = ("out", "in", "both")
 CREATED_BY = ("user", "system")
 _NOT_FOUND = ("RESOURCE_NOT_FOUND", "Resource not found.")
@@ -187,6 +193,17 @@ def _filter(value, errors: list):
             errors.extend({"path": f"/filter/tags/{i}", "message": "Expected a tag slug."} for i in bad)
             if not bad and tags:
                 out["tags"] = sorted(set(tags))
+    if "artifact_kinds" in value:
+        kinds = value["artifact_kinds"]
+        if not isinstance(kinds, list) or not 1 <= len(kinds) <= wf.MAX_ARTIFACT_KINDS:
+            errors.append({"path": "/filter/artifact_kinds",
+                           "message": f"artifact_kinds must be a non-empty array of at most {wf.MAX_ARTIFACT_KINDS} artifact kinds."})
+        else:
+            bad = [i for i, k in enumerate(kinds) if not isinstance(k, str) or k not in wf.ARTIFACT_KINDS]
+            errors.extend({"path": f"/filter/artifact_kinds/{i}",
+                           "message": f"Expected one of: {', '.join(wf.ARTIFACT_KINDS)}."} for i in bad)
+            if not bad:
+                out["artifact_kinds"] = sorted(set(kinds))
     for name, choices in (("file_kind", wf.FILE_KINDS), ("origin_type", proj.ORIGIN_TYPES), ("status", wf.STATUSES)):
         if name in value:
             item = value[name]
@@ -209,11 +226,27 @@ def _canonical(saved):
 
 def saved_query(saved: dict) -> dict:
     """A stored FileFilter as /files query filters. Its omitted status means `active`."""
-    query = {k: saved[k] for k in ("file_kind", "origin_type", "q") if k in saved}
-    if saved.get("tags"):
-        query["tag"] = sorted(set(saved["tags"]))
+    query = wf.saved_filter_query(saved)
     query["status"] = saved.get("status", "active")
     return query
+
+
+def _presentation(value, errors: list):
+    """Validate a CollectionPresentation body value. Returns canonical JSON text, or None for null/invalid."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        errors.append({"path": "/presentation", "message": "presentation must be an object or null."})
+        return None
+    before = len(errors)
+    _unknown(value, PRESENTATION_FIELDS, errors, "/presentation")
+    for name, choices in PRESENTATION_FIELDS.items():
+        item = value.get(name)
+        if not isinstance(item, str) or item not in choices:
+            errors.append({"path": f"/presentation/{name}", "message": f"{name} is required and must be one of: {', '.join(choices)}."})
+    if len(errors) > before:
+        return None
+    return _canonical({name: value[name] for name in PRESENTATION_FIELDS})
 
 
 def _file_count(cat, row) -> int:
@@ -232,7 +265,7 @@ def _file_count(cat, row) -> int:
 
 def _collection_fields(body: dict, *, creating: bool) -> dict:
     errors, values = [], {}
-    _unknown(body, ("name", "description", "filter"), errors)
+    _unknown(body, ("name", "description", "filter", "presentation"), errors)
     if "name" in body or creating:
         name = body.get("name")
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= MAX_NAME:
@@ -251,6 +284,11 @@ def _collection_fields(body: dict, *, creating: bool) -> dict:
         values["filter"] = _canonical(_filter(body["filter"], errors))
     elif creating:
         values["filter"] = None
+    # Omitted on PATCH: unchanged. Null clears it. An object replaces it completely.
+    if "presentation" in body:
+        values["presentation"] = _presentation(body["presentation"], errors)
+    elif creating:
+        values["presentation"] = None
     if errors:
         raise validation_error(errors)
     return values
@@ -267,6 +305,7 @@ def _to_collection(cat, project_id: str, row) -> dict:
     return {
         "id": row["id"], "project_id": project_id, "name": row["name"], "description": row["description"],
         "filter": json.loads(row["filter"]) if row["filter"] is not None else None,
+        "presentation": json.loads(row["presentation"]) if row["presentation"] is not None else None,
         "file_count": _file_count(cat, row), "revision": row["revision"],
         "created_at": row["created_at"], "updated_at": row["updated_at"],
     }
@@ -311,9 +350,10 @@ def create_collection(project_id):
         if conn.execute("SELECT COUNT(*) FROM collections").fetchone()[0] >= MAX_COLLECTIONS:
             raise validation_error([{"path": "", "message": f"A project may have at most {MAX_COLLECTIONS} collections."}])
         collection_id, ts = new_id("col"), now_ts()
-        conn.execute("INSERT INTO collections (id, name, description, filter, revision, created_at, updated_at) "
-                     "VALUES (?, ?, ?, ?, 1, ?, ?)",
-                     (collection_id, values["name"], values["description"], values["filter"], ts, ts))
+        conn.execute("INSERT INTO collections (id, name, description, filter, presentation, revision, created_at, "
+                     "updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+                     (collection_id, values["name"], values["description"], values["filter"], values["presentation"],
+                      ts, ts))
         _emit(conn, [{"entity": "collection", "id": collection_id, "revision": 1, "deleted": False}])
         item = _to_collection(conn, project_id, _collection_row(conn, collection_id))
         headers = {"Location": f"/api/v1/projects/{project_id}/collections/{collection_id}", "ETag": etag(1)}

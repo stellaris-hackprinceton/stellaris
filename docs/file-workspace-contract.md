@@ -4,7 +4,7 @@ Contract version: **1.1.0-draft (additive to `/api/v1`)**
 Status: **Implemented and Docker-verified for the backend foundation, with frontend adoption in Materials and Knowledge graph.** See [Unified workspace interface](frontend-workspace.md). Backend progress is tracked in
 [backend/file-workspace-plan.md](backend/file-workspace-plan.md).
 
-**Proposed next version, November 14, 2026:** [Section 16](#16-proposed-curated-views-extension) specifies curated views, collection presentation metadata, and artifact-kind filtering. These additions are **not implemented or verified**. The existing foundation status above applies only to the existing interfaces. The public [Materials specification](materials-views-spec.md) defines the proposed browsing experience.
+**Next version, November 14, 2026:** [Section 16](#16-proposed-curated-views-extension) specifies curated views, collection presentation metadata, artifact-kind filtering, and exact origin lookup. The backend implementation is written (catalog schema 2) with a focused check script, `backend/scripts/workspace_views_test.py`; **its verification results are not yet recorded** (see section 16.6). The existing foundation status above applies only to the existing interfaces. The public [Materials specification](materials-views-spec.md) defines the proposed browsing experience.
 Prepared: **November 14, 2026**
 Extends: [frontend-backend-contract.md](frontend-backend-contract.md). Its sections 3 (common
 rules, development mode without authentication), 6 (artifact content), 8 (events), and 9
@@ -429,6 +429,8 @@ The backend never invents, infers, or ranks links.
 | `tag` | Repeatable, up to 10. A file must carry **all** listed slugs (AND). System and user assignments both match. An unknown slug matches nothing. It is not an error. |
 | `file_kind` | `artifact`, `record`, or `note`. |
 | `origin_type` | One of `FileOriginType`. |
+| `origin_id` | Section 16 extension. Exact origin ID; valid only together with `origin_type` (otherwise `400 INVALID_QUERY`). The pair selects at most one file of this project. An unknown, mismatched, or other-project origin matches nothing. Bound into cursors like other filters. Not a saved `FileFilter` field. |
+| `artifact_kind` | Section 16 extension. Repeatable `ArtifactKind`, OR within the set (section 16.3). |
 | `collection_id` | Members of that collection. An unknown collection returns `404`. |
 | `status` | `active` (default), `trashed`, or `all`. |
 | `q` | 1–100 characters. Case-insensitive substring match on `name` only. `%` and `_` are literal. It does not search content. |
@@ -594,7 +596,7 @@ to the intended visible files in the client; an edge is directed from `from_file
 
 ## 16. Proposed curated views extension
 
-Status: **Specified, not implemented or verified.** This section describes the next additive interface, provisionally `1.2.0-draft`. Sections 1–15 document the existing foundation. Their types do not gain these fields until this extension is implemented. UI requirements are canonical in [Research desk](research-workspace-spec.md), [Materials views](materials-views-spec.md), and [Reports](reports-spec.md).
+Status: **Backend implemented (catalog schema 2); verification results pending** (section 16.6). This section describes the next additive interface, provisionally `1.2.0-draft`. Sections 1–15 document the existing foundation; backends advertising `workspace_views` add the fields below. UI requirements are canonical in [Research desk](research-workspace-spec.md), [Materials views](materials-views-spec.md), and [Reports](reports-spec.md).
 
 ### 16.1 Capability and additive types
 
@@ -640,6 +642,10 @@ Saved `FileFilter.artifact_kinds` expresses the same non-empty set. Validate at 
 
 Only artifact-origin catalog entries can match an artifact-kind constraint. Contradictory valid constraints, such as `file_kind=note&artifact_kind=report`, match zero files. They do not reinterpret the request. Query and saved collection artifact-kind constraints intersect as ordinary independent filters.
 
+Query values are validated the same way: at most ten repeated values before deduplication, each an exact `ArtifactKind` (empty or differently cased values return `400 INVALID_QUERY`).
+
+**Exact origin lookup.** `GET /files?origin_type=T&origin_id=I` returns the single file projected from that legacy origin in this project, or an empty page. `origin_id` without `origin_type` returns `400 INVALID_QUERY`; the pair is bound into the cursor. It lets legacy links (for example an artifact ID) resolve to a file without scanning pages. It is a query parameter only and is not accepted in saved `FileFilter` bodies. This lookup is covered by `workspace_views`.
+
 Apply selection before LIMIT and cursor calculation. Bind canonical artifact kinds into cursor state along with project, other filters, sort, and order. Equivalent repeated values in a different order use the same normalized selection. Changed selection with an old cursor is rejected under section 8, not continued over a different dataset. Keep default foundation list order unchanged. Rich views request descending order explicitly.
 
 Examples, valid only after capability rollout:
@@ -673,3 +679,11 @@ Check a new catalog and a populated v1 catalog with notes, revisions, explicit a
 Check repeated kinds with reordered/duplicate values, contradictions, invalid values, collection/query intersection, dynamic counts, pagination beyond one page, and changed filters with old cursors. A note tagged reports must never enter the report query.
 
 Check presentation POST/PATCH/null/no-op, ETag conflict, archive rejection, idempotent POST replay, emitted events, and reconnect-driven refresh. Check frontend fallback with the extension capability absent. Record actual results separately when implementation occurs.
+
+### 16.6 Implementation notes
+
+- Catalog `SCHEMA_VERSION` is 2 (`backend/api/stellaris_api/catalog.py`). A new catalog applies the v1 base schema and then every migration in one transaction, so new and upgraded catalogs have the same columns and indexes. A v1 catalog is upgraded in one `BEGIN IMMEDIATE` transaction (`ALTER TABLE files ADD COLUMN artifact_kind`, `ALTER TABLE collections ADD COLUMN presentation`, index `files_artifact_kind (artifact_kind, created_at, id)`, then `user_version = 2`). Any failure rolls back everything and the catalog returns the usual retryable `503`. A catalog with a newer `user_version` is refused, never downgraded.
+- `catalog_projection.PROJECTION_VERSION = 2` forces one projection pass per catalog even without new legacy events. That pass fills missing `artifact_kind` values from the artifact records only. Filling it preserves file ID, `revision`, `created_at`, `updated_at`, hashes, and tags, and emits one bulk file `catalog.changed`. A conflicting non-null kind fails the pass (503) rather than being overwritten. Every catalog route projects before responding, so kind-filtered requests never see a partial backfill.
+- `presentation` is stored as canonical JSON; equality is compared on that canonical form. Projection never writes it.
+- `GET /capabilities` reports `features.workspace_views: true` (`backend/api/stellaris_api/app.py`).
+- Focused checks: `backend/scripts/workspace_views_test.py` (real API, plus a downgraded-catalog migration and fixture-based migration/rollback checks run inside the api container). Results: **not yet recorded**. `workspace_files_test.py` still expects `schema_version == 1` and needs updating to 2.

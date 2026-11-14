@@ -168,6 +168,9 @@ def _register_system_routes(app, config, runtime, manager):
                     "collaboration": False,
                     # Additive file catalog, revisioned notes, tags, collections and links.
                     "workspace_files": True,
+                    # Catalog schema 2 (contract section 16): collection presentation, artifact-kind
+                    # file selection and saved filters, and exact origin lookup. Complete support only.
+                    "workspace_views": True,
                     "terminal": app.extensions["stellaris_terminals"].available(),
                 },
                 "uploads": {
