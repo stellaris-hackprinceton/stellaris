@@ -24,7 +24,9 @@ COPY project_runtime/requirements.txt /opt/stellaris/requirements.txt
 RUN pip install --no-cache-dir -r /opt/stellaris/requirements.txt
 COPY project_runtime/server.py /opt/stellaris/server.py
 COPY project_runtime/agent_runner.py /opt/stellaris/agent_runner.py
+COPY project_runtime/report_agent.py /opt/stellaris/report_agent.py
 COPY project_runtime/agent_runtime_test.py /opt/stellaris/agent_runtime_test.py
+COPY project_runtime/report_runtime_test.py /opt/stellaris/report_runtime_test.py
 COPY project_runtime/secure_layout.py /opt/stellaris/secure_layout.py
 
 USER 10001:10001

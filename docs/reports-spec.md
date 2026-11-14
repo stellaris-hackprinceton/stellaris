@@ -1,9 +1,13 @@
 # Reports library and generation specification
 
-Version: **1.0 proposed**. Prepared November 14, 2026.
-Status: **Specified, not implemented or verified.** Existing report generation and individual Markdown readers are implemented. The Reports index, navigation, cards, and composer placement below are proposed.
+Version: **1.1**. Updated November 14, 2026.
+Status: **Agent-led analysis implemented with provider-free local verification. Live-provider verification remains pending.** New report runs invoke the configured project-contained Deep Agent. Earlier reports used deterministic assembly and remain readable. Checks and limits are recorded in [report analysis verification](verification/report-analysis.md). The report library and composer implementation is recorded in [workspace implementation](workspace-implementation-plan.md) and [verification](workspace-verification.md).
 
-Read with the [Research desk](research-workspace-spec.md), [Materials views](materials-views-spec.md), and [scientific contract](frontend-backend-contract.md). The report generator currently assembles Markdown from persisted evidence. Moving its controls does not add an LLM writing service.
+The user accepted this implementation on November 14, 2026. Narrative grounding,
+citation coverage, and live-model evaluation remain [recorded follow-ups](verification/report-analysis.md#recorded-follow-ups).
+Additional hallucination guards are not required for this delivery.
+
+Read with the [Research desk](research-workspace-spec.md), [Materials views](materials-views-spec.md), and [scientific contract](frontend-backend-contract.md). This is the canonical specification for agent-led report analysis. The user requires an actual configured LangChain Deep Agent invocation during generation, superseding the earlier exclusion of LLM writing. Existing deterministic reports remain readable and immutable.
 
 ## 1. Navigation and page structure
 
@@ -107,7 +111,39 @@ Literature metadata-only, abstract-only, full-text, and truncated/partial-extrac
 
 Paper-ingestion runs are not analysis evidence choices, and shell sessions/transcripts are not report evidence. Existing Slurm-backed analysis runs, if present, remain analysis evidence under the same terminal-state and experiment checks. Preserve their recorded backend/provenance and simulated-cluster qualifications. HPC stays disabled and no new execution controls are added to the report composer.
 
+### Required agent-led analysis
+
+Each report run invokes the configured LangChain Deep Agent inside the owning project's persistent container. Use the existing provider configuration, report command and lifecycle, and project-scoped evidence. Do not add a browser-side model call or expose credentials.
+
+The existing `kind: "report"` request is unchanged. `features.markdown_reports` now requires locally valid model configuration. Existing artifacts remain readable when generation is unavailable. Configuration presence does not certify model access or a successful provider invocation.
+
+The agent examines accepted experiment snapshots, saved measurements and uncertainty, claims, retrieved source material, warnings, and failures. It assesses whether evidence supports the hypothesis, compares selected runs where meaningful, identifies contradictions and alternative explanations, and states what cannot be concluded. It explains the analysis in readable scientific language with supporting references. A paraphrase of result summaries or a pasted measurement table alone is insufficient.
+
+Keep observations, computed results, and AI interpretations distinguishable. Numerical conclusions reference recorded measurements or reproducible calculations. New calculations use the existing isolated execution tools and retain exact code, inputs, outputs, and provenance. Never invent measurements, physical calibration, statistical significance, or source contents. Evidence insufficient to evaluate a hypothesis produces an explicitly inconclusive interpretation.
+
+Retain exact evidence and technical references alongside the interpretation. Preserve simulation labels, unknown uncertainty, partial failures, calibration assumptions, and literature retrieval qualifications. Record model identity, evidence actually supplied or read, context truncation, analysis limitations, and any calculation runs in report provenance. Provide a concise evidence-linked explanation, not hidden chain-of-thought.
+
+Provider or agent failure fails the report run honestly without silently publishing a deterministic-only substitute as a successful agent-analyzed report. Existing run cancellation, idempotent acceptance, immutable artifacts, and project isolation continue to apply. Historical deterministic reports are not rewritten.
+
+The trusted backend supplies paged evidence through `read_report_evidence` and validates the final assessment, limitations, and record references. Every selected run requires initial reads of its overview, accepted experiment, measurements, claims, and sources. Selected report sources require a separate read. Each page contains at most 40 records and 80,000 serialized bytes within a 1,500,000-byte cumulative context budget. Saved paper text is bounded to 16,000 characters per source. Unread pages, truncated text, and unavailable content become explicit limitations. A record exceeding the page limit cannot be silently omitted.
+
+`calculate_report` accepts Python source and optional selected-evidence data/media artifact IDs. The backend adds a saved JSON evidence dataset and runs a child `script_analysis_v1` execution through the existing isolated worker. At most four calculations are permitted. Calculation snapshots link the requesting report and original evidence without updating the current experiment. Calculation runs publish computed datasets/charts, with no new scientific measurements or claims. They use recorded units without inheriting the first evidence run's camera conversion. The agent has project-isolated per-report scratch and no research, organization, delegation, or native execution tool.
+
+The agent returns a structured assessment (`supported`, `contradicted`, `inconclusive`, or `mixed`), interpretation Markdown, limitations, and referenced record IDs. This is an internal runtime protocol, not a new public API resource. Reports show that interpretation before the recorded evidence appendix. Provenance records the provider/model, runtime image/packages, exact supplied-page hashes and references, calculation runs, and analysis limitations. Incrementally committed run logs retain the audit trail if the API restarts before final artifact publication. Structural validation does not independently verify scientific conclusions.
+
 ## 7. Acceptance scenarios
+
+Agent-analysis acceptance scenarios are below. See the [verification record](verification/report-analysis.md) for checks actually run and remaining live-model evaluation:
+
+- A report generation invokes the configured LangChain Deep Agent and records model identity and supplied evidence in provenance.
+- Given recorded results and a hypothesis, the report explains how evidence supports, contradicts, or leaves the hypothesis inconclusive and cites the relevant records.
+- Contradictory selected runs are discussed with their differences and limitations rather than silently averaged or selectively omitted.
+- Failed/cancelled evidence and missing measurements remain qualified. Simulated evidence is never described as a physical observation.
+- Missing calibration retains pixel/native units. Unknown uncertainty is not zero and insufficient evidence does not become a confident conclusion.
+- New numerical calculations have retained execution code, inputs, outputs, and provenance. Values copied from measurements reference those records.
+- Provider failure and cancellation cannot publish a successful template-only replacement. Previously saved deterministic reports remain readable.
+
+Library and composer acceptance scenarios:
 
 - Opening Reports with no saved artifact explains generation prerequisites and offers a usable composer when permitted.
 - More than 24 reports paginate newest first across the whole project, without duplicates or reordering caused by catalog synchronization.

@@ -411,7 +411,7 @@ def cleanup_lost_agents(runtime, project_runs):
             log.warning("Could not clean orphaned project agent %s (%s)", run_id, type(exc).__name__)
 
 
-def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id):
+def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id, *, report_session=None):
     runtime = ctx.runtime
     container = None
     try:
@@ -482,7 +482,11 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id)
                     raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid event.") from exc
                 if not isinstance(event, dict) or not isinstance(event.get("type"), str):
                     raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid event.")
+                if report_session is not None and saw_complete:
+                    raise RunFailure("INVALID_AGENT_STREAM", "The report agent emitted data after completion.")
                 if event.get("type") == "delta":
+                    if report_session is not None:
+                        raise RunFailure("INVALID_AGENT_STREAM", "Report analysis must return a final structured result.")
                     if set(event) != {"type", "text"}:
                         raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid text event.")
                     text = event.get("text")
@@ -498,11 +502,14 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id)
                         raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid tool request.")
                     request_id, name, payload = event["request_id"], event["name"], event["payload"]
                     expected = f"{ctx.run_id}-{len(tool_request_ids) + 1}"
-                    if request_id != expected or len(tool_request_ids) >= MAX_AGENT_TOOL_REQUESTS or not isinstance(name, str):
+                    tool_limit = 160 if report_session is not None else MAX_AGENT_TOOL_REQUESTS
+                    if request_id != expected or len(tool_request_ids) >= tool_limit or not isinstance(name, str):
                         raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid tool request.")
                     tool_request_ids.append(request_id)
-                    reply = _handle_agent_tool(ctx, name, payload, claim_ids,
-                                               cancelled=lambda: ctx.cancel_requested() or timed_out.is_set())
+                    handler = report_session.handle_tool if report_session is not None else None
+                    cancelled = lambda: ctx.cancel_requested() or timed_out.is_set()
+                    reply = (handler(name, payload, cancelled=cancelled) if handler else
+                             _handle_agent_tool(ctx, name, payload, claim_ids, cancelled=cancelled))
                     if ctx.cancel_requested():
                         raise RunFailure("CANCELLED", "The agent run was cancelled.")
                     if timed_out.is_set():
@@ -514,6 +521,8 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id)
                         agent_metadata.setdefault("execution_outputs", []).append({"tool": name, **reply["result"]})
                     ctx.log.system(f"Agent tool {name}: {'completed' if reply.get('ok') else 'returned an error'}.")
                 elif event.get("type") == "proposal":
+                    if report_session is not None:
+                        raise RunFailure("INVALID_AGENT_STREAM", "Report agents cannot propose project mutations.")
                     if set(event) != {"type", "kind", "payload"}:
                         raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid proposal event.")
                     if event.get("kind") == "paper_ingest":
@@ -535,6 +544,8 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id)
                     ctx.log.system(f"Validated {event.get('kind')} proposal: {dumps(result)}")
                     agent_metadata.setdefault("resource_outputs", []).append({"kind": event["kind"], **result})
                 elif event.get("type") == "retrieval":
+                    if report_session is not None:
+                        raise RunFailure("INVALID_AGENT_STREAM", "Report analysis uses saved evidence only.")
                     retrieval = _retrieval_record(event)
                     retrievals = agent_metadata.setdefault("retrievals", [])
                     if len(retrievals) >= MAX_AGENT_RETRIEVALS:
@@ -544,6 +555,10 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id)
                     ctx.log.system(f"arXiv retrieval {dumps(retrieval['search_query'])}: "
                                    f"{len(retrieval['candidates'])} retrieved, {kept} matched every term, "
                                    f"{len(retrieval['candidates']) - kept} rejected as candidates.")
+                elif event.get("type") == "report_analysis" and report_session is not None:
+                    if set(event) != {"type", "analysis"}:
+                        raise RunFailure("INVALID_AGENT_STREAM", "The report agent returned an invalid result event.")
+                    report_session.accept_analysis(event["analysis"])
                 elif event.get("type") == "complete":
                     if set(event) != {"type"}:
                         raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid completion event.")

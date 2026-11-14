@@ -31,7 +31,18 @@ These items are **not implemented or verified**. See [file workspace contract se
 - [ ] Advertise `features.workspace_views` only with complete extension support. Preserve old client behavior and existing scientific routes.
 - [ ] Verify new and migrated catalogs, kind-filter pagination and tag/type distinction, presentation conflicts, events, and extension-disabled fallback through focused Docker/API checks.
 
-The Reports library uses existing artifacts and report runs. No new report generator, LLM writing call, execution backend, cross-project reference, or authentication work is included. Historical completed checks above do not verify this extension.
+The Reports library uses existing artifacts and report runs. Curated-view work does not change the execution backend, project scope, or authentication. The subsequently required agent-led report analysis is recorded separately below. Historical completed checks above do not verify either extension.
+
+## Required agent-led report analysis (November 14, 2026)
+
+Status: **Implemented, locally verified, and accepted by the user.** Live-provider evaluation and narrative-grounding review remain recorded follow-ups, not delivery blockers. Follow the canonical [report-analysis specification](../reports-spec.md#required-agent-led-analysis) and amended [scientific contract](../frontend-backend-contract.md#execution-panel-and-reports). New report runs invoke the project-contained agent. Earlier completed report checks establish historical deterministic behavior only. See [report verification](../verification/report-analysis.md) for the new checks and follow-ups.
+
+- [x] Invoke the configured LangChain Deep Agent inside the owning project container during report generation, using saved evidence and accepted experiment snapshots.
+- [x] Require evidence-linked hypothesis evaluation, meaningful run comparisons, contradictions, alternative explanations, and explicit inconclusive outcomes. Rephrasing saved summaries alone is insufficient.
+- [x] Separate observations, computed results, and AI interpretations. Retain existing isolation and reproducible calculation code/input/output provenance.
+- [x] Record model identity, evidence supplied or read, truncation, limitations, and calculation runs. Preserve immutable evidence, simulation labels, calibration, uncertainty, citations, and historical reports.
+- [x] Verify provider-free agent graph/tool transport, evidence scope and references, partial failures, simulation, missing calibration, insufficient evidence, cancellation, persistence, isolated calculation, and provider failure without deterministic fallback.
+- [ ] Evaluate live model hypothesis reasoning, contradictory-run interpretation, alternative explanations, and numerical grounding against real evidence after live-provider testing is authorized.
 
 
 ## File workspace foundation (2026-11-14)

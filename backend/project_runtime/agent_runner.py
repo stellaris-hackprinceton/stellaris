@@ -24,6 +24,7 @@ from langchain.tools import tool
 from langchain_openai import ChatOpenAI
 from langchain_aws import ChatBedrockConverse
 from botocore.exceptions import ClientError
+from report_agent import create_report_agent, extract_final_analysis
 
 _write_lock = threading.Lock()
 _SAFE_ERROR_CODE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
@@ -689,8 +690,9 @@ def main(path):
         generation = request.get("snapshot", {}).get("chat_generation", 0)
         if not isinstance(generation, int) or generation < 0:
             generation = 0
-        agent = create_agent(model, known_artifact_ids(request.get("snapshot")),
-                             papers if isinstance(papers, dict) else {}, run_id, generation)
+        agent = (None if request.get("mode") == "report" else
+                 create_agent(model, known_artifact_ids(request.get("snapshot")),
+                              papers if isinstance(papers, dict) else {}, run_id, generation))
         messages = [{"role": "user", "content": json.dumps(request, ensure_ascii=False)}]
 
         async def stream():
@@ -699,7 +701,39 @@ def main(path):
                                ("deepagents", "langchain", "langchain-core", "langchain-aws" if provider == "bedrock"
                                 else "langchain-openai")},
                   "provider": provider, "model": model_name,
-                  "tool_version": "stellaris-agent-tools-v1"})
+                  "tool_version": "stellaris-report-agent-v1" if request.get("mode") == "report"
+                  else "stellaris-agent-tools-v1"})
+            if request.get("mode") == "report":
+                report_tool_count = 0
+
+                def report_backend_tool(name, payload):
+                    nonlocal report_tool_count
+                    if report_tool_count >= 160:
+                        raise RuntimeError("report backend tool limit reached")
+                    report_tool_count += 1
+                    request_id = f"{run_id}-{report_tool_count}"
+                    emit({"type": "tool_request", "request_id": request_id, "name": name, "payload": payload})
+                    reply_path = f"/tmp/stellaris-agent-{request_id}-reply.json"
+                    deadline = time.monotonic() + TOOL_REPLY_WAIT_S
+                    while not os.path.exists(reply_path):
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError("report backend tool request timed out")
+                        time.sleep(.2)
+                    try:
+                        with open(reply_path, encoding="utf-8") as reply_file:
+                            reply = json.load(reply_file)
+                    except (OSError, ValueError) as exc:
+                        raise RuntimeError("invalid report backend tool response") from exc
+                    if not isinstance(reply, dict) or set(reply) - {"ok", "result", "error"}:
+                        raise RuntimeError("report backend tool request failed")
+                    return reply if not reply.get("ok") else reply.get("result", {})
+
+                report_agent, report_messages = create_report_agent(model, request, report_backend_tool)
+                result = await report_agent.ainvoke({"messages": report_messages},
+                                                    config={"recursion_limit": AGENT_RECURSION_LIMIT})
+                emit({"type": "report_analysis", "analysis": extract_final_analysis(result)})
+                emit({"type": "complete"})
+                return
             # Explicit step budget: without it this stack falls back to LangGraph's limit of 25 steps
             # (~12 tool rounds), which multi-step requests exceed (GraphRecursionError). The API's
             # MAX_AGENT_SECONDS remains the hard bound on cost.

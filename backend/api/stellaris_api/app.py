@@ -146,7 +146,7 @@ def _register_system_routes(app, config, runtime, manager):
     def capabilities():
         # Report only what is actually implemented and available. Zero limits mean "not
         # available". Video analysis (bouncing_ball_v1) and isolated Python execution need the
-        # worker image; Markdown reports run in the API (they still need evidence runs).
+        # worker image. Report interpretation invokes the project-contained Deep Agent.
         workers = manager.worker_available()
         available_runtimes = worker.available_runtimes(runtime, config) if workers else []
         remote = manager.cluster.capabilities() if workers and manager.cluster is not None else None
@@ -164,7 +164,7 @@ def _register_system_routes(app, config, runtime, manager):
                     "video_analysis": workers,
                     "image_analysis": False,
                     "audio_analysis": False,
-                    "markdown_reports": True,
+                    "markdown_reports": agent_configured,
                     "remote_compute": remote is not None,
                     "full_text_papers": workers,
                     "collaboration": False,
@@ -248,7 +248,7 @@ def _recover_database(config):
         lost_agents = []
         for run_id in lost:
             row = conn.execute("SELECT project_id,kind FROM runs WHERE id = ?", (run_id,)).fetchone()
-            if row["kind"] == "agent":
+            if row["kind"] in {"agent", "report"}:
                 lost_agents.append((row["project_id"], run_id))
         return queued, lost_agents
     finally:

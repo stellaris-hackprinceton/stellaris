@@ -14,6 +14,7 @@ scripts/make_bouncing_ball_fixture.py inside the worker image from known physics
 with origin "simulated" and a SIMULATED- filename, and its ground truth is used only to check
 the measurement pipeline. It is never observed evidence. The CSV and Python fixtures are
 likewise simulated/generated test material. Creates real projects, which are retained.
+Live agent report generation is opt-in with --live-reports and may incur provider charges.
 Does not read any .env file.
 """
 
@@ -238,12 +239,13 @@ def make_fixture_video():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-restart", action="store_true")
+    parser.add_argument("--live-reports", action="store_true", help="Explicitly allow paid model calls for report generation")
     args = parser.parse_args()
     tag = uuid.uuid4().hex[:8]
 
     print("1. Capabilities and project layout protection")
     _, _, caps = api("GET", "/capabilities")
-    check(caps["features"]["video_analysis"] and caps["features"]["markdown_reports"]
+    check(caps["features"]["video_analysis"] and isinstance(caps["features"]["markdown_reports"], bool)
           and caps["execution"]["allowed_backends"] == ["isolated_python"] and caps["execution"]["network_access"] is False
           and caps["execution"]["max_wall_time_s"] > 0 and caps["max_log_chunk_bytes"] > 0,
           "capabilities report video analysis, Markdown reports, and real execution limits")
@@ -416,27 +418,30 @@ def main():
                                                   "evidence_run_ids": [R1["id"]], "source_ids": [], "title": "x",
                                                   "format": "markdown"})
     check(status == 422 and code(err) == "VALIDATION_FAILED", "report with evidence from another experiment is rejected")
-    _, _, rr = post(f"/projects/{P}/runs", {"kind": "report", "experiment_id": exp["id"],
-                                            "evidence_run_ids": [R1["id"], R2["id"]], "source_ids": [src["id"]],
-                                            "title": "Bounce retention report (SIMULATED fixture)", "format": "markdown"})
-    RR = wait_run(P, rr["id"], 120)
-    rres = api("GET", f"/projects/{P}/runs/{RR['id']}/results")[2]
-    check(RR["status"] == "succeeded" and rres["report_artifact_id"] and RR["provenance_artifact_id"],
-          f"report run succeeded with a report artifact and provenance ({RR['error']})")
-    report_art = api("GET", f"/projects/{P}/artifacts/{rres['report_artifact_id']}")[2]
-    _, md_bytes = content(P, report_art["id"], inline=True)
-    md = md_bytes.decode("utf-8")
-    check(report_art["mime_type"] == "text/markdown" and report_art["kind"] == "report" and report_art["filename"].endswith(".md"),
-          "report is an immutable Markdown artifact")
-    check("SIMULATED" in md and "not an observation" in md, "report labels simulated results")
-    check(all(f"{m['value']:.6g}" in md for m in heights + hm), "report contains the measured apex heights (px and m)")
-    check(R1["id"] in md and R2["id"] in md and src["url"] in md and RR["provenance_artifact_id"] in md
-          and R1["provenance_artifact_id"] in md, "report links runs, sources, and provenance")
-    check("revision 1" in md and "revision 2" in md and "m/px" in md, "report uses each run's accepted snapshot")
-    check("does not mean any experiment" in md, "report states that generation success is not experimental success")
-    _, _, ws = api("GET", f"/projects/{P}/workspace")
-    check(ws["latest_report_artifact_id"] == report_art["id"] and ws["counts"]["runs"] == 3 and ws["active_run_ids"] == [],
-          "workspace shows run count, no active runs, and the latest report")
+    if args.live_reports:
+        _, _, rr = post(f"/projects/{P}/runs", {"kind": "report", "experiment_id": exp["id"],
+                                                "evidence_run_ids": [R1["id"], R2["id"]], "source_ids": [src["id"]],
+                                                "title": "Bounce retention report (SIMULATED fixture)", "format": "markdown"})
+        RR = wait_run(P, rr["id"], 600)
+        rres = api("GET", f"/projects/{P}/runs/{RR['id']}/results")[2]
+        check(RR["status"] == "succeeded" and rres["report_artifact_id"] and RR["provenance_artifact_id"],
+              f"report run succeeded with a report artifact and provenance ({RR['error']})")
+        report_art = api("GET", f"/projects/{P}/artifacts/{rres['report_artifact_id']}")[2]
+        _, md_bytes = content(P, report_art["id"], inline=True)
+        md = md_bytes.decode("utf-8")
+        check(report_art["mime_type"] == "text/markdown" and report_art["kind"] == "report" and report_art["filename"].endswith(".md"),
+              "report is an immutable Markdown artifact")
+        check("SIMULATED" in md and "not an observation" in md, "report labels simulated results")
+        check(all(f"{m['value']:.6g}" in md for m in heights + hm), "report contains the measured apex heights (px and m)")
+        check(R1["id"] in md and R2["id"] in md and src["url"] in md and RR["provenance_artifact_id"] in md
+              and R1["provenance_artifact_id"] in md, "report links runs, sources, and provenance")
+        check("revision 1" in md and "revision 2" in md and "m/px" in md, "report uses each run's accepted snapshot")
+        check("does not mean any experiment" in md, "report states that generation success is not experimental success")
+        _, _, ws = api("GET", f"/projects/{P}/workspace")
+        check(ws["latest_report_artifact_id"] == report_art["id"] and ws["counts"]["runs"] >= 3 and ws["active_run_ids"] == [],
+              "workspace shows run count, no active runs, and the latest report")
+    else:
+        print("Agent report generation skipped. Use --live-reports only with live provider authorization.")
 
     print("7. python_analysis_v1 and untrusted output")
     csv_bytes = b"t_s,height_px\n0.0,100\n0.5,64\n1.0,41\n"

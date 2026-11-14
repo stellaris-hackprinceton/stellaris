@@ -10,6 +10,7 @@ This is the single canonical documentation tree. Root README and agent entrypoin
 - [Backend implementation progress](backend/implementation-plan.md).
 - [Backend verification evidence](backend/verification.md).
 - [Current Compose startup verification](verification/compose-startup.md).
+- [Agent-led report analysis and verification limits](verification/report-analysis.md).
 - [Experiment launch selection verification](verification/experiment-launch.md).
 - [Broad layout verification](verification/broad-layout.md).
 - [Project home design and verification](verification/project-home.md).

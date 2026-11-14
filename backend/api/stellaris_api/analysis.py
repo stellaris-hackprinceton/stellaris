@@ -560,6 +560,7 @@ def _provenance(ctx, *, outcome, code_doc, outputs, log_staged, status_note, wor
             "runtime": snap.get("runtime", "python"),
             "selected_sources": snap["sources"], "execution_limits": snap["limits"],
             "simulated_inputs": snap["simulated"],
+            **({"report_calculation": snap["report_calculation"]} if snap.get("report_calculation") else {}),
         },
         "code": {"artifact_id": code_doc["id"], "sha256": code_doc["sha256"], "filename": code_doc["filename"],
                  "pipeline": snap["pipeline"]["name"], "pipeline_version": snap["pipeline"]["version"],
@@ -834,6 +835,9 @@ def _after_execution(ctx, snap, pipeline, work_dir, code_doc, outcome, input_row
                                  tabular_units=pipeline == "script_analysis_v1" and bool(snap["inputs"])
                                  and all(a["kind"] == "dataset" and a["mime_type"] in {"text/csv", "application/json", "text/plain"}
                                          for a in snap["inputs"]))
+        if snap.get("report_calculation"):
+            if result["measurements"] or result["claims"]:
+                raise InvalidOutput(["Report calculations publish computed datasets and charts only, not new scientific measurements or claims."])
         if (pipeline == "script_analysis_v1" and not snap["inputs"]
                 and (any(row.get("data_origin") == "observed" for row in result["measurements"])
                      or any(row.get("kind") == "observation" for row in result["claims"]))):

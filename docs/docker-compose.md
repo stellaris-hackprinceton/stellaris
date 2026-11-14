@@ -15,7 +15,7 @@ Open `http://localhost:3000`. The frontend waits for the API health check, then 
 
 The frontend runs the Next.js development server with hot reload by default. Save a frontend component or stylesheet and the open page updates without rebuilding the image. The first page request can take longer while Next.js compiles it.
 
-No model credentials are needed to open the workspace or use provider-independent processing. Live research chat and experiment-design tools require model configuration. Feature availability comes from `/api/v1/capabilities`.
+No model credentials are needed to open the workspace or use provider-independent processing. Live research chat, experiment-design tools, and new agent-analyzed reports require model configuration. Saved reports remain readable without it. Feature availability comes from `/api/v1/capabilities`.
 
 ## Alternative ports
 

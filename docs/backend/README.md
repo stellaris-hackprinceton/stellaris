@@ -54,8 +54,11 @@ files are never mounted.
   Decoded frame timestamps, detection failures, calibration, code, logs, environment, and
   assumptions are retained. `python_analysis_v1` accepts a Python code artifact and validates
   its `/output/result.json` against the worker contract.
-- Reports: deterministic Markdown assembled from terminal analysis evidence, actual values,
-  citations, plots, uncertainties, limitations, and each run's accepted method snapshot.
+- Reports: the project-contained LangChain Deep Agent evaluates terminal analysis evidence
+  and the hypothesis, with isolated reproducible calculations when needed. Saved Markdown
+  distinguishes AI interpretation from recorded measurements, citations, plots, uncertainty,
+  limitations, and accepted method snapshots. Model/provider failure produces no template-only
+  substitute. Historical deterministic reports remain readable. See [report verification](../verification/report-analysis.md).
 - Chat: queued research-agent runs execute inside the owning project container. The agent
   has a persistent LangChain filesystem scratch space and proposes resources for backend
   validation. Missing model configuration produces an honest failed run, never a fake answer.
