@@ -15,6 +15,7 @@ import { AnalysisSetup } from "./launch/AnalysisSetup";
 import { ExperimentEditor } from "./plan/ExperimentEditor";
 import { usePlanDraft } from "./plan/usePlanDraft";
 import { FileImport } from "./upload/FileImport";
+import { mimeForFile } from "./upload/fileTypes";
 import { UploadProgressView } from "./upload/UploadProgressView";
 import { useArtifactUpload } from "./upload/useArtifactUpload";
 import { useStudioParams } from "./useStudioParams";
@@ -114,10 +115,12 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
   }
 
   function uploadFile(file: File, kind: Artifact["kind"] & ("document" | "dataset" | "image" | "video" | "audio" | "code"), origin: "observed" | "simulated" | "reference" | "generated") {
+    const mime = mimeForFile(file.type, file.name);
     up.start({
-      blob: file,
+      // Keep the transfer Content-Type consistent with the normalized upload declaration.
+      blob: file.slice(0, file.size, mime),
       request: {
-        filename: file.name, mime_type: file.type.split(";")[0], size_bytes: file.size, kind, origin, experiment_id: x.id,
+        filename: file.name, mime_type: mime, size_bytes: file.size, kind, origin, experiment_id: x.id,
         capture: { method: "file_upload", recorded_at: null, recording_permission_confirmed: false },
       },
     });
@@ -194,6 +197,12 @@ function StudioBody({ project_id, experimentQuery, archived, caps, list, runPara
           <section className={styles.panel} aria-labelledby="studio-launch">
             <h3 id="studio-launch">Run analysis</h3>
             <AnalysisSetup project_id={project_id} experiment={x} inputs={inputs} caps={caps}
+              hasMoreArtifacts={all.has_next_page || forExp.has_next_page}
+              loadingArtifacts={all.is_fetching_next_page || forExp.is_fetching_next_page}
+              loadMoreArtifacts={() => {
+                if (all.has_next_page && !all.is_fetching_next_page) all.load_next_page();
+                if (forExp.has_next_page && !forExp.is_fetching_next_page) forExp.load_next_page();
+              }}
               planDirty={plan.dirty} planOutOfDate={plan.remoteNewer} archived={archived}
               refetchExperiment={experimentQuery.refetch}
               onLaunched={(r: Run) => update({ run: r.id })} />

@@ -7,6 +7,8 @@ Companion document: [Frontend–backend contract](frontend-backend-contract.md),
 
 Current operation: run the application through the [Docker Compose guide](docker-compose.md). This document preserves the original three-agent implementation breakdown. The [current shared contract](frontend-backend-contract.md) supersedes authentication assumptions in the original frontend draft. All documentation paths are relative to the repository root unless stated otherwise.
 
+Visual direction revised **November 14, 2026**: section 4 replaces the original visual defaults with a sharp research desk direction requested by the user. These are design requirements for subsequent interface work, not a claim that the current frontend implements them.
+
 ## 1. Context carried forward from this chat
 
 Stellaris is the research platform described in the supplied HackPrinceton 2026 document. Its frontend connects a scientific question to literature, an experiment plan, real experimental inputs, inspectable measurements, and a scientific report in one persistent project.
@@ -100,28 +102,68 @@ Opaque IDs must be encoded in URLs. A selected object is validated against the r
 
 ## 4. Interface structure and visual requirements
 
-This is an application for carrying out research. Prioritize readable evidence, clear controls, and honest state over marketing treatments. The following visual values are proposed implementation defaults, not descriptions of an existing app.
+### Visual direction: precision research desk
+
+Stellaris should feel like a precise instrument for sustained research. Use a compact, orderly workspace with crisp edges, aligned information, readable evidence, and an obvious next action. Power comes from visible context, efficient inspection, and predictable controls. Familiar labels and progressive disclosure keep the same interface approachable on a first visit.
+
+Use graphite navigation beside a light neutral work surface. Keep the main experiment, evidence, or report visually dominant. Give chat a quieter supporting rail. Structure the workspace with straight dividers and shared panel boundaries. Reserve separate bordered containers for genuinely independent content. Avoid a stack of rounded cards, decorative gradients, glow, glass effects, and oversized dashboard statistics.
+
+### Attention and workflow hierarchy
+
+- **Orient:** keep project name, current area, and relevant experiment or run identity in a compact, stable header. Show active navigation with text, a background change, and a solid edge marker.
+- **Focus:** let the active task occupy most of the center. In Research, this is the research brief and its evidence. In Studio, it is the current setup or recording. In Execution, it is run state and available results. In Workspace, it is the selected artifact. In Reports, it is the saved document.
+- **Advance:** give the current task one visually dominant filled action, with a specific label such as “Save plan” or “Start analysis”. Other actions use outlined or plain treatments. When a prerequisite prevents progress, place the explanation and recovery action beside that control.
+- **Interrupt when necessary:** a required approval, failed upload, missing input, or scientific warning belongs near the affected work. A blocking issue takes priority over the normal next action. Routine connection state remains compact and quiet while healthy.
+- **Inspect:** place units, uncertainty, source links, and evidence origin beside the claim or value they qualify. Put longer provenance, parameters, and logs behind clearly labeled disclosures. Critical limitations stay visible.
+
+Use the research → experiment → measurement → report sequence for orientation and contextual handoffs. Researchers must still be able to revisit earlier work. Do not add a second navigation bar or imply completion from a route visit. Keep action and state labels tied to persisted backend state.
 
 ### Desktop and smaller screens
+
+The desktop desk has three stable regions, from left to right: project navigation, the active workspace, and Research Chat. Chat is docked on the **right**, with its conversation scrolling above a persistent composer. Its collapse control remains in a predictable header location. Collapsing chat gives its width back to the workspace. Reopening restores the conversation and unsubmitted draft. Chat actions must not silently change the selected experiment or launch an analysis.
+
+The center has a compact context row, the working surface, and the task's actions next to the content they affect. In Studio, keep the experiment selector at the top, followed by plan/setup, input collection, and explicit launch configuration. Results use the full center width beneath the setup. Additional columns are allowed only when the center itself has enough space. A wide browser with navigation and chat open must not force the experiment into two cramped inner columns. Use workspace container width, rather than browser width, to decide that split.
+
+For the next layout pass, replace Studio's long stack of open forms with task views labeled **Plan**, **Inputs**, **Analysis**, and **Results** within the same central workspace. Keep the selected experiment and right-hand chat stable while changing views. Place the current view's primary action and any prerequisite warning beside its work. Preserve unsaved plan text across these switches and make the next useful view easy to reach. These task views are a proposed layout refinement, not part of the launch bug fix or a new set of backend run states.
+
+Supporting source details and provenance belong beside or within the selected central content. Do not add a permanent fourth rail that competes with chat. On smaller screens, the same right-hand chat becomes a dismissible sheet and then a full-height conversation, with a clear return to the selected work.
 
 - At viewport widths of 1280 CSS pixels and above, use a 208-pixel project/navigation sidebar, a flexible content area, and a 352-pixel chat rail. The chat rail can collapse. Preserve a practical content minimum rather than forcing three columns into a narrow window.
 - From 768 through 1279 pixels, keep the main workspace visible and open chat in a dismissible side sheet. Collapse project navigation to a menu when necessary.
 - Below 768 pixels, show one main surface, a compact project header, and navigation in a menu. Open chat as a full-height sheet. Stack Studio setup and preview vertically.
 - At 320 pixels, every action remains reachable. Tables may scroll inside labeled containers. The document itself must not develop horizontal overflow.
 - Desktop panels scroll independently where useful. Mobile reading uses ordinary vertical flow. Sticky controls must not obscure the final form fields or measurements.
+- On narrow screens, preserve the active task and its next action first. Supporting evidence and chat open on demand with a clear return to the same task and selection. Dense tables scroll within their own labeled region.
+
+### Explicit analysis launch
+
+An experiment's title or position in a list does not determine its analysis method. Launch configuration starts without a selected method. The user explicitly chooses the existing built-in bouncing-ball tracker or the supported Python analysis path. The bouncing-ball option describes its single-ball/fixed-camera assumptions. A descriptive object label does not turn it into a general-purpose tracker. Python analysis requires a saved Python code artifact and selected inputs from the saved experiment. It executes that code, rather than generating analysis from the plan automatically.
+
+The launch summary reflects the selected method, actual input artifacts, code artifact when applicable, and exact parameters. Dirty or stale plans remain blocked. An unresolved submission preserves its exact request and command key for retry. Changing the selected experiment resets local launch configuration. These changes use the existing analysis API and do not add an agent code-generation tool or a new pipeline.
 
 ### Shared design tokens, owned by A
 
-Start with these named CSS variables and adjust them only in the shared stylesheet:
+The following proposed tokens replace the original rounded-panel defaults. Implement shared values in `styles/tokens.css`, with navigation-specific colors consumed by the shell. The current stylesheet must be updated explicitly before these values can be considered shipped.
+
+All feature areas, including Execution and Reports, consume the same typography, spacing, control sizes, and shared UI primitives. Feature styles may arrange scientific content without redefining the control system. Use separate token roles only where the surface requires them, such as light content and dark navigation.
 
 ```css
---color-background: #f6f7f9;
+--color-background: #f2f4f6;
 --color-surface: #ffffff;
---color-surface-muted: #edf1f5;
---color-text: #15212b;
---color-text-muted: #53616f;
---color-border: #ccd5df;
---color-accent: #225d91;
+--color-surface-muted: #e9edf1;
+--color-text: #18212b;
+--color-text-muted: #4c5a69;
+--color-border: #c4ccd5;
+--color-control-border: #758393;
+--color-accent: #185abc;
+--color-accent-contrast: #ffffff;
+--color-selection: #e8f0fe;
+--color-focus: #185abc;
+--color-nav-background: #18212b;
+--color-nav-text: #f3f5f7;
+--color-nav-text-muted: #b8c3cf;
+--color-nav-selected: #2d4057;
+--color-nav-focus: #a8ceff;
 --color-success: #1b6a45;
 --color-warning: #8a5400;
 --color-danger: #a32929;
@@ -131,17 +173,33 @@ Start with these named CSS variables and adjust them only in the shared styleshe
 --space-4: 16px;
 --space-6: 24px;
 --space-8: 32px;
---radius-control: 6px;
---radius-panel: 10px;
+--radius-control: 2px;
+--radius-panel: 2px;
 ```
 
-Use a system sans-serif family and a monospace family for code, logs, IDs, and numerical alignment. Body text is 16 pixels, compact labels 14 pixels, and section titles 18–24 pixels. Prose stays near 70 characters per line. Use tabular figures where numerical comparisons matter.
+Use a system sans-serif family for navigation, forms, and research prose. Reserve monospace for code, logs, identifiers, and precise technical values. Use tabular figures and right alignment for comparable numerical columns, with units in clear column headings or beside each value. Body text is 16 pixels, compact controls and metadata 14 pixels, and section titles 18–24 pixels. Prose stays near 70 characters per line. Use sentence case and weight to establish hierarchy. Avoid tiny uppercase labels and wide letter spacing.
+
+Keep spacing compact within a related group and more generous between tasks. Use aligned rows for project lists, artifacts, and run history. Table rows need enough height to scan and select reliably. Scientific charts and media keep the space needed for inspection. The interface must remain readable at 200% text zoom.
+
+Blue identifies the primary action, links, and selection through distinct filled, underlined, or tinted treatments. Green, amber, and red communicate confirmed success, caution, and failure. Use explicit labels or icons alongside semantic colors. Distinguish observed, inferred, hypothetical, and simulated information in text. Do not assign unrelated bright colors to every section or status. Use shadows only when an overlay needs separation from the workspace.
 
 Every interactive control needs default, hover, focus, disabled, pending, and error behavior. Semantic colors also carry text or an icon. Recording uses a persistent textual indicator and elapsed time. Success labels are reserved for confirmed resource state.
 
 Required shared components: `Button`, `IconButton`, `Field`, `TextInput`, `TextArea`, `Select`, `Dialog`, `Sheet`, `Tabs`, `StatusBadge`, `EmptyState`, `ErrorNotice`, `Skeleton`, `MarkdownView`, `ArtifactLink`, and `TimestampLabel`. Agent A publishes named exports from `components/ui/index.ts`. Feature agents request additions rather than creating duplicate shared controls.
 
-Use visible labels, keyboard navigation, focus restoration for overlays, an accessible description for icon buttons, and suitable live announcements. Do not announce every streamed token or log line. Respect reduced motion. Primary controls should have at least a 40-pixel target size. Contrast and focus visibility require human review before presentation.
+### Accessibility and predictable interaction
+
+Use visible field labels, familiar action names, keyboard navigation, focus restoration for overlays, accessible names for icon buttons, and suitable live announcements. Keep common actions visible. Keyboard shortcuts may supplement labeled controls once implemented, with a discoverable reference. Never display shortcut hints for unavailable behavior.
+
+Target text contrast of at least 4.5:1, and 3:1 for large text, essential control boundaries, and state indicators against adjacent backgrounds. Use the stronger control-border token where a field or button boundary is required to identify the control. The lighter divider token is for grouping. Verify actual foreground/background combinations, including disabled, hover, selected, error, and dark-navigation states. Use a visible focus outline with separation from the control, adapting its color to light and dark surfaces. A palette alone does not establish accessibility.
+
+Primary controls have at least a 40-pixel target size on desktop and 44 pixels for touch layouts. Preserve sensible spacing around compact secondary controls. Do not hide essential actions until hover. Error messages explain what happened and offer a specific recovery step without discarding entered work. Disabled controls need a nearby explanation when their prerequisite is unclear.
+
+Announce meaningful state transitions, not every streamed token or log line. Loading and unknown progress remain honest. Respect reduced motion. Restrict animation to short feedback or disclosure transitions that preserve the user's place. Avoid decorative movement and automatic scroll jumps while someone is inspecting evidence.
+
+### Design acceptance checks
+
+Before presenting this direction as implemented, inspect the real frontend on desktop and narrow screens. Confirm that a first-time user can identify the current project, active task, next action, and any blocker without opening chat. Review keyboard-only navigation, overlay focus, text zoom, contrast, control targets, and the visibility of scientific qualifications. Record which checks actually ran. A design specification or build success alone does not verify these behaviors.
 
 ## 5. Shared frontend module contracts
 
