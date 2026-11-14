@@ -147,7 +147,11 @@ def _apply_proposal(ctx, event, claim_ids):
                     raise RunFailure("INVALID_AGENT_OUTPUT", "The claim proposal contained unsupported fields.")
                 payload = dict(payload)
                 citations = []
-                for citation in payload.get("citations", []):
+                proposed_citations = payload.get("citations", [])
+                if not isinstance(proposed_citations, list) or any(not isinstance(item, dict)
+                                                                    for item in proposed_citations):
+                    raise RunFailure("INVALID_AGENT_OUTPUT", "Claim citations must be an array of objects.")
+                for citation in proposed_citations:
                     citation = dict(citation)
                     source_ref = citation.get("source_id")
                     if isinstance(source_ref, str) and source_ref.startswith("arxiv:"):
@@ -165,7 +169,10 @@ def _apply_proposal(ctx, event, claim_ids):
                 claim_ids.append(claim["id"])
                 return {"claim_id": claim["id"]}
     except ApiError as exc:
-        raise RunFailure("INVALID_AGENT_OUTPUT", f"Backend rejected the {kind or 'resource'} proposal: {exc.message}") from exc
+        fields = exc.details.get("field_errors", [])
+        detail = "; ".join(f"{field.get('path', '')}: {field.get('message', '')}" for field in fields[:8])
+        raise RunFailure("INVALID_AGENT_OUTPUT", f"Backend rejected the {kind or 'resource'} proposal: "
+                         f"{detail or exc.message}") from exc
     raise RunFailure("INVALID_AGENT_OUTPUT", "The agent proposed an unsupported resource type.")
 
 
@@ -476,4 +483,3 @@ def handle_agent_run(ctx):
             _finish_message(ctx, status="interrupted")
             log.warning("Agent run %s failed (%s)", ctx.run_id, type(exc).__name__)
             raise RunFailure("AGENT_PROVIDER_ERROR", "The configured model request failed.", True) from exc
-

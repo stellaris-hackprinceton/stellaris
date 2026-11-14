@@ -39,6 +39,13 @@ class DeterministicTestModel(BaseChatModel):
 async def _check():
     events = []
     agent_runner.emit = events.append
+    claim_tool = next(tool for tool in agent_runner.make_tools() if tool.name == "propose_claim")
+    malformed = claim_tool.invoke({
+        "kind": "hypothesis", "text": "Malformed citation fixture.", "evidence_json": "[]",
+        "citations_json": "{}", "assumptions_json": "[]", "limitations_json": "[]"})
+    assert "citations_json must be a JSON array" in str(malformed), malformed
+    assert events == [], events
+
     write_model = DeterministicTestModel(target_tool="write_file", tool_args={
         "file_path": "/scratch-persistence-probe.txt", "content": "persistent project scratch marker"})
     agent = agent_runner.create_agent(write_model)
