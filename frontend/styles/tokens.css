@@ -1,0 +1,36 @@
+/* Shared design tokens. Owned by Agent A; change only here. */
+:root {
+  --color-background: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-muted: #edf1f5;
+  --color-text: #15212b;
+  --color-text-muted: #53616f;
+  --color-border: #ccd5df;
+  --color-accent: #225d91;
+  --color-accent-contrast: #ffffff;
+  --color-success: #1b6a45;
+  --color-warning: #8a5400;
+  --color-danger: #a32929;
+  --color-focus: #225d91;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-control: 6px;
+  --radius-panel: 10px;
+
+  --control-height: 40px;
+
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-code: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --text-body: 16px;
+  --text-label: 14px;
+  --text-title: 20px;
+
+  --sidebar-width: 208px;
+  --chat-rail-width: 352px;
+}
