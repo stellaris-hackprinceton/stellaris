@@ -75,3 +75,17 @@ are not presented as observed research.
   dedicated current-session endpoint can remove that practical frontend limit later.
 
 The running Compose services use this checkout and preserve existing project volumes.
+
+## Follow-up: container cleanup and layout warning
+
+- Archived 36 idle test projects and removed their runtime containers, plus one
+  stopped managed helper. Preserved every volume, the frontend/API, the three
+  existing user projects, the real Work–energy project and its active terminal.
+- Fixed `instant-unrendered-segment`: session/project loading gates retain their
+  route subtree under provider context, hidden and inert until readiness, with
+  existing error/loading UI alongside it. Session-identity resets and the project
+  event readiness guard remain intact.
+- Added page-local Suspense boundaries around URL parameter reads in all nine
+  project routes, with a shared loading view. No validation flags were disabled.
+- TypeScript and focused ESLint passed. Fresh development-server output from
+  project navigation contained neither dropped-segment nor URL-data warnings.

@@ -1,7 +1,14 @@
 import { Suspense } from "react";
 import { KnowledgeGraph } from "@/features/graph/KnowledgeGraph";
+import LoadingProjectView from '../loading'
 
-export default async function GraphPage({ params }: { params: Promise<{ projectId: string }> }) {
+type Props = { params: Promise<{ projectId: string }> }
+
+export default function GraphPage({ params }: Props) {
+  return <Suspense fallback={<LoadingProjectView />}><GraphPageContent params={params} /></Suspense>
+}
+
+async function GraphPageContent({ params }: Props) {
   const { projectId } = await params;
-  return <Suspense fallback={<p>Opening project graph…</p>}><KnowledgeGraph project_id={projectId} /></Suspense>;
+  return <KnowledgeGraph project_id={projectId} />;
 }

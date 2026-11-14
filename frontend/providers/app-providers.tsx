@@ -35,14 +35,26 @@ function SessionGate({ children }: { children: ReactNode }) {
       await client.invalidateQueries({ queryKey: keys.capabilities })
     }
   }
-  if (expired || isAuthError(session.error)) {
+  const expiredSession = expired || isAuthError(session.error)
+  const validSession = !!session.data && !!capabilities.data && !expiredSession && !session.error && !capabilities.error
+  const blocked = !validSession
+  let status: ReactNode = null
+  if (expiredSession) {
     const login = process.env.NEXT_PUBLIC_LOGIN_URL
     const allowedLogin = login && (login.startsWith('/') && !login.startsWith('//') || login.startsWith('https://')) ? login : null
-    return <><SignInRequired login_url={allowedLogin} expired={expired} /><div className={styles.screen}><button disabled={session.isFetching} onClick={() => void reconnect()}>Check session again</button></div></>
+    status = <><SignInRequired login_url={allowedLogin} expired={expired} /><div className={styles.screen}><button disabled={session.isFetching} onClick={() => void reconnect()}>Check session again</button></div></>
+  } else if (session.error || capabilities.error) {
+    status = <ConnectionNotice error={session.error ?? capabilities.error} endpoint={session.error ? '/api/v1/session' : '/api/v1/capabilities'} pending={session.isFetching || capabilities.isFetching} retry={() => void reconnect()} />
+  } else if (!validSession) {
+    status = <main className={styles.screen} aria-busy="true"><h1>Opening Stellaris</h1><p>Resolving session and available research tools…</p></main>
   }
-  if (session.error || capabilities.error) return <ConnectionNotice error={session.error ?? capabilities.error} endpoint={session.error ? '/api/v1/session' : '/api/v1/capabilities'} pending={session.isFetching || capabilities.isFetching} retry={() => void reconnect()} />
-  if (!session.data || !capabilities.data) return <main className={styles.screen} aria-busy="true"><h1>Opening Stellaris</h1><p>Resolving session and available research tools…</p></main>
-  return <SessionContext.Provider key={session.data.user.id} value={{ session: session.data, capabilities: capabilities.data }}>{children}</SessionContext.Provider>
+  const value = validSession && session.data && capabilities.data ? { session: session.data, capabilities: capabilities.data } : null
+  // Keep route segments in the SSR tree so Next can validate navigation. The
+  // user key still discards local drafts when the session identity changes.
+  return <SessionContext.Provider key={session.data?.user.id ?? 'pending'} value={value}>
+    {status}
+    <div hidden={blocked} inert={blocked}>{children}</div>
+  </SessionContext.Provider>
 }
 export function AppProviders({ children }: { children: ReactNode }) {
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 15000, refetchOnWindowFocus: false }, mutations: { retry: false } } }))
