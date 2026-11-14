@@ -23,9 +23,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable}`}
     >
-      <body className="min-h-full flex flex-col"><Suspense fallback={<p>Opening Stellaris…</p>}><AppProviders>{children}</AppProviders></Suspense></body>
+      <body><Suspense fallback={<p>Opening Stellaris…</p>}><AppProviders>{children}</AppProviders></Suspense></body>
     </html>
   );
 }

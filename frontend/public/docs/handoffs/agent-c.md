@@ -1,6 +1,6 @@
 # Agent C frontend implementation handoff
 
-Status: **Sol-owned implementation complete for source-level handoff. Live backend integration, Claude A/B assembly, and human interaction review remain pending.**
+Status: **Merged frontend components are connected. Live backend integration and authenticated workflow verification remain pending.**
 
 This handoff implements the accepted Sol plan and the [frontend specification](../frontend-implementation-spec.md) against the [API contract](../frontend-backend-contract.md). No backend endpoints, mock server, fixture data, automated tests, or Claude-owned features were added. Nothing was committed, pushed, or deployed.
 
@@ -79,14 +79,18 @@ For uploads, use `api.uploads.create`, `api.uploads.putContent`, `api.uploads.ge
 
 ## Connecting Claude exports
 
-`providers/feature-bridge.tsx` is the only integration point for the absent Claude components. It contains typed slots for:
+`providers/feature-bridge.tsx` connects the merged components through typed slots:
 
 - A: `ProjectsScreen`, `ProjectShell`, `ResearchScreen`.
 - B: `StudioScreen`, `ResultsPane`.
 
-When an owner supplies those exports, Agent C imports them statically into the bridge and replaces the corresponding `null` entries. Their prop shapes are defined there. No missing-module imports currently exist. Until assembly, affected views explicitly say “Awaiting Claude implementation”.
+All five exports are now statically imported and assigned in the bridge. Their prop shapes are defined there. The project, research, Studio, shell, and results views use the merged implementations.
 
-The fallback project navigation is temporary and contains no chat replacement. The execution screen mounts B's ResultsPane through its slot and does not open another event stream. Claude A's shell must preserve the passed route children. Claude features consume the existing providers rather than constructing independent query clients or project streams.
+The execution screen mounts B's ResultsPane through its slot and does not open another event stream. Claude A's shell renders the route children and the shared chat. All features consume the existing providers rather than constructing independent query clients or project streams. `providers/index.ts` exposes those shared providers to the merged features.
+
+The query layer supports both scoped feature calls such as `useEditProject(project_id)` with `{ body, etag }` and the explicit-scope form with `{ project_id, body, edit }`. Both use the same transport. Command hooks likewise accept the features' top-level `idempotency_key` or the explicit `command` object. Query results expose `is_loading` and `is_fetching_next_page` aliases, and pagination/refetch callbacks are safe to pass directly to controls. Request type aliases match the merged feature imports. ApiError exposes its code, request ID, details, and retryability through getters as well as its original envelope.
+
+Shared design tokens and global styles now load through `app/globals.css`. The custom all-CSS loader was removed so Next.js handles CSS Modules directly. The backend connection screen uses the merged Button component, provides separate action spacing, and links to the [connection setup guide](../connection-setup.md). A missing backend still prevents authenticated workspace access.
 
 Claude A still owns global styling/shared controls, project creation/list UI, shell/chat, and research. Claude B still owns Studio/capture, full experiment editing, calibration, upload orchestration, and measurements/evidence inspection. No files were created in those feature directories.
 
@@ -124,10 +128,18 @@ At the initial handoff, verification was limited to source review, TypeScript, l
 
 These checks establish production build/launch and the backend-unavailable path. They do not verify authenticated project work, SSE recovery, real uploads, or scientific analysis. Those still need the actual backend and the Claude-owned UI. No unit-test suite was run.
 
+### Merged frontend verification — November 14, 2026
+
+After all three frontend contributions were merged, the frontend-only integration connected the five feature exports, shared global styles, request aliases, scoped mutation interfaces, loading-state aliases, provider exports, and connection-state labels. ApiError codes are now readable by the merged feature error handlers. Next.js uses its native CSS Modules handling.
+
+The merged production build and source lint passed. A local production launch and browser inspection confirmed the styled backend-connection screen and its Retry connection action. The screen offers a setup guide and expandable request details. The missing backend continues to produce an expected session proxy failure. No session bypass, mocked backend, or fabricated project data was introduced.
+
+Authenticated project, chat, Studio, and scientific results behavior remains unverified until the actual backend is connected. Restart Next.js to pick up configuration and stylesheet changes. Follow the [connection setup guide](../connection-setup.md).
+
 ## Remaining integration dependencies and human review
 
 The backend directory currently has no API implementation. Supply authentication/session/capabilities, persistence, uploads, runs, artifacts, approvals where supported, and project SSE according to the contract. Authoritative video-frame extraction remains a separate unagreed backend extension. Do not invent a physical scale to bypass it.
 
-After backend and Claude assembly, a human should exercise session failure/recovery, project navigation, permission denial, explicit recording/upload, interrupted upload, stale-plan edits, cancellation, approvals, event interruption, partial/failed results, safe previews, report generation/download, and refresh/deep-link recovery. Inspect desktop/mobile layout, focus handling, contrast, native media compatibility, and whether every scientific value links back to its actual evidence.
+After connecting the backend, exercise session failure/recovery, project navigation, permission denial, explicit recording/upload, interrupted upload, stale-plan edits, cancellation, approvals, event interruption, partial/failed results, safe previews, report generation/download, and refresh/deep-link recovery. Inspect desktop/mobile layout, focus handling, contrast, native media compatibility, and whether every scientific value links back to its actual evidence.
 
 The implementation is ready for those integration steps. It does not establish that the complete research-to-report product is operational.

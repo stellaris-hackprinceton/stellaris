@@ -40,7 +40,7 @@ export const api = {
     edit: (p: string, id: string, body: D.EditExperiment, edit: D.EditOptions) => request<T.Experiment>(resourcePath(p, 'experiments', id), { method: 'PATCH', body, edit }),
   },
   uploads: {
-    get: (p: string, id: string, signal?: AbortSignal) => get<T.Upload>(resourcePath(p, 'uploads', id), signal),
+    get: (p: string, id: string, options?: AbortSignal | { signal?: AbortSignal }) => get<T.Upload>(resourcePath(p, 'uploads', id), options && 'aborted' in options ? options : options?.signal),
     create: (p: string, body: T.UploadRequest, command: D.CommandOptions) => request<T.Upload>(resourcePath(p, 'uploads'), { method: 'POST', body, command }),
     putContent: (p: string, id: string, blob: Blob, options?: Parameters<typeof putBytes>[2]) => putBytes(resourcePath(p, 'uploads', id) + '/content', blob, options),
     complete: (p: string, id: string, command: D.CommandOptions) => request<T.Artifact>(resourcePath(p, 'uploads', id) + '/complete', { method: 'POST', body: {}, command }),

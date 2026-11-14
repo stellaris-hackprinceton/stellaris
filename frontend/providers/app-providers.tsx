@@ -6,6 +6,8 @@ import type { Capabilities, Session } from '@/contracts/api'
 import { isAuthError, setCsrfToken } from '@/lib/api'
 import { keys, useCapabilities, useSession } from '@/lib/queries'
 import styles from '@/features/execution/sol.module.css'
+import { ConnectionNotice } from './connection-notice'
+import { SignInRequired } from '@/features/projects'
 
 const SessionContext = createContext<{ session: Session, capabilities: Capabilities } | null>(null)
 export function useAppSession() {
@@ -36,9 +38,9 @@ function SessionGate({ children }: { children: ReactNode }) {
   if (expired || isAuthError(session.error)) {
     const login = process.env.NEXT_PUBLIC_LOGIN_URL
     const allowedLogin = login && (login.startsWith('/') && !login.startsWith('//') || login.startsWith('https://')) ? login : null
-    return <main className={styles.screen}><h1>Sign in to Stellaris</h1><p>Your research session is unavailable or has expired.</p>{allowedLogin ? <a href={allowedLogin}>Sign in</a> : <p>A login entry point has not been configured. Ask the backend owner to configure authentication.</p>}<button onClick={() => void reconnect()}>Check session again</button></main>
+    return <><SignInRequired login_url={allowedLogin} expired={expired} /><div className={styles.screen}><button disabled={session.isFetching} onClick={() => void reconnect()}>Check session again</button></div></>
   }
-  if (session.error || capabilities.error) return <main className={styles.screen}><h1>Stellaris is unavailable</h1><p>The research backend could not be reached or returned an error. No project data has been replaced.</p><p role="alert">{(session.error ?? capabilities.error)?.message}</p><button onClick={() => void reconnect()}>Retry connection</button><a href="/docs/README.md">Read integration documentation</a></main>
+  if (session.error || capabilities.error) return <ConnectionNotice error={session.error ?? capabilities.error} endpoint={session.error ? '/api/v1/session' : '/api/v1/capabilities'} pending={session.isFetching || capabilities.isFetching} retry={() => void reconnect()} />
   if (!session.data || !capabilities.data) return <main className={styles.screen} aria-busy="true"><h1>Opening Stellaris</h1><p>Resolving session and available research tools…</p></main>
   return <SessionContext.Provider key={session.data.user.id} value={{ session: session.data, capabilities: capabilities.data }}>{children}</SessionContext.Provider>
 }

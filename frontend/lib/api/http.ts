@@ -2,6 +2,10 @@ import type { ApiResult, CommandOptions, EditOptions, UploadProgress } from '@/c
 
 export type ErrorEnvelope = { code: string, message: string, request_id?: string, retryable: boolean, details: Record<string, unknown> }
 export class ApiError extends Error {
+  get code() { return this.error.code }
+  get request_id() { return this.error.request_id }
+  get details() { return this.error.details }
+  get retryable() { return this.error.retryable }
   constructor(public status: number, public error: ErrorEnvelope, public retry_after: string | null = null) {
     super(error.message)
     this.name = 'ApiError'

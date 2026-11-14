@@ -13,3 +13,11 @@ export type CommandOptions = { idempotency_key: string, signal?: AbortSignal }
 export type EditOptions = { etag: string, signal?: AbortSignal }
 export type ApiResult<T> = { data: T, etag: string | null, request_id: string | null }
 export type UploadProgress = { loaded_bytes: number, total_bytes: number | null }
+
+// Public request names used by the merged feature modules.
+export type CreateProjectRequest = CreateProject
+export type EditProjectRequest = EditProject
+export type CreateExperimentRequest = CreateExperiment
+export type EditExperimentRequest = EditExperiment
+export type SubmitMessageRequest = SubmitMessage
+export type CreateSourceRequest = CreateSource

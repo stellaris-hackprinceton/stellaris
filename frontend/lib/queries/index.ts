@@ -1,4 +1,5 @@
 'use client'
+import { useCallback } from 'react'
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import type * as T from '@/contracts/api'
@@ -30,17 +31,22 @@ export function useSession() {
 }
 export function useCapabilities() {
   const session = useSession()
-  return useQuery({ queryKey: keys.capabilities, queryFn: async ({ signal }) => (await api.capabilities.get(signal)).data, enabled: !!session.data && !session.error, retry: false, staleTime: 60000 })
+  const query = useQuery({ queryKey: keys.capabilities, queryFn: async ({ signal }) => (await api.capabilities.get(signal)).data, enabled: !!session.data && !session.error, retry: false, staleTime: 60000 })
+  const { refetch: refetchQuery } = query
+  const refetch = useCallback(() => refetchQuery(), [refetchQuery])
+  return { ...query, is_loading: query.isPending, refetch }
 }
-function useDetail<R>(p: string, resource: string, id: string | undefined, load: (signal: AbortSignal) => Promise<D.ApiResult<R>>) {
+function useDetail<R>(p: string, resource: string, id: string | null | undefined, load: (signal: AbortSignal) => Promise<D.ApiResult<R>>) {
   const session = useSession()
-  const client = useQueryClient(), key = keys.detail(p, resource, id)
+  const client = useQueryClient(), key = keys.detail(p, resource, id ?? undefined)
   const query = useQuery({ queryKey: key, queryFn: async ({ signal }) => {
     const incoming = await load(signal), current = client.getQueryData<D.ApiResult<R>>(key)
     const data = preferCurrent(current?.data, incoming.data)
     return current && data === current.data ? current : { ...incoming, data }
   }, enabled: !!p && !!id && !!session.data && !session.error, retry: false })
-  return { ...query, data: query.data?.data, etag: query.data?.etag ?? null, request_id: query.data?.request_id ?? null }
+  const { refetch: refetchQuery } = query
+  const refetch = useCallback(() => refetchQuery(), [refetchQuery])
+  return { ...query, data: query.data?.data, etag: query.data?.etag ?? null, request_id: query.data?.request_id ?? null, is_loading: query.isPending, refetch }
 }
 function useList<R extends { id: string }>(key: readonly unknown[], enabled: boolean, load: (cursor: string | undefined, signal: AbortSignal) => Promise<D.ApiResult<T.Page<R>>>) {
   const session = useSession()
@@ -60,7 +66,11 @@ function useList<R extends { id: string }>(key: readonly unknown[], enabled: boo
   })
   const byId = new Map<string, R>()
   for (const page of query.data?.pages ?? []) for (const item of page.data.items) byId.set(item.id, item)
-  return { ...query, items: [...byId.values()], has_next_page: !!query.hasNextPage, load_next_page: query.fetchNextPage }
+  const { fetchNextPage } = query
+  const load_next_page = useCallback(() => fetchNextPage(), [fetchNextPage])
+  const { refetch: refetchQuery } = query
+  const refetch = useCallback(() => refetchQuery(), [refetchQuery])
+  return { ...query, items: [...byId.values()], has_next_page: !!query.hasNextPage, load_next_page, refetch, is_loading: query.isPending, is_fetching_next_page: query.isFetchingNextPage }
 }
 export function useProjects(filters: D.ListFilters = {}) { return useList(keys.projects(filters), true, (cursor, signal) => api.projects.list({ ...filters, cursor }, signal)) }
 export function useProject(p: string) { return useDetail(p, 'project', p, signal => api.projects.get(p, signal)) }
@@ -69,12 +79,12 @@ export function useMessages(p: string) { return useList(keys.list(p, 'messages')
 export function useSources(p: string, f: D.ListFilters = {}) { return useList(keys.list(p, 'sources', f), !!p, (cursor, signal) => api.sources.list(p, { ...f, cursor }, signal)) }
 export function useClaims(p: string, f: D.ListFilters = {}) { return useList(keys.list(p, 'claims', f), !!p, (cursor, signal) => api.claims.list(p, { ...f, cursor }, signal)) }
 export function useExperiments(p: string) { return useList(keys.list(p, 'experiments'), !!p, (cursor, signal) => api.experiments.list(p, { cursor }, signal)) }
-export function useExperiment(p: string, id?: string) { return useDetail(p, 'experiments', id, signal => api.experiments.get(p, id!, signal)) }
-export function useArtifact(p: string, id?: string) { return useDetail(p, 'artifacts', id, signal => api.artifacts.get(p, id!, signal)) }
+export function useExperiment(p: string, id?: string | null) { return useDetail(p, 'experiments', id, signal => api.experiments.get(p, id!, signal)) }
+export function useArtifact(p: string, id?: string | null) { return useDetail(p, 'artifacts', id, signal => api.artifacts.get(p, id!, signal)) }
 export function useArtifacts(p: string, f: D.ListFilters = {}) { return useList(keys.list(p, 'artifacts', f), !!p, (cursor, signal) => api.artifacts.list(p, { ...f, cursor }, signal)) }
 export function useRuns(p: string, f: D.ListFilters = {}) { return useList(keys.list(p, 'runs', f), !!p, (cursor, signal) => api.runs.list(p, { ...f, cursor }, signal)) }
-export function useRun(p: string, id?: string) { return useDetail(p, 'runs', id, signal => api.runs.get(p, id!, signal)) }
-export function useRunResults(p: string, id?: string) { return useDetail(p, 'results', id, signal => api.runs.results(p, id!, signal)) }
+export function useRun(p: string, id?: string | null) { return useDetail(p, 'runs', id, signal => api.runs.get(p, id!, signal)) }
+export function useRunResults(p: string, id?: string | null) { return useDetail(p, 'results', id, signal => api.runs.results(p, id!, signal)) }
 export function useMeasurements(p: string, id: string, f: D.ListFilters = {}) { return useList(keys.list(p, `measurements:${id}`, f), !!p && !!id, (cursor, signal) => api.runs.measurements(p, id, { ...f, cursor }, signal)) }
 export function useRunLogs(p: string, id: string) {
   const history = useList(keys.list(p, `logs:${id}`), !!p && !!id, (cursor, signal) => api.runs.logs(p, id, { cursor }, signal))
@@ -103,13 +113,27 @@ function useCommand<V, R>(fn: (variables: V) => Promise<D.ApiResult<R>>) {
     onError: error => { if (isAuthError(error)) void client.cancelQueries() },
   })
 }
-export function useCreateProject() { return useCommand((v: CreateProjectVariables) => api.projects.create(v.body, v.command)) }
-export function useEditProject() { return useCommand((v: EditProjectVariables) => api.projects.edit(v.project_id, v.body, v.edit)) }
-export function useSubmitMessage() { return useCommand((v: SubmitMessageVariables) => api.messages.create(v.project_id, v.body, v.command)) }
-export function useCreateSource() { return useCommand((v: CreateSourceVariables) => api.sources.create(v.project_id, v.body, v.command)) }
-export function useCreateExperiment() { return useCommand((v: CreateExperimentVariables) => api.experiments.create(v.project_id, v.body, v.command)) }
-export function useEditExperiment() { return useCommand((v: EditExperimentVariables) => api.experiments.edit(v.project_id, v.experiment_id, v.body, v.edit)) }
-export function useStartRun() { return useCommand((v: StartRunVariables) => api.runs.create(v.project_id, v.body, v.command)) }
+export type ScopedCommand<B> = { body: B, idempotency_key: string, signal?: AbortSignal }
+export type ScopedEdit<B> = { body: B, etag: string, signal?: AbortSignal }
+function commandOptions(v: { command: D.CommandOptions } | { idempotency_key: string, signal?: AbortSignal }): D.CommandOptions {
+  return 'command' in v ? v.command : { idempotency_key: v.idempotency_key, signal: v.signal }
+}
+function editOptions(v: { edit: D.EditOptions } | { etag: string, signal?: AbortSignal }): D.EditOptions {
+  return 'edit' in v ? v.edit : { etag: v.etag, signal: v.signal }
+}
+function scope(bound: string | undefined, v: object, key: 'project_id' | 'experiment_id' = 'project_id') {
+  const id = bound ?? (key in v ? (v as Record<string, unknown>)[key] : undefined)
+  if (typeof id !== 'string' || !id) throw new Error(`A ${key} is required for this operation.`)
+  return id
+}
+// Both explicit-scope and bound-scope forms share the same transport and command identity.
+export function useCreateProject() { return useCommand((v: CreateProjectVariables | ScopedCommand<D.CreateProject>) => api.projects.create(v.body, commandOptions(v))) }
+export function useEditProject(p?: string) { return useCommand((v: EditProjectVariables | ScopedEdit<D.EditProject>) => api.projects.edit(scope(p, v), v.body, editOptions(v))) }
+export function useSubmitMessage(p?: string) { return useCommand((v: SubmitMessageVariables | ScopedCommand<D.SubmitMessage>) => api.messages.create(scope(p, v), v.body, commandOptions(v))) }
+export function useCreateSource(p?: string) { return useCommand((v: CreateSourceVariables | ScopedCommand<D.CreateSource>) => api.sources.create(scope(p, v), v.body, commandOptions(v))) }
+export function useCreateExperiment(p?: string) { return useCommand((v: CreateExperimentVariables | ScopedCommand<D.CreateExperiment>) => api.experiments.create(scope(p, v), v.body, commandOptions(v))) }
+export function useEditExperiment(p?: string, id?: string) { return useCommand((v: EditExperimentVariables | ScopedEdit<D.EditExperiment>) => api.experiments.edit(scope(p, v), scope(id, v, 'experiment_id'), v.body, editOptions(v))) }
+export function useStartRun(p?: string) { return useCommand((v: StartRunVariables | ScopedCommand<D.StartRun>) => api.runs.create(scope(p, v), v.body, commandOptions(v))) }
 export function useCancelRun() { return useCommand((v: CancelRunVariables) => api.runs.cancel(v.project_id, v.run_id, v.command)) }
 export function useDecideApproval() { return useCommand((v: DecideApprovalVariables) => api.approvals.decide(v.project_id, v.approval_id, v.body, v.command)) }
 export type CachedPages<R> = InfiniteData<D.ApiResult<T.Page<R>>, string | undefined>

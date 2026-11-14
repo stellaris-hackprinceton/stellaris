@@ -3,9 +3,13 @@
 import Link from 'next/link'
 import type { ComponentType, ReactNode } from 'react'
 import styles from '@/features/execution/sol.module.css'
+import { ProjectsScreen } from '@/features/projects'
+import { ProjectShell } from '@/components/shell'
+import { ResearchScreen } from '@/features/research'
+import { StudioScreen } from '@/features/studio'
+import { ResultsPane } from '@/features/results'
 
-// Sole integration point for Claude exports. Replace null with static imported
-// components here once their owners publish the agreed interfaces.
+// Sole integration point for the merged agent exports.
 type ProjectProps = { project_id: string }
 export type ClaudeFeatures = {
   ProjectsScreen: ComponentType | null,
@@ -14,7 +18,7 @@ export type ClaudeFeatures = {
   StudioScreen: ComponentType<ProjectProps> | null,
   ResultsPane: ComponentType<ProjectProps & { run_id: string }> | null,
 }
-const features: ClaudeFeatures = { ProjectsScreen: null, ProjectShell: null, ResearchScreen: null, StudioScreen: null, ResultsPane: null }
+const features: ClaudeFeatures = { ProjectsScreen, ProjectShell, ResearchScreen, StudioScreen, ResultsPane }
 function Pending({ title, owner }: { title: string, owner: string }) {
   return <section className={styles.screen}><h1>{title}</h1><p>Awaiting Claude {owner} implementation.</p><p>This boundary contains no sample research or fabricated results.</p><a href="/docs/frontend-implementation-spec.md">Read the shared implementation specification</a></section>
 }

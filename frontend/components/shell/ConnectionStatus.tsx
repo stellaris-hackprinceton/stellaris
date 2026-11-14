@@ -6,9 +6,9 @@ import styles from "./shell.module.css";
 
 const LABELS: Record<string, { tone: StatusTone; text: string }> = {
   connecting: { tone: "neutral", text: "Connecting" },
-  open: { tone: "info", text: "Live" },
+  connected: { tone: "info", text: "Live" },
   reconnecting: { tone: "warning", text: "Reconnecting" },
-  failed: { tone: "error", text: "Live updates stopped" },
+  offline: { tone: "error", text: "Live updates stopped" },
 };
 
 /** Shows the event-stream state only. It never implies anything about run state. */
@@ -18,7 +18,7 @@ export function ConnectionStatus() {
   return (
     <div className={styles.connection} role="status" aria-live="polite">
       <StatusBadge tone={label.tone}>{label.text}</StatusBadge>
-      {connection === "failed" && <Button onClick={reconnect}>Reconnect</Button>}
+      {connection === "offline" && <Button onClick={reconnect}>Reconnect</Button>}
     </div>
   );
 }

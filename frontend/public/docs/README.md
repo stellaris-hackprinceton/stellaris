@@ -1,5 +1,7 @@
 # Stellaris frontend documentation
 
+If the app cannot open a session, start with the [connection setup guide](connection-setup.md).
+
 These shared specifications live in `frontend/public/docs/` so they can be committed with the frontend and read by every implementation agent.
 
 1. [Frontend–backend contract](frontend-backend-contract.md) defines API resources, commands, uploads, live events, errors, and scientific provenance.
