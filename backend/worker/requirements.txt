@@ -1,0 +1,7 @@
+# Scientific worker image. Direct dependencies are pinned; every installed distribution's
+# exact version is recorded at build time in /opt/stellaris/versions.json and copied into
+# each run's provenance manifest.
+numpy==2.1.3
+opencv-python-headless==4.10.0.84
+av==13.1.0
+matplotlib==3.9.2
