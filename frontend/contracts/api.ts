@@ -21,7 +21,11 @@ export type Capabilities = {
     markdown_reports: boolean,
     remote_compute: boolean,
     collaboration: boolean,
-    workspace_files?: boolean
+    workspace_files?: boolean,
+    // Research extension (docs/research-contract.md). Missing means false.
+    full_text_papers?: boolean,
+    // Proposed curated views extension (file-workspace-contract §16). Missing means false.
+    workspace_views?: boolean
   },
   uploads: {
     accepted_mime_types: string[],
@@ -90,7 +94,45 @@ export type Source = {
   retrieval_status: "metadata_only" | "abstract_retrieved" | "full_text_retrieved" | "failed",
   retrieved_at: Timestamp,
   document_artifact_id: ID | null,
+  // Additive research extension; absent or null unless full text was extracted.
+  full_text?: SourceFullText | null,
   created_at: Timestamp
+}
+
+/** `text_artifact_id` identifies the structured paper.json, not the flat paper.txt. */
+export type SourceFullText = {
+  format: "latex_source" | "pdf_text",
+  text_artifact_id: ID,
+  ingest_run_id: ID,
+  section_count: number | null,
+  page_count: number | null,
+  truncated: boolean,
+  license_url: string | null
+}
+
+/** Structured paper.json (schema stellaris.paper.v1). Untrusted text: render escaped only. */
+export type PaperDocument = {
+  schema: "stellaris.paper.v1",
+  format: "latex_source" | "pdf_text",
+  title: string | null,
+  abstract: string | null,
+  page_count: number | null,
+  sections: {
+    id: string, number: string | null, title: string, level: 1 | 2 | 3, locator: string,
+    paragraphs: { id: string, locator: string, kind: "text" | "caption", text: string }[]
+  }[],
+  references: { key: string | null, text: string }[],
+  truncated: boolean,
+  extraction_notes: string[]
+}
+
+export type PaperDocumentSelector = { arxiv_id: string } | { artifact_id: ID }
+export type PaperMetadata = {
+  title?: string,
+  authors?: string[],
+  doi?: string | null,
+  published_at?: string | null,
+  url?: string | null
 }
 
 export type Citation = {
@@ -185,6 +227,14 @@ export type RunInput =
       source_ids: ID[],
       title: string,
       format: "markdown"
+    }
+  | {
+      // Accepted input as returned by the backend. `requested_by_run_id` is backend-authored and
+      // must never be resubmitted; build new commands from PaperIngestRequest fields only.
+      kind: "paper_ingest",
+      document: PaperDocumentSelector,
+      metadata?: PaperMetadata | null,
+      requested_by_run_id?: ID | null
     }
 
 export type RunStatus = "queued" | "running" | "awaiting_approval" |

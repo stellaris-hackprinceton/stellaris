@@ -4,7 +4,10 @@ import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { WorkspaceFile } from '@/contracts/catalog'
-import { catalogApi, useCatalog, useCatalogMutation, useCollections, useFiles, useTags } from '@/lib/catalog'
+import { catalogApi, useCatalog, useCatalogFeatures, useCatalogMutation, useCollections, useFiles, useOriginFile, useTags } from '@/lib/catalog'
+import { MaterialsViews, type MaterialsIntegrations } from './MaterialsViews'
+import { CHAT_PROMPT_EVENT, LiteratureActions } from '@/features/research/desk/LiteratureWidget'
+import { SourceInspector } from '@/features/research/desk/SourceInspector'
 import { newCommandKey } from '@/components/ui'
 import { useArtifact, useArtifacts, useCapabilities, useProject } from '@/lib/queries'
 import { ErrorNotice, projectHref } from '@/features/execution/feedback'
@@ -15,7 +18,36 @@ import styles from './materials.module.css'
 
 function stableCommand(ref:{current:{key:string,body:string}|null},body:unknown) { const encoded=JSON.stringify(body); if(!ref.current||ref.current.body!==encoded)ref.current={key:newCommandKey(),body:encoded}; return ref.current.key }
 
-export function MaterialsScreen({ project_id }: { project_id: string }) {
+export { MaterialCard } from './MaterialCard'
+export type { MaterialCardProps } from './MaterialCard'
+export type { MaterialsIntegrations } from './MaterialsViews'
+
+/**
+ * Capability switch: `workspace_views` → curated views; only `workspace_files` → the existing catalog UI;
+ * neither → the artifact fallback.
+ */
+export function MaterialsScreen({ project_id, integrations }: { project_id: string, integrations?: MaterialsIntegrations }) {
+  const router = useRouter(), search = useSearchParams()
+  const features = useCatalogFeatures(), catalog = useCatalog(project_id)
+  const shared: MaterialsIntegrations = {
+    openChat: prompt => window.dispatchEvent(new CustomEvent(CHAT_PROMPT_EVENT, { detail: prompt })),
+    addSourceActions: <LiteratureActions project_id={project_id} onOpenSource={id => {
+      const query = new URLSearchParams(search.toString())
+      for (const key of ['file', 'claim', 'artifact']) query.delete(key)
+      query.set('source', id)
+      router.push(`${projectHref(project_id)}/materials?${query}`, { scroll: false })
+    }} />,
+    sourceReader: props => <SourceInspector {...props} />,
+    ...integrations,
+  }
+  if (features.is_loading) return <section className={styles.page}><p role="status" className={styles.empty}>Loading Materials…</p></section>
+  if (!features.files || !!features.error) return <LegacyMaterialsFallback project_id={project_id} error={features.error} />
+  if (catalog.error && (catalog.error as { status?: number }).status === 404) return <LegacyMaterialsFallback project_id={project_id} error={catalog.error} />
+  if (features.views) return <MaterialsViews project_id={project_id} integrations={shared} />
+  return <FoundationMaterials project_id={project_id} />
+}
+
+function FoundationMaterials({ project_id }: { project_id: string }) {
   const search = useSearchParams(), router = useRouter(), project = useProject(project_id), caps = useCapabilities()
   const catalog = useCatalog(project_id), mutation = useCatalogMutation(project_id), tags = useTags(project_id), collections = useCollections(project_id)
   const q=search.get('q')??'', tag=search.get('tag')??'', collection=search.get('collection')??''
@@ -35,18 +67,18 @@ export function MaterialsScreen({ project_id }: { project_id: string }) {
   const enabled = Boolean((caps.data?.features as Record<string, unknown>|undefined)?.workspace_files)
   const setParam = (key:string,value:string|null) => { const p=new URLSearchParams(search.toString()); if(value) p.set(key,value); else p.delete(key); router.replace(`${projectHref(project_id)}/materials${p.size?`?${p}`:''}`,{scroll:false}) }
   function select(id:string) { const p=new URLSearchParams(search.toString()); p.delete('source');p.delete('claim');p.delete('artifact');p.set('file',id);router.replace(`${projectHref(project_id)}/materials?${p}`,{scroll:false}) }
-  const originType=search.get('source')?'source':search.get('claim')?'claim':search.get('artifact')?'artifact':null
+  const originType=search.get('source')?'source' as const:search.get('claim')?'claim' as const:search.get('artifact')?'artifact' as const:null
   const originId=originType?search.get(originType):null
-  const match=originId?files.items.find(f=>f.origin?.id===originId&&f.origin.type===originType):undefined
-  const matchId=match?.id
+  // Bounded lookup independent of the browse filters; never pages through the filtered list.
+  const origin=useOriginFile(project_id,originType,originId)
+  const matchId=origin.file?.id
   useEffect(()=>{
-    if(!originId||!enabled||selected)return
-    if(matchId){const p=new URLSearchParams(search.toString());p.delete('source');p.delete('claim');p.delete('artifact');p.set('file',matchId);router.replace(`${projectHref(project_id)}/materials?${p}`,{scroll:false});return}
-    if(files.has_next_page&&!files.is_fetching_next_page&&!files.error)void files.load_next_page().catch(()=>{})
-  },[originId,originType,enabled,selected,matchId,files,router,project_id,search])
-  const resolvingOrigin=Boolean(originId&&!selected&&!matchId&&(files.is_loading||files.is_fetching_next_page||(files.has_next_page&&!files.error)))
-  const missingOrigin=Boolean(originId&&!selected&&!matchId&&!files.is_loading&&!files.is_fetching_next_page&&!files.has_next_page&&!files.error)
-  const originLookupError=Boolean(originId&&!selected&&!matchId&&files.error)
+    if(!originId||!enabled||selected||!matchId)return
+    const p=new URLSearchParams(search.toString());p.delete('source');p.delete('claim');p.delete('artifact');p.set('file',matchId);router.replace(`${projectHref(project_id)}/materials?${p}`,{scroll:false})
+  },[originId,enabled,selected,matchId,router,project_id,search])
+  const resolvingOrigin=Boolean(originId&&!selected&&!matchId&&origin.is_loading)
+  const missingOrigin=Boolean(originId&&!selected&&!matchId&&origin.missing)
+  const originLookupError=Boolean(originId&&!selected&&!matchId&&origin.error)
   const createNote = async(e:React.FormEvent) => { e.preventDefault(); if(archived || !draftName.trim())return; const body={name:draftName.trim(),content:draftContent,mime_type:newMime}; if(!noteCommand.current||JSON.stringify(noteCommand.current.body)!==JSON.stringify(body))noteCommand.current={key:newCommandKey(),body}; try { const r=await mutation.mutateAsync(()=>catalogApi.createNote(project_id,body,{idempotency_key:noteCommand.current!.key})) as {data?:WorkspaceFile}; const file=r?.data;setDraftName('');setDraftContent('');noteCommand.current=null;setCreatingNote(false);if(file)select(file.id);await files.refetch() } catch { /* Keep the same note draft and command key for a safe retry. */ } }
   const makeTag = async(e:React.FormEvent) => { e.preventDefault(); if(!newTag.trim())return; const slug=newTag.trim().toLowerCase().replace(/\s+/g,'-'), body={slug,label:newTagLabel.trim()||newTag.trim()}; if(!tagCommand.current||JSON.stringify(tagCommand.current.body)!==JSON.stringify(body))tagCommand.current={key:newCommandKey(),body}; try { await mutation.mutateAsync(()=>catalogApi.createTag(project_id,body,{idempotency_key:tagCommand.current!.key}));tagCommand.current=null;setNewTag('');setNewTagLabel('');await tags.refetch() } catch { /* Error remains visible beside the management controls; retry uses the same command key. */ } }
   const makeCollection = async(e:React.FormEvent) => { e.preventDefault(); if(!newCollection.trim())return; const filter=dynamic?{tags:collectionFilterTag?[collectionFilterTag]:undefined,status:'active' as const}:null, body={name:newCollection.trim(),filter}; if(!collectionCommand.current||JSON.stringify(collectionCommand.current.body)!==JSON.stringify(body))collectionCommand.current={key:newCommandKey(),body}; try { await mutation.mutateAsync(()=>catalogApi.createCollection(project_id,body,{idempotency_key:collectionCommand.current!.key}));collectionCommand.current=null;setNewCollection('');await collections.refetch() } catch { /* Error remains visible beside the management controls; retry uses the same command key. */ } }
@@ -55,7 +87,7 @@ export function MaterialsScreen({ project_id }: { project_id: string }) {
   if(!caps.is_loading && (!enabled || !!caps.error)) return <LegacyMaterialsFallback project_id={project_id} error={caps.error} />
   if(catalog.error && (catalog.error as {status?:number}).status===404) return <LegacyMaterialsFallback project_id={project_id} error={catalog.error} />
   return <section className={styles.page}>
-    <header className={styles.heading}><div><h1>Materials</h1><p>One catalog for evidence, research records, outputs, and your notes. Notes and organizational labels never become scientific evidence.</p></div><div className={styles.actions}><button type="button" disabled={archived} onClick={()=>setCreatingNote(v=>!v)}>{creatingNote?'Close note':'New note'}</button><button type="button" onClick={()=>setManage(v=>!v)}>{manage?'Close tools':'Tags & collections'}</button></div></header>
+    <header className={styles.heading}><div><h1>Materials</h1><p>One catalog for evidence, research records, outputs, and your notes. Notes and organizational labels never become scientific evidence.</p><p className={styles.meta}>Curated views (Desk, Literature, Media &amp; data, and saved presentations) are unavailable on this backend. The catalog below remains fully usable.</p></div><div className={styles.actions}><button type="button" disabled={archived} onClick={()=>setCreatingNote(v=>!v)}>{creatingNote?'Close note':'New note'}</button><button type="button" onClick={()=>setManage(v=>!v)}>{manage?'Close tools':'Tags & collections'}</button></div></header>
     <div className={styles.toolbar}>
       <label>Search names<input type="search" value={q} onChange={e=>setParam('q',e.target.value||null)} placeholder="Search material names" /></label>
       <details className={styles.filters}><summary>Filters{(tag || collection || status !== 'active') ? ' · active' : ''}</summary><div className={styles.filterFields}>
@@ -89,7 +121,7 @@ export function MaterialsScreen({ project_id }: { project_id: string }) {
       {selected?<MaterialInspector key={selected} project_id={project_id} file_id={selected} />:<section className={styles.inspector}><p className={styles.empty}>Select a material to inspect its saved content, origin, history, and explicit relations.</p></section>}
     </div>
     {resolvingOrigin&&<p role="status">Finding the linked {originType} in the catalog…</p>}
-    {missingOrigin&&<p role="status">The linked item is not present in the active catalog. It may be unavailable in this project.</p>}{originLookupError&&<p role="status">The catalog could not finish finding the linked item. Retry after the connection recovers.</p>}
+    {missingOrigin&&<p role="status">{origin.bounded?'The linked item was not found among the first 100 catalog entries of its type. This backend does not support exact link lookup; search for it by name.':'The linked item is not present in the active catalog. It may be unavailable in this project.'}</p>}{originLookupError&&<p role="status">The catalog could not finish finding the linked item. Retry after the connection recovers.</p>}
     <ErrorNotice error={mutation.error} />
   </section>
 }

@@ -5,6 +5,24 @@ Status: **Implementation plan. No frontend implementation or agent execution is 
 Prepared: **November 13, 2026**  
 Companion document: [Frontend–backend contract](frontend-backend-contract.md), version `1.0.0-draft`.
 
+**Next implementation amendment, November 14, 2026 — specified, not implemented:** Use the public [Research desk](research-workspace-spec.md), [Materials views](materials-views-spec.md), and [Reports](reports-spec.md) specifications for the next widget, browse-view, and report-library changes. They supersede this document's older Research composition, Materials list-first presentation, and report-composer placement. Read the proposed [catalog extension](file-workspace-contract.md#16-proposed-curated-views-extension) before editing client interfaces. The historical agent assignments below do not authorize new execution or override current repository instructions.
+
+### Pending delivery sequence
+
+1. Implement and verify the catalog extension: v1 → v2 migration, artifact-kind projection/filtering, collection presentation, capability, and cursor semantics. Do not change scientific commands.
+2. Implement shared widget shells and type-specific cards using the specified token sizes, available-width breakpoints, local error boundaries, bounded media reads, and existing query cache.
+3. Replace Research's combined sources and singular-plan panels. Implement Materials preset navigation, saved presentation controls, deep-link resolution outside active filters, and context restoration.
+4. Add the Reports index/navigation and relocate the primary composer. Retain existing report readers and contextual entry points. Use separate acceptance-retry and generate-again flows.
+5. Run focused frontend checks, isolated-profile browser checks, and Docker/API checks. Record new evidence separately from historical handoffs and verification documents. Live provider requests remain a separate authorization boundary.
+
+Pending acceptance is defined per public spec. Nothing in this amendment claims these steps have run.
+
+### Alignment with fetched backend extensions
+
+The [research](research-contract.md), [terminal](terminal-contract.md), and [HPC](hpc-contract.md) extensions are already integrated in the backend. Their frontend integration status is separate. The next Literature UI includes PDF/arXiv ingestion and extracted-paper inspection as specified publicly, rather than assuming only abstract retrieval is available.
+
+Update client Source/full-text fields, paper-ingestion run/request types, capability fields, and exhaustive run labels in overview, Tracker, and run details. Rerun controls must construct allowed command fields and never submit backend-only accepted-input metadata. Keep accepted Slurm execution/remote-job fields readable without introducing HPC controls. Terminal sessions and their events remain separate from scientific runs and catalog materials. HPC remains disabled, and a future demo mock is outside this delivery. These dependencies supplement, rather than replace, the still-pending catalog v1 → v2 migration and curated-view capability.
+
 Current operation: run the application through the [Docker Compose guide](docker-compose.md). This document preserves the original three-agent implementation breakdown. The [current shared contract](frontend-backend-contract.md) supersedes authentication assumptions in the original frontend draft. All documentation paths are relative to the repository root unless stated otherwise.
 
 Visual direction revised **November 14, 2026**: section 4 replaces the original visual defaults with a sharp research desk direction requested by the user. These are design requirements for subsequent interface work, not a claim that the current frontend implements them.

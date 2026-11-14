@@ -16,6 +16,9 @@ export const keys = {
   list: (p: string, resource: string, filters: D.ListFilters = {}) => ['project', p, resource, 'list', filters] as const,
 }
 export const terminal = (run: T.Run) => ['succeeded', 'failed', 'cancelled'].includes(run.status)
+/** Exhaustive run-kind labels. An unrecognized kind is never presented as a report. */
+export const RUN_KIND_LABEL: Record<T.RunInput['kind'], string> = { agent: 'Research', analysis: 'Analysis', report: 'Report generation', paper_ingest: 'Paper ingestion' }
+export function runKindLabel(kind: string): string { return (RUN_KIND_LABEL as Record<string, string>)[kind] ?? 'Unrecognized run' }
 export function useSession() {
   const client = useQueryClient()
   return useQuery<T.Session | null>({ queryKey: keys.session, queryFn: async ({ signal }) => {
@@ -78,6 +81,8 @@ export function useWorkspace(p: string) { return useDetail(p, 'workspace', p, si
 export function useMessages(p: string) { return useList(keys.list(p, 'messages'), !!p, (cursor, signal) => api.messages.list(p, { cursor }, signal)) }
 export function useSources(p: string, f: D.ListFilters = {}) { return useList(keys.list(p, 'sources', f), !!p, (cursor, signal) => api.sources.list(p, { ...f, cursor }, signal)) }
 export function useClaims(p: string, f: D.ListFilters = {}) { return useList(keys.list(p, 'claims', f), !!p, (cursor, signal) => api.claims.list(p, { ...f, cursor }, signal)) }
+export function useSource(p: string, id?: string | null) { return useDetail(p, 'sources', id, signal => api.sources.get(p, id!, signal)) }
+export function useClaim(p: string, id?: string | null) { return useDetail(p, 'claims', id, signal => api.claims.get(p, id!, signal)) }
 export function useExperiments(p: string) { return useList(keys.list(p, 'experiments'), !!p, (cursor, signal) => api.experiments.list(p, { cursor }, signal)) }
 export function useExperiment(p: string, id?: string | null) { return useDetail(p, 'experiments', id, signal => api.experiments.get(p, id!, signal)) }
 export function useArtifact(p: string, id?: string | null) { return useDetail(p, 'artifacts', id, signal => api.artifacts.get(p, id!, signal)) }

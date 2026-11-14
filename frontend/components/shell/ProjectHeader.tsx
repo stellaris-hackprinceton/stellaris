@@ -19,12 +19,14 @@ type Props = {
   onOpenMenu: () => void;
   chatOpen: boolean;
   onToggleChat: () => void;
+  terminalOpen: boolean;
+  onToggleTerminal: () => void;
 };
 
-export function ProjectHeader({ project_id, showMenuButton, onOpenMenu, chatOpen, onToggleChat }: Props) {
+export function ProjectHeader({ project_id, showMenuButton, onOpenMenu, chatOpen, onToggleChat, terminalOpen, onToggleTerminal }: Props) {
   const project = useProject(project_id);
   const view = currentView(usePathname() ?? "", project_id);
-  const viewLabel = view === "report" ? "Report" : VIEWS.find((v) => v.id === view)?.label;
+  const viewLabel = VIEWS.find((v) => v.id === view)?.label;
   const archived = project.data?.status === "archived";
 
   return (
@@ -49,6 +51,13 @@ export function ProjectHeader({ project_id, showMenuButton, onOpenMenu, chatOpen
           className={styles.chatToggle}
           onClick={onToggleChat}
         ><ChatIcon /><span>Chat</span></Button>
+        <Button
+          id="terminal-toggle"
+          aria-label={terminalOpen ? "Hide terminal" : "Show terminal"}
+          aria-pressed={terminalOpen}
+          className={styles.chatToggle}
+          onClick={onToggleTerminal}
+        ><span aria-hidden="true" className={styles.terminalGlyph}>&gt;_</span><span>Terminal</span></Button>
         <details className={styles.projectMenu}>
           <summary aria-label="Project actions" title="Project actions"><MoreIcon /></summary>
           <div className={styles.menuPanel}>

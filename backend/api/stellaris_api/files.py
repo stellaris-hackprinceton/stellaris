@@ -1,6 +1,8 @@
 """Workspace file read routes (docs/file-workspace-contract.md sections 4-8; plan slice 1).
 
 Implemented here: GET /catalog, /files, /files/{id}, /files/{id}/content, /tags, /tags/{slug}.
+GET /files also supports the section 16 curated-view selection (repeatable `artifact_kind`) and
+exact paired `origin_type` + `origin_id` lookup.
 Notes, revisions, tagging, and tag mutations (slice 2) live in file_mutations.py and register
 on this blueprint. Collection and relation routes use the file_collections blueprint.
 
@@ -22,7 +24,7 @@ from .artifacts import _content_disposition, artifact_content
 from .db import transaction
 from .errors import ApiError
 from .http import decode_cursor, encode_cursor, etag, json_response, page_limit
-from .media import INLINE_MIME_TYPES, content_type_header
+from .media import ARTIFACT_KINDS, INLINE_MIME_TYPES, content_type_header
 from .projects import load_visible
 
 log = logging.getLogger(__name__)
@@ -35,6 +37,7 @@ SORT_COLUMNS = {"created_at": "created_at", "updated_at": "updated_at", "name": 
 ORDERS = ("asc", "desc")
 TAG_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
 MAX_TAG_FILTERS = 10
+MAX_ARTIFACT_KINDS = 10  # Counted before deduplication (contract section 16.3).
 MAX_Q = 100
 MAX_ID = 100
 CSP = "default-src 'none'; media-src 'self'; img-src 'self'; sandbox"
@@ -108,6 +111,8 @@ def _to_files(cat, project_id: str, rows) -> list:
             "tags": tags.get(r["id"], []), "collection_ids": collections.get(r["id"], []),
             "content_revision": r["content_revision"] if note else None, "revision": r["revision"],
             "created_at": r["created_at"], "updated_at": r["updated_at"],
+            # Authoritative underlying artifact kind (section 16.1); null for records and notes.
+            "artifact_kind": r["artifact_kind"] if r["file_kind"] == "artifact" else None,
         })
     return out
 
@@ -146,6 +151,15 @@ def _valid_filters(filters) -> bool:
                     or not all(isinstance(t, str) and TAG_SLUG.fullmatch(t) for t in value)
                     or value != sorted(set(value))):
                 return False
+        elif name == "artifact_kind":
+            # Canonical: deduplicated and lexically sorted, so reordered values bind equal cursors.
+            if (not isinstance(value, list) or not 1 <= len(value) <= MAX_ARTIFACT_KINDS
+                    or not all(isinstance(k, str) and k in ARTIFACT_KINDS for k in value)
+                    or value != sorted(set(value))):
+                return False
+        elif name == "origin_id":
+            if not isinstance(value, str) or not 1 <= len(value) <= MAX_ID:
+                return False
         elif name in ("file_kind", "origin_type", "status"):
             allowed = {"file_kind": FILE_KINDS, "origin_type": proj.ORIGIN_TYPES, "status": STATUSES}[name]
             if value not in allowed:
@@ -158,7 +172,7 @@ def _valid_filters(filters) -> bool:
                 return False
         else:
             return False
-    return True
+    return "origin_id" not in filters or "origin_type" in filters  # Exact origin lookup is paired.
 
 
 def _query_filters():
@@ -169,9 +183,18 @@ def _query_filters():
         if len(tags) > MAX_TAG_FILTERS:
             raise _bad_query(f"At most {MAX_TAG_FILTERS} tag filters are allowed.")
         filters["tag"] = sorted(set(tags))
-    for name in ("file_kind", "origin_type", "status", "q", "collection_id"):
+    kinds = args.getlist("artifact_kind")
+    if kinds:
+        if len(kinds) > MAX_ARTIFACT_KINDS:
+            raise _bad_query(f"At most {MAX_ARTIFACT_KINDS} artifact_kind filters are allowed.")
+        if not all(k in ARTIFACT_KINDS for k in kinds):
+            raise _bad_query(f"artifact_kind must be one of: {', '.join(ARTIFACT_KINDS)}.")
+        filters["artifact_kind"] = sorted(set(kinds))
+    for name in ("file_kind", "origin_type", "origin_id", "status", "q", "collection_id"):
         if args.get(name) is not None:
             filters[name] = args.get(name)
+    if "origin_id" in filters and "origin_type" not in filters:
+        raise _bad_query("origin_id requires origin_type.")
     if not _valid_filters(filters):
         raise _bad_query("A file filter has an unsupported value.")
     sort, order = args.get("sort"), args.get("order")
@@ -187,10 +210,14 @@ def _apply_filters(filters: dict, where: list, params: list, *, default_status: 
     if status != "all":
         where.append("f.status = ?")
         params.append(status)
-    for name in ("file_kind", "origin_type"):
+    for name in ("file_kind", "origin_type", "origin_id"):
         if name in filters:
             where.append(f"f.{name} = ?")
             params.append(filters[name])
+    kinds = filters.get("artifact_kind") or []
+    if kinds:  # OR within the set; only artifact files carry a kind, so notes/records never match.
+        where.append(f"(f.file_kind = 'artifact' AND f.artifact_kind IN ({','.join('?' * len(kinds))}))")
+        params.extend(kinds)
     if "q" in filters:
         escaped = filters["q"].casefold().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         where.append("f.name_key LIKE ? ESCAPE '\\'")
@@ -202,6 +229,17 @@ def _apply_filters(filters: dict, where: list, params: list, *, default_status: 
         params.extend([*tags, len(tags)])
 
 
+def saved_filter_query(saved: dict) -> dict:
+    """A stored FileFilter as query filters: `tags` -> `tag`, `artifact_kinds` -> `artifact_kind`.
+    Omitted status stays omitted (the caller's default applies)."""
+    query = {k: v for k, v in saved.items() if k not in ("tags", "artifact_kinds")}
+    if saved.get("tags"):
+        query["tag"] = sorted(set(saved["tags"]))
+    if saved.get("artifact_kinds"):
+        query["artifact_kind"] = sorted(set(saved["artifact_kinds"]))
+    return query
+
+
 def _collection_filters(cat, collection_id: str, where: list, params: list) -> bool:
     """Add membership constraints; return whether a saved filter supplies the default status."""
     row = cat.execute("SELECT filter FROM collections WHERE id = ?", (collection_id,)).fetchone()
@@ -211,10 +249,7 @@ def _collection_filters(cat, collection_id: str, where: list, params: list) -> b
         where.append("f.id IN (SELECT file_id FROM collection_files WHERE collection_id = ?)")
         params.append(collection_id)
         return False
-    saved = json.loads(row["filter"])  # FileFilter uses `tags`; query filters use `tag`.
-    if "tags" in saved:
-        saved = {**{k: v for k, v in saved.items() if k != "tags"}, "tag": sorted(set(saved["tags"]))}
-    _apply_filters(saved, where, params)
+    _apply_filters(saved_filter_query(json.loads(row["filter"])), where, params)
     return True
 
 

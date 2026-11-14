@@ -19,6 +19,20 @@ Still intentionally undecided: what ends a project's duration and permits contai
 Archiving retains both the running container and evidence. Authentication is deferred by the
 user; remote/public deployment is outside the current local configuration.
 
+## Pending curated-view support (specified November 14, 2026)
+
+Fetched baseline: full-text ingestion, isolated terminal sessions, and optional Slurm support are already integrated according to the [integration record](hpc-research-terminal-plan.md). See the existing [research](../research-contract.md), [terminal](../terminal-contract.md), and [HPC](../hpc-contract.md) contracts. Their recorded local verification is not new verification by this documentation change. HPC remains disabled. Frontend paper ingestion/type/reader work is pending in the public specs and does not require reimplementing those backend services.
+
+These items are **not implemented or verified**. See [file workspace contract section 16](../file-workspace-contract.md#16-proposed-curated-views-extension) for exact wire and migration behavior, and the public [Research desk](../research-workspace-spec.md), [Materials views](../materials-views-spec.md), and [Reports](../reports-spec.md) for observable UI requirements.
+
+- [ ] Add transactional catalog v1 → v2 migration and preserve existing project organization and original evidence identities/dates.
+- [ ] Project authoritative artifact kind, backfill existing catalogs, and add repeatable OR kind filters with saved-filter, count, and cursor support.
+- [ ] Persist optional collection presentation with existing revision, idempotency, archive, and event behavior.
+- [ ] Advertise `features.workspace_views` only with complete extension support. Preserve old client behavior and existing scientific routes.
+- [ ] Verify new and migrated catalogs, kind-filter pagination and tag/type distinction, presentation conflicts, events, and extension-disabled fallback through focused Docker/API checks.
+
+The Reports library uses existing artifacts and report runs. No new report generator, LLM writing call, execution backend, cross-project reference, or authentication work is included. Historical completed checks above do not verify this extension.
+
 
 ## File workspace foundation (2026-11-14)
 

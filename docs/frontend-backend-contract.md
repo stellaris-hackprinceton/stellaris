@@ -33,6 +33,8 @@ The product document does not define exact API shapes. This draft selects the fo
 
 **Implementation update (2026-11-14):** The catalog backend foundation is implemented. Its frontend is named Materials and uses `/projects/:project_id/materials`. The removed `/projects/:project_id/workspace` was a frontend page, distinct from the unchanged backend workspace snapshot API. Knowledge graph draws explicit catalog relations in the browser using `/files` and `/relations`. Tracker uses existing runs and their persisted states. These views add no inferred scientific links, new graph endpoint, or independent task model.
 
+**Proposed research desk extension (2026-11-14), not implemented:** The public [widget specification](research-workspace-spec.md), [Materials views specification](materials-views-spec.md), and [Reports specification](reports-spec.md) define the next UI. [File workspace section 16](file-workspace-contract.md#16-proposed-curated-views-extension) specifies optional `features.workspace_views`, collection presentation metadata, and artifact-kind selection. These are proposed additive catalog changes. Existing scientific commands, resource meaning, run snapshots, chart artifacts, and report generation remain authoritative here. Reports gain a proposed frontend index, not a new backend report resource.
+
 “MUST” means an implementation requirement within this proposed contract. “SHOULD” allows an exception when its consequence is documented. All routes below belong to the MVP unless explicitly marked as future work.
 
 ## 2. Responsibilities at the boundary

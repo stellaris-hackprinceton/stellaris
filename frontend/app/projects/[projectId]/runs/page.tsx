@@ -1,5 +1,14 @@
+import { Suspense } from 'react'
 import { ExecutionScreen } from '@/features/execution'
-export default async function RunsPage({ params }: { params: Promise<{ projectId: string }> }) {
+import LoadingProjectView from '../loading'
+
+type Props = { params: Promise<{ projectId: string }> }
+
+export default function RunsPage({ params }: Props) {
+  return <Suspense fallback={<LoadingProjectView />}><RunsPageContent params={params} /></Suspense>
+}
+
+async function RunsPageContent({ params }: Props) {
   const { projectId } = await params
   return <ExecutionScreen project_id={projectId} />
 }

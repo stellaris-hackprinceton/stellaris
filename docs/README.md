@@ -13,14 +13,23 @@ This is the single canonical documentation tree. Root README and agent entrypoin
 - [Experiment launch selection verification](verification/experiment-launch.md).
 - [Broad layout verification](verification/broad-layout.md).
 - [Project home design and verification](verification/project-home.md).
+- [Sketch-derived logo candidates and verification](design/logo-treatments/README.md).
+- [Logo reconstruction from the original S artwork](design/logo-reconstruction/README.md).
 
 ## Product and implementation
 
 - [Product vision](product-vision.md).
+- [Research desk and widget specification](research-workspace-spec.md). Proposed card contents, layout dimensions, responsive behavior, data flow, and acceptance scenarios. Not yet implemented.
+- [Materials curated views specification](materials-views-spec.md). Proposed view layouts, saved collections/presentations, inspection, navigation, and backend prerequisites. Not yet implemented.
+- [Reports library and generation specification](reports-spec.md). Proposed report browsing, composer placement, evidence selection, and execution states. Not yet implemented.
 - [Frontend–backend contract](frontend-backend-contract.md). The authoritative interface includes the current development mode without authentication.
+- [Full-text paper ingestion](research-contract.md). Integrated backend support for PDF/arXiv extraction and source locators. The new Literature UI remains pending.
+- [Interactive terminal contract](terminal-contract.md). Separate isolated sessions and scratch storage. Frontend integration remains separate.
+- [HPC execution contract](hpc-contract.md). Integrated optional backend support. HPC remains disabled under the current user decision.
+- [Research, HPC, and terminal integration record](backend/hpc-research-terminal-plan.md). Recorded checks and remaining live-verification gaps.
 - [File workspace contract](file-workspace-contract.md). The backend foundation for tagged materials, notes, collections, and explicit relations is implemented. See its [implementation record](backend/file-workspace-plan.md).
 - [Unified workspace interface](frontend-workspace.md). Materials, Knowledge graph, Research overview, Tracker, and the shared navigation.
-- [Frontend implementation specification](frontend-implementation-spec.md). The original three-agent implementation breakdown is retained as a reference.
+- [Frontend implementation specification](frontend-implementation-spec.md). Pending delivery sequence for the new public specs, followed by the historical three-agent breakdown.
 - Historical frontend handoffs: [Agent A](handoffs/agent-a.md), [Agent B](handoffs/agent-b.md), [Agent C](handoffs/agent-c.md). Current startup guidance is in the Compose guide.
 
 ## Agent practices and tooling

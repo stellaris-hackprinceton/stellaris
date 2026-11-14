@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ID } from "@/contracts/api";
-import { useRun, useRunResults } from "@/lib/queries";
+import { useCapabilities, useRun, useRunResults } from "@/lib/queries";
 import { Button, EmptyState, ErrorNotice, Skeleton, describeError } from "@/components/ui";
 import { hrefs } from "@/components/shell";
 import { ChartGallery } from "./ChartGallery";
@@ -20,6 +20,7 @@ export type ResultsPaneProps = { project_id: ID; run_id: ID };
  * opens its own event stream. Selecting a historical run shows that run's evidence as recorded.
  */
 export function ResultsPane({ project_id, run_id }: ResultsPaneProps) {
+  const capabilities = useCapabilities();
   const run = useRun(project_id, run_id);
   const results = useRunResults(project_id, run_id);
   const ms = useAllMeasurements(project_id, run_id);
@@ -93,6 +94,7 @@ export function ResultsPane({ project_id, run_id }: ResultsPaneProps) {
             ? <li><Link href={hrefs.artifact(project_id, r.provenance_artifact_id)}>Provenance manifest</Link></li>
             : <li className={styles.muted}>Provenance manifest not yet saved</li>}
           <li><Link href={hrefs.run(project_id, r.id)}>Run details and logs</Link></li>
+          {r.input.kind === "analysis" && capabilities.data?.features.markdown_reports && <li><Link href={hrefs.reports(project_id, { compose: true, experiment: r.input.experiment_id, evidence_run: r.id })}>Generate report</Link></li>}
           {res?.report_artifact_id && <li><Link href={hrefs.report(project_id, res.report_artifact_id)}>Report</Link></li>}
         </ul>
       </section>

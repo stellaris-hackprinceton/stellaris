@@ -38,6 +38,7 @@
 .connectionLabel > span { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); }
 .connectionLabel:not([data-state="connected"]) > span { background: var(--color-warning); }
 .chatToggle { border-color: transparent; background: var(--color-surface-muted); }
+.terminalGlyph { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 700; }
 .projectMenu { position: relative; }
 .projectMenu > summary { list-style: none; display: flex; align-items: center; justify-content: center; width: 40px; min-height: 40px; cursor: pointer; border-radius: var(--radius-control); }
 .projectMenu > summary::-webkit-details-marker { display: none; }
@@ -70,6 +71,6 @@
   .connectionLabel { font-size: 0; gap: 0; }
   .projectName { max-width: 100%; }
   .headerTitle { flex: 1; }
-  .chatToggle span { display: none; }
+  .chatToggle span:not(.terminalGlyph) { display: none; }
   .chatToggle { padding-inline: 9px; }
 }

@@ -11,10 +11,14 @@ import hashlib
 import io
 import json
 
+from .media import ARTIFACT_KINDS
 from .runs import TERMINAL
 from .runs import results as run_results
 
 RENDER_VERSION = 1
+# Bump to make every existing catalog run one projection pass even without new legacy events.
+# 2: backfill files.artifact_kind from authoritative artifact records (catalog schema 2).
+PROJECTION_VERSION = 2
 CATALOG_EVENT = "catalog.changed"
 ORIGIN_TYPES = ("artifact", "source", "claim", "experiment", "run", "run_measurements")
 SYSTEM_TAGS = ("research", "hypotheses", "experiments", "results", "artifacts", "reports", "agent-logs",
@@ -146,13 +150,13 @@ def render_record(main, project_id: str, origin_type: str, origin_id: str):
 # -- entries ---------------------------------------------------------------------------------
 
 def _entry(project_id, kind, origin_type, origin_id, origin_revision, name, mime_type, size, sha256,
-           scientific_origin, created_at, updated_at, tags, rendered):
+           scientific_origin, created_at, updated_at, tags, rendered, artifact_kind=None):
     return {
         "id": file_id(project_id, origin_type, origin_id), "file_kind": kind, "origin_type": origin_type,
         "origin_id": origin_id, "origin_revision": origin_revision, "name": name, "name_key": name.casefold(),
         "mime_type": mime_type, "size_bytes": size, "content_sha256": sha256,
         "scientific_origin": scientific_origin, "render_version": RENDER_VERSION if rendered else None,
-        "created_at": created_at, "updated_at": updated_at, "tags": tags,
+        "created_at": created_at, "updated_at": updated_at, "tags": tags, "artifact_kind": artifact_kind,
     }
 
 
@@ -168,9 +172,11 @@ def artifact_entry(project_id: str, artifact: dict, run_kind) -> dict:
         tags.append("agent-logs" if run_kind == "agent" else "run-logs")
     elif artifact["kind"] in ARTIFACT_KIND_TAGS:
         tags.append(ARTIFACT_KIND_TAGS[artifact["kind"]])
+    # artifact_kind comes only from the artifact record itself, never from tags or MIME guesses.
+    kind = artifact["kind"] if artifact["kind"] in ARTIFACT_KINDS else None
     return _entry(project_id, "artifact", "artifact", artifact["id"], None, artifact["filename"],
                   artifact["mime_type"], artifact["size_bytes"], artifact["sha256"], artifact["origin"],
-                  artifact["created_at"], artifact["created_at"], tags, False)
+                  artifact["created_at"], artifact["created_at"], tags, False, kind)
 
 
 def source_entry(project_id: str, source: dict) -> dict:
@@ -213,9 +219,10 @@ def measurements_entry(project_id: str, run: dict, measurements) -> dict:
 def collect(main, project_id: str, projected: dict) -> list:
     """Entries for legacy records that are missing from, or newer than, the catalog.
 
-    `projected` maps (origin_type, origin_id) -> (origin_revision, render_version). Insert-only
-    tables (artifacts, sources, claims) need only membership checks; experiments and terminal
-    runs are compared by revision. Call inside one main-DB read transaction.
+    `projected` maps (origin_type, origin_id) -> (origin_revision, render_version, artifact_kind).
+    Insert-only tables (artifacts, sources, claims) need only membership checks, plus artifact
+    files whose artifact_kind is still missing (schema 2 backfill); experiments and terminal runs
+    are compared by revision. Call inside one main-DB read transaction.
     """
     def stale(origin_type, origin_id, revision=None, rendered=True):
         current = projected.get((origin_type, origin_id))
@@ -228,9 +235,11 @@ def collect(main, project_id: str, projected: dict) -> list:
     entries = []
     run_kinds = {r["id"]: r["kind"] for r in main.execute("SELECT id, kind FROM runs WHERE project_id = ?",
                                                           (project_id,))}
-    for row in main.execute("SELECT id FROM artifacts WHERE project_id = ? ORDER BY created_at, id",
+    for row in main.execute("SELECT id, kind FROM artifacts WHERE project_id = ? ORDER BY created_at, id",
                             (project_id,)).fetchall():
-        if stale("artifact", row["id"], rendered=False):
+        current = projected.get(("artifact", row["id"]))
+        missing_kind = (current is not None and current[2] is None and row["kind"] in ARTIFACT_KINDS)
+        if missing_kind or stale("artifact", row["id"], rendered=False):
             artifact = _doc(main, "artifacts", project_id, row["id"])
             entries.append(artifact_entry(project_id, artifact, run_kinds.get(artifact["run_id"])))
     for origin_type, table, build in (("source", "sources", source_entry), ("claim", "claims", claim_entry)):

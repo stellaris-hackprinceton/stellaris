@@ -35,6 +35,12 @@ export async function applyProjectEvent(client: QueryClient, event: ProjectEvent
         if (['succeeded', 'failed', 'cancelled'].includes(run.status)) active.delete(run.id); else active.add(run.id)
         return { ...old, data: { ...old.data, active_run_ids: [...active] } }
       })
+      if (['succeeded', 'failed', 'cancelled'].includes(run.status) && previous?.status !== run.status) {
+        // Terminal transitions: refresh saved outputs once through the shared cache.
+        void client.invalidateQueries({ queryKey: keys.detail(p, 'results', run.id) })
+        void invalidate('workspace')
+        if (run.input.kind === 'paper_ingest' || run.input.kind === 'report') void invalidate('catalog:files')
+      }
       return
     }
     case 'message.created': case 'message.updated':
@@ -63,7 +69,10 @@ export async function applyProjectEvent(client: QueryClient, event: ProjectEvent
     case 'experiment.updated': upsert(client, p, 'experiments', event.payload.experiment); void invalidate('experiments'); return
     case 'source.created': upsert(client, p, 'sources', event.payload.source); void invalidate('sources'); void invalidate('workspace'); return
     case 'claim.created': upsert(client, p, 'claims', event.payload.claim); void invalidate('claims'); return
-    case 'artifact.created': upsert(client, p, 'artifacts', event.payload.artifact); void invalidate('artifacts'); void invalidate('workspace'); return
+    case 'artifact.created':
+      upsert(client, p, 'artifacts', event.payload.artifact); void invalidate('artifacts'); void invalidate('workspace')
+      if (event.payload.artifact.kind === 'report') void invalidate('catalog:files')
+      return
     case 'upload.updated': client.setQueryData(keys.detail(p, 'uploads', event.payload.upload.id), { data: event.payload.upload, etag: null, request_id: null }); return
     case 'results.updated': void invalidate('results'); return
     case 'measurements.available': void invalidate(`measurements:${event.payload.run_id}`); void invalidate('results'); return

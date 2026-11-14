@@ -3,6 +3,8 @@
 Contract version: **1.1.0-draft (additive to `/api/v1`)**
 Status: **Implemented and Docker-verified for the backend foundation, with frontend adoption in Materials and Knowledge graph.** See [Unified workspace interface](frontend-workspace.md). Backend progress is tracked in
 [backend/file-workspace-plan.md](backend/file-workspace-plan.md).
+
+**Next version, November 14, 2026:** [Section 16](#16-proposed-curated-views-extension) specifies curated views, collection presentation metadata, artifact-kind filtering, and exact origin lookup. The backend implementation is written (catalog schema 2) with a focused check script, `backend/scripts/workspace_views_test.py`; **its verification results are not yet recorded** (see section 16.6). The existing foundation status above applies only to the existing interfaces. The public [Materials specification](materials-views-spec.md) defines the proposed browsing experience.
 Prepared: **November 14, 2026**
 Extends: [frontend-backend-contract.md](frontend-backend-contract.md). Its sections 3 (common
 rules, development mode without authentication), 6 (artifact content), 8 (events), and 9
@@ -13,7 +15,7 @@ rules, development mode without authentication), 6 (artifact content), 8 (events
 Users asked for one free-form workspace of files instead of fixed sections and tables. This
 contract adds that interface:
 
-- Every artifact and every existing scientific record appears as a **file** in one list.
+- Every artifact and every existing scientific record appears as a **file** in one catalog. The current frontend exposes a list. The proposed curated views present that same catalog through distinct widgets without changing record identity.
 - Former fixed categories such as research, hypotheses, results, artifacts, and agent logs
   become **default tags**. Users can add their own tags.
 - Users can write mutable Markdown or plain-text **notes** with retained revisions.
@@ -427,6 +429,8 @@ The backend never invents, infers, or ranks links.
 | `tag` | Repeatable, up to 10. A file must carry **all** listed slugs (AND). System and user assignments both match. An unknown slug matches nothing. It is not an error. |
 | `file_kind` | `artifact`, `record`, or `note`. |
 | `origin_type` | One of `FileOriginType`. |
+| `origin_id` | Section 16 extension. Exact origin ID; valid only together with `origin_type` (otherwise `400 INVALID_QUERY`). The pair selects at most one file of this project. An unknown, mismatched, or other-project origin matches nothing. Bound into cursors like other filters. Not a saved `FileFilter` field. |
+| `artifact_kind` | Section 16 extension. Repeatable `ArtifactKind`, OR within the set (section 16.3). |
 | `collection_id` | Members of that collection. An unknown collection returns `404`. |
 | `status` | `active` (default), `trashed`, or `all`. |
 | `q` | 1–100 characters. Case-insensitive substring match on `name` only. `%` and `_` are literal. It does not search content. |
@@ -588,4 +592,98 @@ not complete resources. Do not treat a user tag or relation as scientific eviden
 
 A future graph can use paged files as nodes and paged relations as edges. Filter both sets
 to the intended visible files in the client; an edge is directed from `from_file_id` to
-`to_file_id`. No graph rendering or automatic semantic-link feature is implemented.
+`to_file_id`. No graph rendering endpoint or automatic semantic-link feature is implemented. The current frontend renders explicit relations locally.
+
+## 16. Proposed curated views extension
+
+Status: **Backend implemented (catalog schema 2); verification results pending** (section 16.6). This section describes the next additive interface, provisionally `1.2.0-draft`. Sections 1–15 document the existing foundation; backends advertising `workspace_views` add the fields below. UI requirements are canonical in [Research desk](research-workspace-spec.md), [Materials views](materials-views-spec.md), and [Reports](reports-spec.md).
+
+### 16.1 Capability and additive types
+
+Add optional `features.workspace_views?: boolean` to capabilities. Missing means false. True certifies support for all of this section: collection presentation reads/writes, artifact-kind file selection, and artifact-kind saved filters. It is independent of `markdown_reports`, which controls report generation. Keep `workspace_files` for the existing catalog foundation.
+
+New clients send the extended fields only when `workspace_views` is true. Older backends reject unknown JSON fields and can ignore unknown query parameters. Sending an unsupported artifact filter could therefore return unrelated files. Never infer support from an unfiltered successful response or from tags.
+
+```ts
+type ViewPreset = "desk" | "literature" | "notes" | "media-data" |
+  "findings" | "measurements" | "all"
+type CollectionPresentation = {
+  preset: ViewPreset,
+  sort: "created_at" | "updated_at" | "name",
+  order: "asc" | "desc"
+}
+type ArtifactKind = "document" | "dataset" | "image" | "video" | "audio" |
+  "code" | "chart" | "report" | "log" | "environment"
+
+// Additive members, not replacements for the foundation types:
+// Collection: presentation?: CollectionPresentation | null
+// CreateCollection / EditCollection: presentation?: CollectionPresentation | null
+// FileFilter: artifact_kinds?: ArtifactKind[]
+// WorkspaceFile: artifact_kind?: ArtifactKind | null
+```
+
+The extended backend returns `presentation` on each collection, null for existing collections without a saved presentation. The UI resolves null/missing to `{preset:"all",sort:"created_at",order:"desc"}`. For new unsaved built-in views, Notes defaults to `updated_at desc` and all others to `created_at desc`.
+
+`WorkspaceFile.artifact_kind` is the authoritative underlying artifact kind for artifact origins and null for records/notes. A user tag or MIME guess cannot populate it. It is display/filter metadata, not a new scientific resource or editable field.
+
+### 16.2 Presentation mutations
+
+Collection POST accepts optional presentation. Collection PATCH leaves it unchanged when omitted, replaces the complete object when supplied, and clears it when null. Require all three members of a non-null object. Reject unknown members and invalid enums with `422 VALIDATION_FAILED` and JSON Pointer field paths. Empty objects do not mean defaults.
+
+Presentation participates in existing collection revision, ETag, idempotency, archive, and `catalog.changed` behavior. Equal canonical values are no-ops. Updating only presentation changes no file memberships, note content, scientific records, or saved dynamic filters. Clients can resolve `412` using an explicitly reviewed retry against the latest revision.
+
+A saved view is an ordinary collection with filter or explicit membership plus presentation. Its preset is not a second membership rule on the server. The client combines the saved collection's members with its currently selected preset as additional query constraints. **Save view** writes the preset's type constraints into a new dynamic filter explicitly. Changing only a saved presentation later leaves those constraints unchanged.
+
+### 16.3 Artifact-kind selection and cursors
+
+Extend `/files` with repeatable `artifact_kind`. One or more values mean OR within that filter. Other constraints, including tags and collection membership, remain AND. `artifact_kind=image&artifact_kind=video&artifact_kind=dataset` selects all three kinds. It never selects a note tagged images.
+
+Saved `FileFilter.artifact_kinds` expresses the same non-empty set. Validate at most ten entries before deduplication, all from ArtifactKind, with no null or non-string entries. Canonicalize by deduplication and lexical sorting. Omission means no artifact-kind constraint. An empty JSON array is invalid. Invalid query values return `400 INVALID_QUERY`, invalid saved-filter bodies return `422 VALIDATION_FAILED`.
+
+Only artifact-origin catalog entries can match an artifact-kind constraint. Contradictory valid constraints, such as `file_kind=note&artifact_kind=report`, match zero files. They do not reinterpret the request. Query and saved collection artifact-kind constraints intersect as ordinary independent filters.
+
+Query values are validated the same way: at most ten repeated values before deduplication, each an exact `ArtifactKind` (empty or differently cased values return `400 INVALID_QUERY`).
+
+**Exact origin lookup.** `GET /files?origin_type=T&origin_id=I` returns the single file projected from that legacy origin in this project, or an empty page. `origin_id` without `origin_type` returns `400 INVALID_QUERY`; the pair is bound into the cursor. It lets legacy links (for example an artifact ID) resolve to a file without scanning pages. It is a query parameter only and is not accepted in saved `FileFilter` bodies. This lookup is covered by `workspace_views`.
+
+Apply selection before LIMIT and cursor calculation. Bind canonical artifact kinds into cursor state along with project, other filters, sort, and order. Equivalent repeated values in a different order use the same normalized selection. Changed selection with an old cursor is rejected under section 8, not continued over a different dataset. Keep default foundation list order unchanged. Rich views request descending order explicitly.
+
+Examples, valid only after capability rollout:
+
+```text
+GET /files?artifact_kind=report&sort=created_at&order=desc&limit=24
+GET /files?artifact_kind=image&artifact_kind=video&artifact_kind=dataset&sort=created_at&order=desc
+POST /collections
+  {"name":"Motion recordings","filter":{"artifact_kinds":["video"],"status":"active"},
+   "presentation":{"preset":"media-data","sort":"created_at","order":"desc"}}
+PATCH /collections/{id}
+  {"presentation":{"preset":"all","sort":"name","order":"asc"}}
+```
+
+### 16.4 Storage and migration
+
+The current catalog uses SQLite schema version 1 and has no upgrade path for an already-versioned catalog. Changing only a `CREATE TABLE IF NOT EXISTS` statement is insufficient.
+
+Implement a transactional v1 → v2 migration per project catalog, adding nullable `collections.presentation` JSON text and nullable `files.artifact_kind` text. Create an artifact-kind/created-time/ID index for kind-specific browsing. New catalogs initialize the same v2 schema. Set `user_version` only after successful migration. Reopening an upgraded catalog must be a no-op.
+
+Backfill artifact kinds from authoritative artifact records during projection, with a projection-version bump so existing files are revisited even without new project events. Complete backfill before serving kind-filtered requests for that catalog. Preserve file IDs, original dates, content hashes, immutable bytes, note revisions, collection memberships, tags, user relations, and existing collection revisions when presentation is null. Adding selection metadata must not make old material appear newly created.
+
+Projection updates artifact selection metadata only. It never resets saved collection presentation, which is user organization. Keep collection serialization, field whitelists, saved-filter validation, file serialization, filter SQL, counts, and cursor normalization consistent with the migration. Update dynamic collection counts using the same artifact-kind predicate as listings.
+
+Gate capability true on deployment of the complete implementation. A specific project's catalog failure still returns the existing safe retryable 503. No partial migration result or quietly stale classification is served. Rollout deploys backend support before the dependent UI. Rolling back to v1-only application code after migration requires an explicitly compatible release or restoring a verified backup, not an automatic destructive downgrade.
+
+### 16.5 Required verification
+
+Check a new catalog and a populated v1 catalog with notes, revisions, explicit and dynamic collections, and relations. Reopen twice and verify migration idempotency and preserved IDs/content/dates. Simulate migration failure and verify rollback.
+
+Check repeated kinds with reordered/duplicate values, contradictions, invalid values, collection/query intersection, dynamic counts, pagination beyond one page, and changed filters with old cursors. A note tagged reports must never enter the report query.
+
+Check presentation POST/PATCH/null/no-op, ETag conflict, archive rejection, idempotent POST replay, emitted events, and reconnect-driven refresh. Check frontend fallback with the extension capability absent. Record actual results separately when implementation occurs.
+
+### 16.6 Implementation notes
+
+- Catalog `SCHEMA_VERSION` is 2 (`backend/api/stellaris_api/catalog.py`). A new catalog applies the v1 base schema and then every migration in one transaction, so new and upgraded catalogs have the same columns and indexes. A v1 catalog is upgraded in one `BEGIN IMMEDIATE` transaction (`ALTER TABLE files ADD COLUMN artifact_kind`, `ALTER TABLE collections ADD COLUMN presentation`, index `files_artifact_kind (artifact_kind, created_at, id)`, then `user_version = 2`). Any failure rolls back everything and the catalog returns the usual retryable `503`. A catalog with a newer `user_version` is refused, never downgraded.
+- `catalog_projection.PROJECTION_VERSION = 2` forces one projection pass per catalog even without new legacy events. That pass fills missing `artifact_kind` values from the artifact records only. Filling it preserves file ID, `revision`, `created_at`, `updated_at`, hashes, and tags, and emits one bulk file `catalog.changed`. A conflicting non-null kind fails the pass (503) rather than being overwritten. Every catalog route projects before responding, so kind-filtered requests never see a partial backfill.
+- `presentation` is stored as canonical JSON; equality is compared on that canonical form. Projection never writes it.
+- `GET /capabilities` reports `features.workspace_views: true` (`backend/api/stellaris_api/app.py`).
+- Focused checks: `backend/scripts/workspace_views_test.py` passed **48 API checks plus 8 migration fixtures**. Existing collection regression checks passed **78 checks** with limits and worker-backed relations skipped. `workspace_files_test.py` now expects schema 2. See [workspace verification](workspace-verification.md) for the testing context and remaining limits.

@@ -1,5 +1,7 @@
 # Agent A handoff — draft complete, awaiting Agent C foundation
 
+> Historical handoff. The foundation-waiting status and tabbed Research layout below describe the original delivery, not the current runtime. For the next work use the public [Research desk](../research-workspace-spec.md), [Materials views](../materials-views-spec.md), and [Reports](../reports-spec.md) specifications. Their cards, dimensions, responsive layout, and interactions supersede the earlier presentation. Pending shell work includes Reports navigation and shared widget/card controls. Current repository instructions govern model selection and delegation. This notice records no new implementation or verification.
+
 Status: all Agent A deliverables are drafted. They compile against the contract-derived interface in §3 below. They are **not connected to live data** because C's `contracts/`, `lib/queries/` and `providers/` do not exist yet. No version-control changes have been made.
 
 ## 1. Files

@@ -53,5 +53,68 @@
 .preview :global(img),.preview :global(video) { max-width:100%; height:auto; }
 .preview :global(pre) { overflow:auto; max-height:420px; background:var(--color-background); padding:12px; }
 .conflict { padding:12px; border:1px solid var(--color-warning); background:#fff7e7; }
+/* Curated views (docs/materials-views-spec.md). */
+.viewsPage { max-width:1440px; margin:0 auto; display:grid; gap:16px; align-content:start; }
+.viewsPage > .heading { padding-bottom:16px; }
+.viewsPage > .toolbar { padding:0; border-bottom:0; }
+.eyebrow { margin:0 0 4px; color:var(--color-text-muted); font-size:13px; }
+.viewTabs { display:flex; flex-wrap:wrap; gap:4px; border-bottom:1px solid var(--color-border); }
+.page .viewTabs button { border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; padding:8px 12px; min-height:40px; }
+.page .viewTabs button[aria-current="page"] { border-bottom-color:var(--color-accent); font-weight:650; }
+.viewSelect { display:grid; gap:5px; color:var(--color-text-muted); font-size:13px; max-width:360px; }
+.collections > summary, .tools > summary { cursor:pointer; padding:6px 0; font-weight:600; }
+.collections { border-bottom:1px solid var(--color-border); padding-bottom:8px; }
+.plainList { list-style:none; margin:8px 0; padding:0; display:grid; gap:10px; }
+.plainList > li { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.chip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--color-border); background:var(--color-background); padding:2px 4px 2px 10px; font-size:13px; }
+.page .chip button { min-height:28px; padding:2px 8px; border-color:transparent; }
+.sortField { display:grid; gap:5px; color:var(--color-text-muted); font-size:13px; }
+.unavailable { padding:16px; border:1px solid var(--color-border); background:var(--color-surface); }
+.browse { display:block; }
+.browseWithInspector { display:grid; grid-template-columns:minmax(640px,1fr) 360px; gap:16px; align-items:start; }
+.browseMain { container-type:inline-size; min-width:0; }
+.browseMain .items { max-height:none; overflow:visible; }
+.inspectorColumn { position:sticky; top:0; max-height:calc(100dvh - 96px); overflow:auto; min-width:0; }
+.desk { display:grid; gap:16px; }
+.deskColumns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start; }
+.widget { border:1px solid var(--color-border); background:var(--color-surface); padding:16px; min-width:0; display:grid; gap:12px; align-content:start; }
+.widgetHeader { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+.widgetHeader h2 { margin:0; font-size:20px; }
+.widgetFooter, .shortcutRow, .loadMore { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.loadMore { justify-content:center; }
+.shortcutRow a { display:inline-flex; align-items:center; min-height:var(--control-height); padding:7px 11px; border:1px solid var(--color-control-border); border-radius:var(--radius-control); color:var(--color-text); text-decoration:none; font-size:14px; }
+.shortcutList { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
+.stack { display:grid; gap:12px; }
+.cardGrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap:12px; align-items:start; }
+.group h3 { font-size:16px; margin:8px 0; }
+.card { border:1px solid var(--color-border); background:var(--color-surface); padding:12px; min-width:0; display:grid; gap:6px; align-content:start; overflow-wrap:anywhere; }
+.card:hover { border-color:var(--color-accent); }
+.card[aria-current="true"] { background:var(--color-selection); }
+.card p { margin:0; }
+.cardTitle { margin:0; font-size:16px; font-weight:600; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.page button.titleButton, .inspector button.titleButton { border:0; padding:0; min-height:0; background:transparent; font:inherit; text-align:left; color:inherit; cursor:pointer; }
+.page button.titleButton:hover { background:transparent; text-decoration:underline; }
+.cardBadges { display:flex; flex-wrap:wrap; gap:5px; }
+.badge { border:1px solid var(--color-border); padding:1px 6px; font-size:12px; color:var(--color-text-muted); background:var(--color-background); }
+.clamp3, .clamp2 { display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; }
+.clamp3 { -webkit-line-clamp:3; }
+.clamp2 { -webkit-line-clamp:2; }
+.cardError { font-size:13px; color:var(--color-text-muted); }
+.cardSkeleton { min-height:48px; background:var(--color-background); color:var(--color-text-muted); font-size:13px; padding:8px; }
+.thumb { display:block; max-width:100%; max-height:200px; object-fit:contain; margin:0 auto; }
+.placeholder { display:flex; align-items:center; justify-content:center; min-height:96px; background:var(--color-background); color:var(--color-text-muted); font-size:14px; }
+.evidence > summary { cursor:pointer; font-size:14px; }
+.evidence ul, .sample { margin:6px 0; padding-left:18px; font-size:14px; }
+.bulkBar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px; background:var(--color-background); }
+.saveView { border:1px solid var(--color-border); background:var(--color-surface); padding:16px; max-width:640px; }
+.saveView h2 { margin:0; font-size:18px; }
+.contextBox { padding:12px 16px; border:1px solid var(--color-border); border-bottom:0; background:var(--color-surface); }
+.contextBox h3 { margin:0 0 8px; font-size:15px; }
+.dl { display:grid; grid-template-columns:minmax(90px,.35fr) minmax(0,1fr); gap:6px 12px; margin:0; font-size:14px; }
+.dl dt { color:var(--color-text-muted); }
+.dl dd { margin:0; overflow-wrap:anywhere; }
+.gallery { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
+@container (max-width: 799px) { .deskColumns { grid-template-columns:minmax(0,1fr); } }
 @container (max-width: 720px) { .layout { grid-template-columns:minmax(0,1fr); } .items { max-height:45vh; } }
 @container (max-width: 540px) { .heading { display:block; } .heading>.actions { margin-top:12px; } }
