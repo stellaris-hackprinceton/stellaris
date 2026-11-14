@@ -72,8 +72,18 @@ def image_info(runtime, config):
     except DockerException as exc:
         log.warning("Worker image lookup failed: %s", exc)
         return None
+    labels = ((image.attrs.get("Config") or {}).get("Labels") or {})
+    runtimes = [name for name in (labels.get("stellaris.runtimes", "").split(","))
+                if name in ("python", "javascript", "shell")]
     return {"reference": config.worker_image, "image_id": image.id,
-            "repo_digests": image.attrs.get("RepoDigests") or [], "created": image.attrs.get("Created")}
+            "repo_digests": image.attrs.get("RepoDigests") or [], "created": image.attrs.get("Created"),
+            "runtimes": runtimes}
+
+
+def available_runtimes(runtime, config):
+    """Runtime names guaranteed by the exact configured image metadata."""
+    info = image_info(runtime, config)
+    return info["runtimes"] if info else []
 
 
 # -- bounded tar reading ----------------------------------------------------------------

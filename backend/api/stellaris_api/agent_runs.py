@@ -25,6 +25,7 @@ MAX_AGENT_SECONDS = 480
 MAX_PAPER_CONTEXT_BYTES = 4 * 1024 * 1024
 MAX_AGENT_INGESTIONS = 2
 MAX_AGENT_RETRIEVALS = 3
+MAX_AGENT_TOOL_REQUESTS = 100
 DEFAULT_MODEL_PROVIDER = "bedrock"
 DEFAULT_AWS_REGION = "us-east-1"
 DEFAULT_BEDROCK_MODEL_ID = "us.amazon.nova-2-lite-v1:0"
@@ -105,7 +106,9 @@ def _save_delta(ctx, text, index):
         message["updated_at"] = now_ts()
         ctx.conn.execute("UPDATE messages SET doc = ? WHERE id = ?", (dumps(message), message["id"]))
         record_event(ctx.conn, ctx.project_id, "message.delta",
-                     {"message_id": message["id"], "chunk_index": index, "text": text}, run_id=ctx.run_id)
+                     {"message_id": message["id"], "chunk_index": index, "text": text,
+                      "chat_generation": message.get("chat_generation", ctx.snapshot.get("chat_generation", 0))},
+                     run_id=ctx.run_id)
 
 
 def _finish_message(ctx, *, status, claim_ids=None, extra_text=""):
@@ -140,7 +143,7 @@ def _apply_proposal(ctx, event, claim_ids):
                 return {"source_id": source["id"], "title": source["title"]}
             if kind == "experiment":
                 allowed = set(experiments.FIELDS)
-                if set(payload) != allowed:
+                if not (allowed - {"implementation"}).issubset(payload) or set(payload) - allowed:
                     raise RunFailure("INVALID_AGENT_OUTPUT", "The experiment proposal was incomplete.")
                 exp = experiments.create_experiment(ctx.conn, ctx.project_id, payload)
                 return {"experiment_id": exp["id"], "revision": exp["revision"]}
@@ -181,6 +184,78 @@ def _apply_proposal(ctx, event, claim_ids):
         raise RunFailure("INVALID_AGENT_OUTPUT", f"Backend rejected the {kind or 'resource'} proposal: "
                          f"{detail or exc.message}") from exc
     raise RunFailure("INVALID_AGENT_OUTPUT", "The agent proposed an unsupported resource type.")
+
+
+def _handle_agent_tool(ctx, name, payload, claim_ids, cancelled=None):
+    """Run a project-scoped tool request in the trusted API process."""
+    if not isinstance(payload, dict):
+        raise RunFailure("INVALID_AGENT_OUTPUT", "The agent tool payload must be an object.")
+    if not hasattr(ctx, "_agent_experiment_revisions"):
+        ctx._agent_experiment_revisions = {e["id"]: e["revision"] for e in ctx.snapshot.get("experiments", [])}
+    revisions = ctx._agent_experiment_revisions
+    try:
+        if name == "propose_experiment":
+            from types import SimpleNamespace
+            result = _apply_proposal(SimpleNamespace(conn=ctx.conn, project_id=ctx.project_id),
+                                     {"kind": "experiment", "payload": payload}, claim_ids)
+            revisions[result["experiment_id"]] = result["revision"]
+        elif name == "save_experiment_implementation":
+            from . import experiments
+            allowed = {"experiment_id", "runtime", "filename", "source"}
+            if set(payload) != allowed or any(not isinstance(payload[k], str) for k in allowed):
+                raise RunFailure("INVALID_AGENT_OUTPUT", "The implementation request was malformed.")
+            expected = revisions.get(payload["experiment_id"])
+            if expected is None:
+                raise RunFailure("RESOURCE_NOT_FOUND", "The experiment was not supplied in this agent's context.")
+            updated, artifact = experiments.publish_implementation(
+                ctx.conn, ctx.runtime, ctx.config, ctx.project_id, payload["experiment_id"],
+                runtime=payload["runtime"], filename=payload["filename"], source=payload["source"],
+                expected_revision=expected)
+            revisions[updated["id"]] = updated["revision"]
+            result = {"experiment_id": updated["id"], "revision": updated["revision"],
+                      "code_artifact_id": artifact["id"], "filename": artifact["filename"]}
+        elif name == "execute_analysis":
+            from . import analysis
+            allowed = {"experiment_id", "code_artifact_id", "input_artifact_ids"}
+            if set(payload) != allowed or not isinstance(payload["input_artifact_ids"], list):
+                raise RunFailure("INVALID_AGENT_OUTPUT", "The analysis execution request was malformed.")
+            expected = revisions.get(payload["experiment_id"])
+            if expected is None:
+                raise RunFailure("RESOURCE_NOT_FOUND", "The experiment was not supplied in this agent's context.")
+            result = analysis.execute_saved_analysis(
+                ctx, payload["experiment_id"], payload["code_artifact_id"],
+                input_artifact_ids=payload["input_artifact_ids"], cancelled=cancelled, expected_revision=expected)
+        elif name in {"list_materials", "organize_materials"}:
+            from . import agent_management
+            result = agent_management.handle_tool(ctx, name, payload)
+        else:
+            raise RunFailure("INVALID_AGENT_OUTPUT", "The agent requested an unsupported tool.")
+        return {"ok": True, "result": result}
+    except RunFailure as exc:
+        if exc.code == "CANCELLED" or ctx.cancel_requested():
+            raise
+        return {"ok": False, "error": f"{exc.code}: {exc.message}"}
+    except ApiError as exc:
+        if ctx.cancel_requested():
+            raise RunFailure("CANCELLED", "The agent run was cancelled.") from exc
+        return {"ok": False, "error": f"{exc.code}: {exc.message}"}
+    except ValueError as exc:
+        if ctx.cancel_requested():
+            raise RunFailure("CANCELLED", "The agent run was cancelled.") from exc
+        return {"ok": False, "error": str(exc)[:1000]}
+    except Exception as exc:
+        log.warning("Agent tool %s failed for %s (%s)", name, ctx.run_id, type(exc).__name__)
+        return {"ok": False, "error": "The backend could not complete this tool request."}
+
+
+def _deliver_agent_tool_reply(container, run_id, request_id, reply):
+    if (not re.fullmatch(re.escape(run_id) + r"-[1-9][0-9]{0,3}", request_id)
+            or not isinstance(reply, dict) or set(reply) - {"ok", "result", "error"}):
+        raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid tool request.")
+    raw = dumps(reply).encode("utf-8")
+    if len(raw) > 1_000_000:
+        raw = dumps({"ok": False, "error": "The backend tool response exceeded its size limit."}).encode("utf-8")
+    _write_runtime_file(container, run_id, f"/tmp/stellaris-agent-{request_id}-reply.json", raw)
 
 
 def _retrieval_record(event):
@@ -299,15 +374,17 @@ def _terminate_agent(container, run_id):
     _stop_agent(container, run_id, 9)
 
 
-def _cleanup_agent_files(container, run_id):
+def _cleanup_agent_files(container, run_id, tool_request_ids=()):
     if not re.fullmatch(r"run_[0-9a-f]{32}", run_id):
         return
     paths = [f"/tmp/stellaris-agent-{run_id}.json", f"/tmp/stellaris-agent-{run_id}.pid"]
     paths += [f"/tmp/stellaris-agent-{run_id}-paper-{i}.json{suffix}"
               for i in range(MAX_AGENT_INGESTIONS) for suffix in ("", ".part")]
-    code = "import os,sys; [os.path.exists(p) and os.unlink(p) for p in sys.argv[1:]]"
+    paths += [f"/tmp/stellaris-agent-{request_id}-reply.json" for request_id in tool_request_ids]
+    code = ("import glob,os,sys; [os.path.exists(p) and os.unlink(p) for p in sys.argv[1:-1]]; "
+            "[os.unlink(p) for p in glob.glob('/tmp/stellaris-agent-'+sys.argv[-1]+'-*-reply.json')]")
     try:
-        container.exec_run(["python", "-c", code, *paths], stdout=False, stderr=False)
+        container.exec_run(["python", "-c", code, *paths, run_id], stdout=False, stderr=False)
     except Exception:
         log.warning("Could not clean temporary project agent files for %s", run_id)
 
@@ -380,6 +457,7 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id)
     watch = threading.Thread(target=watchdog, name=f"stellaris-agent-watch-{ctx.run_id}", daemon=True)
     watch.start()
     saw_complete = False
+    tool_request_ids = []
     try:
         for stdout, stderr in output:
             if ctx.cancel_requested():
@@ -414,6 +492,26 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id)
                         raise RunFailure("AGENT_OUTPUT_TOO_LARGE", "The research agent response exceeded its size limit.")
                     _save_delta(ctx, text, delta_index)
                     delta_index += 1
+                elif event.get("type") == "tool_request":
+                    if set(event) != {"type", "request_id", "name", "payload"}:
+                        raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid tool request.")
+                    request_id, name, payload = event["request_id"], event["name"], event["payload"]
+                    expected = f"{ctx.run_id}-{len(tool_request_ids) + 1}"
+                    if request_id != expected or len(tool_request_ids) >= MAX_AGENT_TOOL_REQUESTS or not isinstance(name, str):
+                        raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid tool request.")
+                    tool_request_ids.append(request_id)
+                    reply = _handle_agent_tool(ctx, name, payload, claim_ids,
+                                               cancelled=lambda: ctx.cancel_requested() or timed_out.is_set())
+                    if ctx.cancel_requested():
+                        raise RunFailure("CANCELLED", "The agent run was cancelled.")
+                    if timed_out.is_set():
+                        raise RunFailure("AGENT_TIMEOUT", "The research agent exceeded its time limit.", True)
+                    _deliver_agent_tool_reply(container, ctx.run_id, request_id, reply)
+                    if reply.get("ok") and name == "propose_experiment":
+                        agent_metadata.setdefault("resource_outputs", []).append({"kind": "experiment", **reply["result"]})
+                    elif reply.get("ok") and name in {"save_experiment_implementation", "execute_analysis"}:
+                        agent_metadata.setdefault("execution_outputs", []).append({"tool": name, **reply["result"]})
+                    ctx.log.system(f"Agent tool {name}: {'completed' if reply.get('ok') else 'returned an error'}.")
                 elif event.get("type") == "proposal":
                     if set(event) != {"type", "kind", "payload"}:
                         raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid proposal event.")
@@ -486,7 +584,7 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id)
         watch.join(timeout=1)
         if not saw_complete or ctx.cancel_requested() or timed_out.is_set():
             _terminate_agent(container, ctx.run_id)
-        _cleanup_agent_files(container, ctx.run_id)
+        _cleanup_agent_files(container, ctx.run_id, tool_request_ids)
 
 
 def handle_agent_run(ctx):

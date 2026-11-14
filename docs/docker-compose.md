@@ -92,3 +92,10 @@ The Dockerfile retains its production `runtime` stage as the default for direct 
 ```sh
 docker build -f frontend/Dockerfile --target runtime -t stellaris-frontend:production .
 ```
+
+## Archived runtime cleanup
+
+Startup reconciliation restores active project containers against their existing volumes.
+It leaves archived projects out of automatic recreation, so explicitly removed old test
+containers stay removed after restart. Existing archived containers are not automatically
+stopped. Container cleanup preserves named workspace volumes and recorded evidence.

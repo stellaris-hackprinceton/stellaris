@@ -18,7 +18,7 @@ import os
 
 from flask import Blueprint, current_app, g, request
 
-from . import idempotency
+from . import idempotency, worker
 from .errors import ApiError, validation_error
 from .events import record_event
 from .http import (
@@ -44,9 +44,10 @@ TRANSITIONS = {
 PIPELINES = {
     "bouncing_ball_v1": {"version": "1.0.0", "source_file": "bouncing_ball_v1.py"},
     "python_analysis_v1": {"version": "1.0.0", "source_file": None},
+    "script_analysis_v1": {"version": "1.0.0", "source_file": None},
 }
 ANALYSIS_FIELDS = {"kind", "experiment_id", "experiment_revision", "input_artifact_ids", "pipeline",
-                   "code_artifact_id", "parameters", "execution"}
+                   "code_artifact_id", "parameters", "execution", "runtime"}
 RESOURCE_FIELDS = {"partition", "wall_time_s", "memory_mb", "cpus", "gpus"}
 REPORT_FIELDS = {"kind", "experiment_id", "evidence_run_ids", "source_ids", "title", "format"}
 BOUNCING_PARAMETERS = {"start_time_s", "end_time_s", "object_hint"}
@@ -209,10 +210,11 @@ def _validate_structure(body: dict) -> str:
         v.string(body, "experiment_id", min_len=1, max_len=100)
         if not is_int(body.get("experiment_revision")) or body["experiment_revision"] < 1:
             v.error("/experiment_revision", "experiment_revision must be a positive integer.")
+        pipeline = v.enum(body, "pipeline", tuple(PIPELINES))
         ids = v.strings(body, "input_artifact_ids", max_items=50, min_len=1, max_len=100, unique=True)
-        if "input_artifact_ids" in body and isinstance(body["input_artifact_ids"], list) and not ids:
+        if pipeline != "script_analysis_v1" and "input_artifact_ids" in body and isinstance(body["input_artifact_ids"], list) and not ids:
             v.error("/input_artifact_ids", "At least one input artifact is required.")
-        v.enum(body, "pipeline", tuple(PIPELINES))
+        v.enum(body, "runtime", ("python", "javascript", "shell"), required=False)
         if "code_artifact_id" not in body:
             v.error("/code_artifact_id", "code_artifact_id is required (string or null).")
         else:
@@ -282,7 +284,7 @@ def _artifact_snapshot(a: dict) -> dict:
                               "parent_artifact_ids", "metadata", "created_at")}
 
 
-def _analysis_snapshot(conn, config, project_id: str, body: dict) -> dict:
+def _analysis_snapshot(conn, config, project_id: str, body: dict, *, manager=None) -> dict:
     experiment = require_one(conn, "experiments", project_id, body["experiment_id"], "/experiment_id")
     if experiment["revision"] != body["experiment_revision"]:
         raise ApiError(409, "EXPERIMENT_REVISION_CONFLICT",
@@ -294,6 +296,9 @@ def _analysis_snapshot(conn, config, project_id: str, body: dict) -> dict:
         raise validation_error(errors)
     inputs = require_artifacts(conn, project_id, body["input_artifact_ids"], "/input_artifact_ids")
     pipeline, params = body["pipeline"], body["parameters"]
+    runtime_name = body.get("runtime", "python")
+    if pipeline in ("bouncing_ball_v1", "python_analysis_v1") and runtime_name != "python":
+        raise validation_error([{"path": "/runtime", "message": "Legacy pipelines require runtime 'python'."}])
     cal = experiment["calibration"]
     conversion = calibration_conversion(cal)
     code = None
@@ -341,7 +346,7 @@ def _analysis_snapshot(conn, config, project_id: str, body: dict) -> dict:
                 pipeline_source = fh.read()
         except OSError:
             raise ApiError(409, "FEATURE_UNAVAILABLE", "The bouncing_ball_v1 pipeline is not installed.")
-    else:
+    elif pipeline == "python_analysis_v1":
         code_id = body["code_artifact_id"]
         if code_id is None:
             raise validation_error([{"path": "/code_artifact_id", "message": "python_analysis_v1 requires a Python code artifact."}])
@@ -350,9 +355,25 @@ def _analysis_snapshot(conn, config, project_id: str, body: dict) -> dict:
             raise validation_error([{"path": "/code_artifact_id", "message": "code_artifact_id must be a text/x-python code artifact."}])
         code = _artifact_snapshot(code)
 
+    else:  # script_analysis_v1
+        if (body.get("execution") or {}).get("backend", "isolated_python") != "isolated_python":
+            raise validation_error([{"path": "/execution/backend", "message": "script_analysis_v1 currently supports isolated workers only."}])
+        if body["code_artifact_id"] is None:
+            raise validation_error([{"path": "/code_artifact_id", "message": "script_analysis_v1 requires a saved code artifact."}])
+        code = require_one(conn, "artifacts", project_id, body["code_artifact_id"], "/code_artifact_id")
+        expected_mimes = {"python": {"text/x-python", "text/plain"},
+                          "javascript": {"text/javascript", "application/javascript", "text/plain"},
+                          "shell": {"text/x-shellscript", "text/plain"}}[runtime_name]
+        if code["kind"] != "code" or code["mime_type"] not in expected_mimes:
+            raise validation_error([{"path": "/code_artifact_id", "message": "code artifact MIME type does not match runtime."}])
+        code = _artifact_snapshot(code)
+        supported = worker.available_runtimes((manager or _manager()).runtime, config)
+        if runtime_name not in supported:
+            raise ApiError(409, "FEATURE_UNAVAILABLE", f"The configured worker image does not advertise runtime {runtime_name!r}.")
+
     data_inputs = [_artifact_snapshot(inputs[aid]) for aid in body["input_artifact_ids"]]
     return {
-        "version": 1, "kind": "analysis",
+        "version": 1, "kind": "analysis", "runtime": runtime_name,
         "project": {"id": project_id, "research_question": load_visible(conn, project_id)["research_question"]},
         "experiment": experiment,
         "inputs": data_inputs,
@@ -366,7 +387,7 @@ def _analysis_snapshot(conn, config, project_id: str, body: dict) -> dict:
         "calibration_assumptions": assumptions,
         "sources": [],
         "simulated": any(a["origin"] == "simulated" for a in data_inputs),
-        "execution": resolve_execution(body.get("execution"), config, _manager().cluster),
+        "execution": resolve_execution(body.get("execution"), config, (manager or _manager()).cluster),
         "limits": _limits(config),
         "accepted_at": now_ts(),
     }
@@ -498,6 +519,7 @@ def create_run(project_id):
                          "experiment_revision": body["experiment_revision"],
                          "input_artifact_ids": list(body["input_artifact_ids"]), "pipeline": body["pipeline"],
                          "code_artifact_id": body["code_artifact_id"], "parameters": snapshot["parameters"],
+                         "runtime": snapshot["runtime"],
                          "execution": {k: v for k, v in snapshot["execution"].items() if k != "cluster"}}
         else:
             snapshot = _report_snapshot(conn, project_id, body)

@@ -3,6 +3,8 @@
 # version inventory; the executed pipeline/script is copied into /input for each run.
 FROM python:3.12-slim
 
+LABEL stellaris.runtimes="python,javascript,shell"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -15,7 +17,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # libglib2.0-0: runtime dependency of OpenCV's headless wheel on slim images.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libglib2.0-0 \
+    && apt-get install -y --no-install-recommends libglib2.0-0 nodejs bash \
     && rm -rf /var/lib/apt/lists/*
 
 COPY worker/requirements.txt /opt/stellaris/requirements.txt

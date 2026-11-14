@@ -27,6 +27,7 @@ import re
 import shutil
 import tarfile
 import tempfile
+import threading
 import time
 
 from docker.errors import DockerException
@@ -453,6 +454,7 @@ def _build_inputs(ctx, work_dir, code_doc, code_bytes):
     manifest = {
         "schema": "stellaris.worker_manifest.v1",
         "pipeline": snap["pipeline"]["name"], "pipeline_version": snap["pipeline"]["version"],
+        "runtime": snap.get("runtime", "python"),
         "run_id": ctx.run_id,
         "experiment": {k: snap["experiment"][k] for k in ("id", "revision", "title", "hypothesis", "method",
                                                           "protocol_markdown", "variables", "success_criteria",
@@ -553,11 +555,13 @@ def _provenance(ctx, *, outcome, code_doc, outputs, log_staged, status_note, wor
         "accepted_snapshot": {
             "accepted_at": snap["accepted_at"], "input": ctx.input,
             "experiment": exp, "inputs": snap["inputs"], "parameters": snap["parameters"],
+            "runtime": snap.get("runtime", "python"),
             "selected_sources": snap["sources"], "execution_limits": snap["limits"],
             "simulated_inputs": snap["simulated"],
         },
         "code": {"artifact_id": code_doc["id"], "sha256": code_doc["sha256"], "filename": code_doc["filename"],
-                 "pipeline": snap["pipeline"]["name"], "pipeline_version": snap["pipeline"]["version"]},
+                 "pipeline": snap["pipeline"]["name"], "pipeline_version": snap["pipeline"]["version"],
+                 "runtime": snap.get("runtime", "python")},
         "execution": execution,
         "environment": outcome.versions if outcome else None,
         "calibration": {"mode": exp["calibration"]["mode"], "assumptions": exp["calibration"]["assumptions"]
@@ -656,6 +660,86 @@ def handle_analysis(ctx):
         shutil.rmtree(work_dir, ignore_errors=True)
 
 
+def execute_saved_analysis(ctx, experiment_id, code_artifact_id, *, input_artifact_ids=None, parameters=None, runtime=None,
+                           cancelled=None, expected_revision=None):
+    """Create and synchronously execute a normal immutable script run from an agent action.
+
+    The caller's agent run already holds an executor slot, so execute_now avoids queue deadlock.
+    Returns only persisted run/output identifiers and bounded text feedback.
+    """
+    from . import runs
+    from .db import transaction
+    from .projects import load_writable
+
+    row = ctx.conn.execute("SELECT doc FROM experiments WHERE id = ? AND project_id = ?",
+                           (experiment_id, ctx.project_id)).fetchone()
+    if row is None:
+        raise ApiError(404, "RESOURCE_NOT_FOUND", "Resource not found.")
+    experiment = json.loads(row["doc"])
+    if expected_revision is not None and (not is_int(expected_revision) or expected_revision < 1):
+        raise ApiError(422, "VALIDATION_FAILED", "expected_revision must be a positive integer.")
+    target_revision = experiment["revision"] if expected_revision is None else expected_revision
+    if experiment["revision"] != target_revision:
+        raise ApiError(412, "REVISION_CONFLICT", "The experiment changed since the agent loaded it. Reload and reconcile edits.",
+                       details={"current_revision": experiment["revision"]})
+    implementation = experiment.get("implementation") or {}
+    code_artifact_id = code_artifact_id or implementation.get("code_artifact_id")
+    runtime = runtime or implementation.get("runtime", "python")
+    input_artifact_ids = list(experiment["input_artifact_ids"] if input_artifact_ids is None else input_artifact_ids)
+    body = {"kind": "analysis", "experiment_id": experiment_id, "experiment_revision": experiment["revision"],
+            "input_artifact_ids": input_artifact_ids, "pipeline": "script_analysis_v1",
+            "code_artifact_id": code_artifact_id, "runtime": runtime, "parameters": parameters or {},
+            "execution": {"backend": "isolated_python"}}
+    try:
+        snapshot = runs._analysis_snapshot(ctx.conn, ctx.config, ctx.project_id, body, manager=ctx.manager)
+    except ApiError as exc:
+        if exc.code == "EXPERIMENT_REVISION_CONFLICT":
+            raise ApiError(412, "REVISION_CONFLICT", "The experiment changed since the agent loaded it. Reload and reconcile edits.",
+                           details={"current_revision": experiment["revision"]}) from exc
+        raise
+    run_input = {"kind": "analysis", "experiment_id": experiment_id, "experiment_revision": experiment["revision"],
+                 "input_artifact_ids": input_artifact_ids, "pipeline": "script_analysis_v1",
+                 "code_artifact_id": code_artifact_id, "runtime": runtime, "parameters": snapshot["parameters"],
+                 "execution": {"backend": "isolated_python"}}
+    with transaction(ctx.conn):
+        load_writable(ctx.conn, ctx.project_id)
+        current_row = ctx.conn.execute("SELECT doc FROM experiments WHERE id = ? AND project_id = ?",
+                                       (experiment_id, ctx.project_id)).fetchone()
+        if current_row is None:
+            raise ApiError(404, "RESOURCE_NOT_FOUND", "Resource not found.")
+        current_experiment = json.loads(current_row["doc"])
+        if current_experiment["revision"] != target_revision:
+            raise ApiError(412, "REVISION_CONFLICT", "The experiment changed before the analysis run was accepted.",
+                           details={"current_revision": current_experiment["revision"]})
+        run = runs.insert_run(ctx.conn, ctx.project_id, run_input, snapshot, experiment_id=experiment_id,
+                              config=ctx.config)
+    finished = threading.Event()
+
+    def cancel_child_with_parent():
+        while not finished.wait(0.1):
+            if (cancelled or ctx.cancel_requested)():
+                ctx.manager.request_cancel(run["id"])
+                return
+
+    cancel_watcher = threading.Thread(target=cancel_child_with_parent,
+                                      name=f"cancel-child-{run['id'][-8:]}", daemon=True)
+    cancel_watcher.start()
+    try:
+        ctx.manager.execute_now(run["id"])
+    finally:
+        finished.set()
+        cancel_watcher.join(timeout=1)
+        with ctx.manager._lock:
+            ctx.manager._cancel_events.pop(run["id"], None)
+    saved = runs.load_run_row(ctx.conn, ctx.project_id, run["id"])
+    public = json.loads(saved["doc"])
+    log_text = "".join(json.loads(item["doc"])["text"] for item in ctx.conn.execute(
+        "SELECT doc FROM run_logs WHERE run_id = ? ORDER BY sequence", (run["id"],)).fetchall())
+    return {"run_id": run["id"], "status": public["status"],
+            "output_artifact_ids": public["output_artifact_ids"], "error": public["error"],
+            "result_summary": public["result_summary"], "log": log_text[-12_000:]}
+
+
 def _run_analysis(ctx, snap, pipeline, work_dir, state):
     ctx.progress("preparing inputs", 0.02, "Publishing executed code and verifying inputs.", force=True)
     existing = ctx.conn.execute("SELECT doc FROM artifacts WHERE run_id = ? AND kind = 'code' ORDER BY created_at",
@@ -689,18 +773,19 @@ def _run_analysis(ctx, snap, pipeline, work_dir, state):
         ctx.log.system(f"Slurm job finished: {outcome.status} (exit code {outcome.exit_code}, "
                        f"{outcome.wall_time_s} s)." + (f" {outcome.message}" if outcome.message else ""))
     else:
-        outcome = _run_local(ctx, pipeline, tar_path, code_doc, work_dir)
+        outcome = _run_local(ctx, pipeline, tar_path, code_doc, work_dir, snap.get("runtime", "python"))
         state["outcome"] = outcome
     _after_execution(ctx, snap, pipeline, work_dir, code_doc, outcome, input_row_counts)
 
 
-def _run_local(ctx, pipeline, tar_path, code_doc, work_dir):
+def _run_local(ctx, pipeline, tar_path, code_doc, work_dir, runtime_name="python"):
     ctx.progress("running isolated worker", 0.1, "Executing in an isolated container.", force=True)
     ctx.log.system(f"Starting isolated worker for {pipeline} (network none, read-only inputs).")
     try:
+        executable = {"python": ["python", "-I", "-B"], "javascript": ["node"], "shell": ["bash"]}[runtime_name]
         outcome = worker.run_worker(
             ctx.runtime, ctx.config, project_id=ctx.project_id, run_id=ctx.run_id, input_tar=tar_path,
-            argv=["python", "-I", "-B", f"/input/artifacts/{code_doc['id']}"], work_dir=work_dir,
+            argv=[*executable, f"/input/artifacts/{code_doc['id']}"], work_dir=work_dir,
             on_output=lambda stream, data: (ctx.log.write(stream, data),
                                             ctx.progress("running isolated worker", None, "Worker is running.")),
             cancel_requested=ctx.cancel_requested)
@@ -729,10 +814,24 @@ def _after_execution(ctx, snap, pipeline, work_dir, code_doc, outcome, input_row
             raise InvalidOutput(["/output/result.json is missing" + (f" (it is a {kind})" if kind else "")])
         with open(outcome.files["result.json"], "rb") as fh:
             raw = fh.read(MAX_RESULT_BYTES + 1)
-        input_ids = {a["id"] for a in snap["inputs"]} | {code_doc["id"]}
+        input_ids = {a["id"] for a in snap["inputs"]}
+        if pipeline != "script_analysis_v1":  # Preserve legacy code-reference behavior.
+            input_ids.add(code_doc["id"])
         result = validate_result(raw, outcome.files, outcome.rejected, input_ids=input_ids,
                                  calibration_mode=snap["experiment"]["calibration"]["mode"],
                                  simulated=snap["simulated"], source_ids={s["id"] for s in snap["sources"]})
+        if (pipeline == "script_analysis_v1" and not snap["inputs"]
+                and (any(row.get("data_origin") == "observed" for row in result["measurements"])
+                     or any(row.get("kind") == "observation" for row in result["claims"]))):
+            raise InvalidOutput(["script_analysis_v1 cannot publish observations without declared input artifacts"])
+        if pipeline == "script_analysis_v1":
+            unsupported_inferences = [claim["local_key"] for claim in result["claims"]
+                                      if claim["kind"] == "inference" and
+                                      (not (claim["evidence"] or claim["measurement_keys"] or claim["citations"])
+                                       or not any(value.strip() for value in claim["assumptions"]))]
+            if unsupported_inferences:
+                raise InvalidOutput(["inference claims require evidence, measurements, or citations and at least one assumption: "
+                                     + ", ".join(unsupported_inferences[:10])])
     except InvalidOutput as exc:
         for line in exc.errors[:50]:
             ctx.log.system(f"invalid output: {line}")

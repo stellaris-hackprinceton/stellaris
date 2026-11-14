@@ -2,6 +2,8 @@
 
 import json
 import platform
+import shutil
+import subprocess
 import sys
 from importlib import metadata
 
@@ -14,7 +16,17 @@ info = {
     "implementation": platform.python_implementation(),
     "machine": platform.machine(),
     "packages": packages,
+    "runtimes": {"python": sys.version.split()[0]},
 }
+for name, command in (("javascript", "node"), ("shell", "bash")):
+    executable = shutil.which(command)
+    if executable:
+        try:
+            result = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=5,
+                                    check=False, env={"PATH": "/usr/bin:/bin"})
+            info["runtimes"][name] = (result.stdout or result.stderr).strip()[:200]
+        except (OSError, subprocess.TimeoutExpired):
+            info["runtimes"][name] = "version unavailable"
 try:
     import av
     import cv2

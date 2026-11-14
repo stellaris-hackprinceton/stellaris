@@ -7,7 +7,7 @@ import uuid
 
 from flask import Flask, g, request
 
-from . import agent_runs, analysis, approvals, artifacts, catalog, chat, db, experiments, file_collections, files, hpc, idempotency, papers, reports, research, runs, worker
+from . import agent_management, agent_runs, analysis, approvals, artifacts, catalog, chat, db, experiments, file_collections, files, hpc, idempotency, papers, reports, research, runs, worker
 from .config import load_config
 from .errors import ApiError, register_error_handlers
 from .executor import RunManager
@@ -30,6 +30,7 @@ def create_app(config=None) -> Flask:
     terminal_conn = db.connect(config.db_path)
     try:
         init_terminal_schema(terminal_conn)
+        agent_management.init_schema(terminal_conn)
     finally:
         terminal_conn.close()
 
@@ -59,7 +60,7 @@ def create_app(config=None) -> Flask:
     app.extensions["stellaris_runs"] = manager
 
     register_error_handlers(app)
-    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp, files.bp, file_collections.bp, approvals.bp):
+    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp, files.bp, file_collections.bp, approvals.bp, agent_management.bp):
         app.register_blueprint(blueprint)
     app.register_blueprint(terminal_blueprint(terminal_manager))
     _register_guards(app, config)
@@ -147,6 +148,7 @@ def _register_system_routes(app, config, runtime, manager):
         # available". Video analysis (bouncing_ball_v1) and isolated Python execution need the
         # worker image; Markdown reports run in the API (they still need evidence runs).
         workers = manager.worker_available()
+        available_runtimes = worker.available_runtimes(runtime, config) if workers else []
         remote = manager.cluster.capabilities() if workers and manager.cluster is not None else None
         provider, _model, _runtime_env, agent_error, _message = agent_runs.selected_model_config()
         agent_configured = agent_error is None
@@ -171,6 +173,8 @@ def _register_system_routes(app, config, runtime, manager):
                     # Catalog schema 2 (contract section 16): collection presentation, artifact-kind
                     # file selection and saved filters, and exact origin lookup. Complete support only.
                     "workspace_views": True,
+                    "agent_controls": True,
+                    "agent_code_execution": bool(available_runtimes),
                     "terminal": app.extensions["stellaris_terminals"].available(),
                 },
                 "uploads": {
@@ -180,6 +184,7 @@ def _register_system_routes(app, config, runtime, manager):
                     "max_project_bytes": config.max_project_bytes,
                 },
                 "execution": {
+                    "runtimes": [{"id": value, "label": {"python": "Python", "javascript": "JavaScript", "shell": "Shell"}.get(value, value)} for value in available_runtimes],
                     "allowed_backends": (["isolated_python"] + (["slurm"] if remote else [])) if workers else [],
                     # Additive, informational descriptors; they do not change validation.
                     "analysis_pipelines": (
@@ -196,11 +201,11 @@ def _register_system_routes(app, config, runtime, manager):
                                 "id": "python_analysis_v1",
                                 "description": (
                                     "Runs a supplied Python code artifact in an isolated worker; "
-                                    "no automatic implementation generated."
+                                    "legacy Python script execution."
                                 ),
                                 "requires_code_artifact": True,
                             },
-                        ]
+                        ] + ([{"id": "script_analysis_v1", "description": "Runs saved agent-generated or supplied code in an installed worker runtime.", "requires_code_artifact": True}] if available_runtimes else [])
                         if workers
                         else []
                     ),
@@ -251,7 +256,7 @@ def _recover_database(config):
 
 
 def _reconcile_containers(config, runtime) -> None:
-    """Ensure every provisioned project (active or archived) has a running container.
+    """Ensure active provisioned projects have a running container.
 
     Missing containers are recreated against the existing workspace volume. A missing
     volume is reported and never replaced with an empty one.
@@ -266,7 +271,9 @@ def _reconcile_containers(config, runtime) -> None:
         log.exception("Catalog event relay at startup failed")
     conn = db.connect(config.db_path)
     try:
-        project_ids = [r["id"] for r in conn.execute("SELECT id FROM projects WHERE runtime_state = 'ready'")]
+        # Archived test runtimes explicitly removed by the user must not be resurrected.
+        # Keep their volumes and records; this does not stop existing archived containers.
+        project_ids = [r["id"] for r in conn.execute("SELECT id FROM projects WHERE runtime_state = 'ready' AND status = 'active'")]
     finally:
         conn.close()
     for project_id in project_ids:

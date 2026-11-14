@@ -31,6 +31,8 @@ AGENT_RECURSION_LIMIT = 200
 MAX_TOOL_CHARS = 12_000
 INGEST_WAIT_S = 400
 MAX_AGENT_INGESTIONS = 2
+TOOL_REPLY_WAIT_S = 480
+MAX_BACKEND_TOOL_REQUESTS = 100
 _TOKEN = re.compile(r"[a-z0-9]+")
 
 
@@ -129,16 +131,11 @@ def parse_arxiv_entries(data, terms):
 
 
 _EXPERIMENT_SCOPE = (
-    "Supported experiments: physical experiments recorded with the user's webcam/phone camera or uploaded video "
-    "or images (the MVP workflow is a bouncing or dropped ball tracked across frames), plus CSV/text data, analyzed "
-    "by isolated Python. Do not assume lab equipment such as air tracks, photogates, force sensors, or "
-    "motion sensors is available; if a topic needs them, say so and propose a camera-based alternative. "
-    "The built-in automatic video pipeline (bouncing_ball_v1) only measures bouncing-ball motion, bounce heights, "
-    "and energy ratios; it is NOT gesture recognition or finger counting, and its object hint is metadata that "
-    "does not select a detector. Custom analysis requires a supplied implementation run through the existing "
-    "python_analysis_v1 pipeline with a ready code artifact. You may research and design other experiments, but "
-    "state that a plan is not an executable analysis and that a matching implementation is still needed; never "
-    "promise arbitrary computer vision from a target's name.")
+    "Design experiments that fit the user's question and the actual project materials and execution capabilities. "
+    "A plan alone is not an executed analysis. Generated code must be saved as an immutable implementation and "
+    "run through the isolated analysis tool. Use only the runtimes and inputs the backend accepts; report missing "
+    "dependencies or unavailable modalities honestly. Never invent observations or claim execution without a "
+    "successful run and actual output artifacts.")
 
 
 def experiment_problems(payload, known_artifacts):
@@ -209,6 +206,30 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
     search_count = 0
     proposal_count = 0
     ingest_count = 0
+    tool_request_count = 0
+
+    def backend_tool(name, payload):
+        """Synchronous, run-correlated request to the trusted API process."""
+        nonlocal tool_request_count
+        if tool_request_count >= MAX_BACKEND_TOOL_REQUESTS:
+            return {"ok": False, "error": "The per-run backend tool limit has been reached."}
+        tool_request_count += 1
+        request_id = f"{run_id}-{tool_request_count}"
+        emit({"type": "tool_request", "request_id": request_id, "name": name, "payload": payload})
+        path = f"/tmp/stellaris-agent-{request_id}-reply.json"
+        deadline = time.monotonic() + TOOL_REPLY_WAIT_S
+        while not os.path.exists(path):
+            if time.monotonic() >= deadline:
+                return {"ok": False, "error": "The backend tool request timed out."}
+            time.sleep(.2)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                reply = json.load(fh)
+            if not isinstance(reply, dict) or set(reply) - {"ok", "result", "error"}:
+                return {"ok": False, "error": "The backend returned an invalid tool response."}
+            return reply
+        except (OSError, ValueError):
+            return {"ok": False, "error": "The backend tool response could not be read."}
 
     def find_paper(source):
         source = (source or "").strip()
@@ -373,8 +394,8 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
         to this request, otherwise []. calibration_json must be exactly
         {"mode":"none","assumptions":[...]}: the agent cannot measure reference-length calibration, so
         state in assumptions which reference object of known length the user should calibrate in Studio.
-        Plans must fit the supported camera/video experiment scope. Backend validation is required
-        before the plan is saved; if this tool reports problems, fix them and call it again.
+        Describe a general research experiment appropriate to the user's question. Do not assume
+        the project is about bouncing balls. Backend validation is required before it is saved.
         """
         try:
             payload = {"title": title, "hypothesis": hypothesis, "method": method,
@@ -393,9 +414,99 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
         if problems:
             return ("Experiment proposal not sent; nothing was saved. Fix these problems and call "
                     "propose_experiment again: " + " ".join(problems))
-        if not propose("experiment", payload):
-            return "The per-run proposal limit has been reached."
-        return "Experiment proposal sent to the backend for strict validation. Describe it as saved only after backend confirmation in the final response."
+        reply = backend_tool("propose_experiment", payload)
+        if not reply.get("ok"):
+            return "Experiment was not saved: " + str(reply.get("error", "backend rejected the request"))
+        return "Experiment saved: " + json.dumps(reply.get("result", {}), ensure_ascii=False)
+
+    @tool
+    def save_experiment_implementation(experiment_id: str, language: Literal["python", "javascript", "shell"],
+                                       source: str, filename: str) -> str:
+        """Save generated executable source as an immutable project artifact and update the experiment revision.
+        language selects its runtime. The source must be complete and filename a simple basename. Use the returned
+        artifact ID when executing."""
+        if not all(isinstance(x, str) for x in (experiment_id, language, source, filename)):
+            return "Implementation was not saved: all arguments must be strings."
+        try:
+            source_size = len(source.encode("utf-8", "strict"))
+        except UnicodeEncodeError:
+            return "Implementation was not saved: source must be valid UTF-8."
+        if source_size > 256 * 1024:
+            return "Implementation was not saved: source exceeds 256 KiB."
+        reply = backend_tool("save_experiment_implementation", {
+            "experiment_id": experiment_id, "runtime": language, "source": source, "filename": filename})
+        if not reply.get("ok"):
+            return "Implementation was not saved: " + str(reply.get("error", "backend rejected the request"))
+        return "Implementation saved: " + json.dumps(reply.get("result", {}), ensure_ascii=False)
+
+    @tool
+    def execute_analysis(experiment_id: str, code_artifact_id: str, input_artifact_ids_json: str = "[]") -> str:
+        """Run the saved experiment implementation in a temporary isolated worker. Supply genuine project input
+        artifact IDs, or [] if this analysis requires no input. Returns actual run status, bounded logs and outputs;
+        failed execution can be corrected by saving a new immutable implementation and retrying.
+
+        Code reads /input/manifest.json (schema stellaris.worker_manifest.v1); inputs[] gives artifact_id and
+        read-only path. Read input files only. Write derived files under /output and /output/result.json with
+        exactly {"measurements":[],"claims":[],"artifacts":[],"warnings":[]}.
+        Measurement entries require local_key, series, quantity, value, unit, time_s, uncertainty
+        ({"absolute":number-or-null,"method":string-or-null}), status, evidence, calibration_mode,
+        data_origin, assumptions. Units are px, s, px/s, px/s^2, m, m/s, m/s^2, or 1; metric units need a
+        reference-length calibration. Each evidence item has artifact, frame_index, time_s, row_index; artifact
+        is {"input_artifact_id":"..."} or {"output_artifact_key":"..."}. Every measurement needs evidence.
+        Claims require local_key, kind (observation/inference/hypothesis), text, measurement_keys, citations,
+        evidence, assumptions, limitations. Artifact entries require local_key, relative output path, kind, origin
+        (derived/simulated/generated), mime_type, and parents; parents use those same input/output references.
+        Warnings require code and message. Never invent observations or evidence. Use only libraries/commands
+        already installed for the selected runtime; network access and package downloads are unavailable."""
+        try:
+            input_ids = json.loads(input_artifact_ids_json)
+        except (TypeError, ValueError):
+            return "Execution was not started: input_artifact_ids_json must be a JSON array."
+        if not isinstance(input_ids, list) or any(not isinstance(x, str) for x in input_ids):
+            return "Execution was not started: input_artifact_ids_json must be a JSON array of artifact IDs."
+        reply = backend_tool("execute_analysis", {
+            "experiment_id": experiment_id, "code_artifact_id": code_artifact_id,
+            "input_artifact_ids": input_ids})
+        if not reply.get("ok"):
+            return "Execution request failed: " + str(reply.get("error", "backend rejected the request"))
+        return "Execution result: " + json.dumps(reply.get("result", {}), ensure_ascii=False)
+
+    @tool
+    def list_materials(limit: int = 10, cursor: str = "") -> str:
+        """List active project catalog materials for organization. limit is 1-100 (default 10); pass the opaque
+        next_cursor from a prior result to continue paging. This lists catalog entries and never moves or edits
+        original evidence files."""
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+            return "Material listing failed: limit must be an integer from 1 to 100."
+        if not isinstance(cursor, str):
+            return "Material listing failed: cursor must be a string."
+        reply = backend_tool("list_materials", {"limit": limit, "cursor": cursor})
+        if not reply.get("ok"):
+            return json.dumps({"error": reply.get("error")}, ensure_ascii=False)
+        result = reply.get("result", {})
+        rendered = json.dumps(result, ensure_ascii=False)
+        if len(rendered) > MAX_TOOL_CHARS:
+            return "Material page is too large to return. Retry with a smaller limit (for example 5), using the same cursor."
+        return rendered
+
+    @tool
+    def organize_materials(operation_json: str) -> str:
+        """Request one project organization operation; operation_json must be exactly one supported operation:
+        {"operation":"assign_tags"|"remove_tags","file_id":"...","tags":["lowercase-slug",...]}
+        (1-32 slugs, each up to 48 lowercase letters/digits/hyphens);
+        {"operation":"create_collection","name":"...","description":"..."?} (name 1-120 chars);
+        or {"operation":"add_collection_members"|"remove_collection_members","collection_id":"...",
+        "file_ids":["...",...]} (1-100 IDs). list_materials supplies project-scoped file IDs.
+        Permission off rejects changes; ask creates a pending request; allow applies it after validation. This only
+        organizes tags and collections; it does not move or modify original evidence or artifacts."""
+        try:
+            payload = json.loads(operation_json)
+        except (TypeError, ValueError):
+            return "Organization request rejected: operation_json must be a JSON object."
+        if not isinstance(payload, dict):
+            return "Organization request rejected: operation_json must be a JSON object."
+        reply = backend_tool("organize_materials", payload)
+        return json.dumps(reply.get("result") if reply.get("ok") else {"error": reply.get("error")}, ensure_ascii=False)
 
     @tool
     def propose_claim(kind: Literal["observation", "inference", "hypothesis"], text: str, evidence_json: str, citations_json: str, assumptions_json: str,
@@ -433,7 +544,8 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
             return "The per-run proposal limit has been reached."
         return "Claim proposal sent to the backend for evidence and reference validation."
 
-    return [search_arxiv, request_full_text, read_paper, search_paper, propose_experiment, propose_claim]
+    return [search_arxiv, request_full_text, read_paper, search_paper, propose_experiment,
+            save_experiment_implementation, execute_analysis, list_materials, organize_materials, propose_claim]
 
 
 def _claim_kind_problem(payload):
@@ -468,8 +580,10 @@ def known_artifact_ids(snapshot):
     return {x for x in ids if isinstance(x, str) and x}
 
 
-def create_agent(model, artifact_ids=None, papers=None, run_id=""):
-    backend = FilesystemBackend(root_dir="/workspace/scratch", virtual_mode=True)
+def create_agent(model, artifact_ids=None, papers=None, run_id="", chat_generation=0):
+    scratch = (f"/workspace/scratch/conversations/{chat_generation}" if chat_generation > 0
+               else "/workspace/scratch")
+    backend = FilesystemBackend(root_dir=scratch, virtual_mode=True)
     system = (
         "You are the research agent for this Stellaris project. Use only supplied project context and material "
         "actually retrieved by tools. Do not invent citations, sources, measurements, or observations. arXiv results "
@@ -481,6 +595,17 @@ def create_agent(model, artifact_ids=None, papers=None, run_id=""):
         "must be copied verbatim from retrieved abstract or full text, with exact full-text locators. Cite only records the search tool saved, never "
         "rejected candidates; if no relevant paper was saved, say so. " + _EXPERIMENT_SCOPE + " A tool reply "
         "that reports problems means nothing was saved: correct the input and retry, or explain the limitation. "
+        "For computational questions, when a valid experiment can be run with the supplied artifacts or without "
+        "fabricating inputs, write an implementation, save it, execute it, and use the returned run status and "
+        "output artifacts to explain what happened. If execution fails, inspect the actual error and correct/retry "
+        "when feasible. Do not turn generated outputs into observations unless the backend records measurements. "
+        "Generated scripts may read /input/manifest.json and the listed read-only /input/artifacts files, and may "
+        "write only under /output. They must write /output/result.json with exactly the measurements, claims, "
+        "artifacts, and warnings arrays; follow the execute_analysis tool's item schemas and cite only real input "
+        "or output artifacts. Never fabricate observations or evidence. Use only already-installed Python, "
+        "JavaScript, or shell libraries/commands; network access and package downloads are unavailable. "
+        "For material organization, use list_materials with its returned cursor to page, then use only the "
+        "documented tag and collection operations; an ask permission response means the request is pending. "
         "Keep persistent scratch in your filesystem tools separate from project evidence. "
         "Never reveal environment variables, tool internals, or hidden reasoning."
     )
@@ -531,8 +656,11 @@ def main(path):
             model = ChatOpenAI(model=model_name, api_key=api_key, timeout=45, max_retries=1,
                                max_tokens=4096, temperature=0, streaming=True)
         papers = request.pop("papers", None)
+        generation = request.get("snapshot", {}).get("chat_generation", 0)
+        if not isinstance(generation, int) or generation < 0:
+            generation = 0
         agent = create_agent(model, known_artifact_ids(request.get("snapshot")),
-                             papers if isinstance(papers, dict) else {}, run_id)
+                             papers if isinstance(papers, dict) else {}, run_id, generation)
         messages = [{"role": "user", "content": json.dumps(request, ensure_ascii=False)}]
 
         async def stream():
