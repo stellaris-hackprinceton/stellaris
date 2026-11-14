@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import type { LogEntry, Message, ProjectEvent, Run, Workspace } from '@/contracts/api'
 import type { ApiResult } from '@/contracts/requests'
 import { api } from '@/lib/api'
+import { invalidateCatalog } from '@/lib/catalog'
 import { keys, type CachedPages } from '@/lib/queries'
 import { preferCurrent } from '@/lib/queries/reconcile'
 
@@ -85,6 +86,10 @@ export async function applyProjectEvent(client: QueryClient, event: ProjectEvent
       return
     }
     case 'approval.required': case 'approval.updated': void invalidate(`approvals:${event.payload.approval.run_id}`); void invalidate('runs'); return
+    case 'catalog.changed': {
+      await invalidateCatalog(client, p)
+      return
+    }
     default: return
   }
 }

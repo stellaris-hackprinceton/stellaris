@@ -8,4 +8,4 @@ export function ErrorNotice({ error }: { error: unknown }) {
 export function PageMore({ has_more, loading, load }: { has_more: boolean, loading: boolean, load: () => unknown }) { return has_more ? <button type="button" disabled={loading} onClick={() => void load()}>{loading ? 'Loading…' : 'Load more'}</button> : null }
 export const projectHref = (p: string) => `/projects/${encodeURIComponent(p)}`
 export const runHref = (p: string, r: string) => `${projectHref(p)}/runs/${encodeURIComponent(r)}`
-export const artifactHref = (p: string, a: string) => `${projectHref(p)}/workspace?artifact=${encodeURIComponent(a)}`
+export const artifactHref = (p: string, a: string) => `${projectHref(p)}/materials?artifact=${encodeURIComponent(a)}`

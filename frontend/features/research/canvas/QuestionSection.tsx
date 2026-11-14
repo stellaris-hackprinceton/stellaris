@@ -70,7 +70,7 @@ function QuestionForm({ project, etag, onDone, refetch }: FormProps) {
       <Field label="Research question">
         <TextArea value={question} onChange={(e) => setQuestion(e.target.value)} rows={3} />
       </Field>
-      <Field label="Description" hint="Optional context for collaborators and the agent.">
+      <Field label="Description" hint="Background, constraints, or context for this research.">
         <TextArea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
       </Field>
       {conflict && (
@@ -82,7 +82,7 @@ function QuestionForm({ project, etag, onDone, refetch }: FormProps) {
             <dt>Description</dt><dd>{project.description || "None"}</dd>
           </dl>
           <div className={styles.row}>
-            <Button onClick={() => { setBaseRevision(project.revision); edit.reset(); }}>Keep my edits and save over it</Button>
+            <Button onClick={() => { setBaseRevision(project.revision); edit.reset(); }}>Review my edits</Button>
             <Button onClick={() => {
               setName(project.name); setQuestion(project.research_question ?? ""); setDescription(project.description);
               setBaseRevision(project.revision); edit.reset();
@@ -92,7 +92,7 @@ function QuestionForm({ project, etag, onDone, refetch }: FormProps) {
       )}
       {edit.error != null && !conflict && <ErrorNotice {...describeError(edit.error, "Changes not saved")} />}
       <div className={styles.row}>
-        <Button type="submit" variant="primary" pending={edit.isPending} disabled={!nameValid || conflict || !etag}>Save</Button>
+        <Button type="submit" variant="primary" pending={edit.isPending} disabled={!nameValid || conflict || !etag}>Save project details</Button>
         <Button onClick={onDone}>Cancel</Button>
       </div>
     </form>

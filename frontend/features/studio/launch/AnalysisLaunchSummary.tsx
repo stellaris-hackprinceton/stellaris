@@ -4,31 +4,38 @@ import styles from "../studio.module.css";
 
 type Props = {
   experiment: Experiment;
-  video: Artifact | undefined;
+  method: "bouncing_ball_v1" | "python_analysis_v1";
+  inputs: Artifact[];
+  code?: Artifact;
+  parameters?: string;
   start: number;
   end: number | null;
   hint: string;
   caps: Capabilities | undefined;
 };
 
-/** Exactly what will be submitted, from saved state. */
-export function AnalysisLaunchSummary({ experiment: x, video, start, end, hint, caps }: Props) {
-  const c = x.calibration;
+/** Describes the selected method and the exact plan artifacts queued for submission. */
+export function AnalysisLaunchSummary({ experiment: x, method, inputs, code, parameters, start, end, hint, caps }: Props) {
   const ex = caps?.execution;
+  const isBall = method === "bouncing_ball_v1";
   return (
     <section className={styles.summary} aria-label="Launch summary">
       <h4 className={styles.smallLabel}>This run will use</h4>
       <dl className={styles.dl}>
         <dt>Plan</dt><dd>{x.title} · revision {x.revision}</dd>
-        <dt>Input</dt>
-        <dd>{video ? <>{video.filename}{video.metadata.duration_ms != null && ` (${formatDuration(video.metadata.duration_ms)})`}{video.origin === "simulated" && " · simulated"}</> : "—"}</dd>
-        <dt>Interval</dt><dd className="num">{Number.isFinite(start) ? start : "?"} s → {end == null ? "end of video" : `${end} s`}</dd>
-        <dt>Object</dt><dd>{hint}</dd>
-        <dt>Pipeline</dt><dd className={styles.mono}>bouncing_ball_v1</dd>
-        <dt>Calibration</dt>
-        <dd>{c.mode === "none" ? "None: results in pixels and dimensionless ratios" : `Reference length ${c.reference_length_m} m`}</dd>
-        <dt>Limits</dt>
-        <dd>{ex ? `${ex.max_wall_time_s} s wall time · ${ex.max_memory_mb} MB · ${ex.max_cpu_cores} CPU · no network` : "Not reported by the server"}</dd>
+        <dt>Method</dt><dd>{isBall ? "Bouncing-ball video tracker" : "Python analysis"}<details className={styles.muted}><summary>Method ID</summary><code className={styles.mono}>{method}</code></details></dd>
+        <dt>{isBall ? "Video" : "Inputs"}</dt><dd>{inputs.length ? inputs.map((a) => <span key={a.id}>{a.filename}{a.metadata.duration_ms != null && ` (${formatDuration(a.metadata.duration_ms)})`}{a.origin === "simulated" && " · simulated"} </span>) : "—"}</dd>
+        {isBall ? <>
+          <dt>Interval</dt><dd className="num">{Number.isFinite(start) ? start : "?"} s → {end == null ? "end of video" : `${end} s`}</dd>
+          <dt>Tracking label</dt><dd>{hint || "—"}</dd>
+          <dt>Tracker scope</dt><dd>Tracks one ball in a fixed camera view. The label does not enable tracking other objects.</dd>
+          <dt>Calibration</dt><dd>{x.calibration.mode === "none" ? "None: results in pixels and dimensionless ratios" : `Reference length ${x.calibration.reference_length_m} m`}</dd>
+        </> : <>
+          <dt>Code</dt><dd>{code?.filename ?? "—"}</dd>
+          <dt>Parameters</dt><dd><pre className={styles.mono} tabIndex={0} aria-label="Python analysis parameters">{parameters}</pre></dd>
+          <dt>Calibration</dt><dd>Available to the script in the manifest; results depend on what the code reports.</dd>
+        </>}
+        <dt>Limits</dt><dd>{ex ? `${ex.max_wall_time_s} s wall time · ${ex.max_memory_mb} MB · ${ex.max_cpu_cores} CPU · no network` : "Not reported by the server"}</dd>
       </dl>
     </section>
   );

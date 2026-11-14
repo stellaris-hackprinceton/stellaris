@@ -1,17 +1,23 @@
 /* Shared design tokens. Owned by Agent A; change only here. */
 :root {
-  --color-background: #f6f7f9;
+  --color-background: #f2f4f6;
   --color-surface: #ffffff;
-  --color-surface-muted: #edf1f5;
-  --color-text: #15212b;
-  --color-text-muted: #53616f;
-  --color-border: #ccd5df;
-  --color-accent: #225d91;
+  --color-surface-muted: #e9edf1;
+  --color-text: #18212b;
+  --color-text-muted: #4c5a69;
+  --color-border: #c4ccd5;
+  --color-accent: #185abc;
   --color-accent-contrast: #ffffff;
   --color-success: #1b6a45;
   --color-warning: #8a5400;
   --color-danger: #a32929;
-  --color-focus: #225d91;
+  --color-selection: #e8f0fe;
+  --color-control-border: #758393;
+  --color-nav-background: #18212b;
+  --color-nav-text: #f3f5f7;
+  --color-nav-muted: #b8c3cf;
+  --color-nav-selected: #2d4057;
+  --color-focus: #185abc;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -20,8 +26,8 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  --radius-control: 6px;
-  --radius-panel: 10px;
+  --radius-control: 2px;
+  --radius-panel: 2px;
 
   --control-height: 40px;
 
@@ -32,5 +38,5 @@
   --text-title: 20px;
 
   --sidebar-width: 208px;
-  --chat-rail-width: 352px;
+  --chat-rail-width: 360px;
 }

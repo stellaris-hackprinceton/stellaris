@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { hrefs } from "@/components/shell/hrefs";
 import type { ID } from "@/contracts/api";
 import { useCapabilities, useExperiments } from "@/lib/queries";
 import { Button, EmptyState, ErrorNotice, Skeleton, describeError } from "@/components/ui";
@@ -15,10 +17,10 @@ export function ExperimentsSection({ project_id }: { project_id: ID }) {
   if (experiments.is_loading) return <Skeleton height="10rem" />;
   if (experiments.items.length === 0) {
     return (
-      <EmptyState title="No experiment plans yet">
+      <EmptyState title="No experiment plans yet" action={<Link href={hrefs.studio(project_id)}>Open experiments</Link>}>
         {caps.data?.features.experiment_design
-          ? "Ask Research Chat to design an experiment for your question."
-          : "Experiment design is not enabled on this server."}
+          ? "Create a plan in Experiments, or ask Research Chat to draft one for your question."
+          : "Create a plan in Experiments. Agent-assisted experiment design is unavailable on this server."}
       </EmptyState>
     );
   }

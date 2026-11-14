@@ -1,6 +1,6 @@
 "use client";
 import { useProjectRuntime } from "@/providers";
-import { Button, StatusBadge } from "@/components/ui";
+import { Button } from "@/components/ui";
 import type { StatusTone } from "@/components/ui";
 import styles from "./shell.module.css";
 
@@ -17,7 +17,7 @@ export function ConnectionStatus() {
   const label = LABELS[connection] ?? LABELS.connecting;
   return (
     <div className={styles.connection} role="status" aria-live="polite">
-      <StatusBadge tone={label.tone}>{label.text}</StatusBadge>
+      <span className={styles.connectionLabel} data-state={connection}><span aria-hidden="true" />{label.text}</span>
       {connection === "offline" && <Button onClick={reconnect}>Reconnect</Button>}
     </div>
   );

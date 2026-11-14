@@ -50,7 +50,7 @@ export function Tabs({ items, value, onChange, label }: TabsProps) {
         ))}
       </div>
       {current && (
-        <div role="tabpanel" id={`${base}-p-${current.id}`} aria-labelledby={`${base}-t-${current.id}`} className={styles.tabPanel}>
+        <div role="tabpanel" tabIndex={0} id={`${base}-p-${current.id}`} aria-labelledby={`${base}-t-${current.id}`} className={styles.tabPanel}>
           {current.content}
         </div>
       )}

@@ -10,21 +10,29 @@ services:
     build:
       context: ..
       dockerfile: frontend/Dockerfile
+      target: development
       args:
         STELLARIS_API_ORIGIN: http://api:8000
     image: stellaris-frontend:dev
     ports:
       - "127.0.0.1:${STELLARIS_FRONTEND_PORT:-3000}:3000"
     environment:
+      NODE_ENV: development
       STELLARIS_API_ORIGIN: http://api:8000
       STELLARIS_DOCS_ROOT: /app/docs
+      WATCHPACK_POLLING: "true"
       HOSTNAME: 0.0.0.0
       PORT: "3000"
     volumes:
       - type: bind
+        source: ../frontend
+        target: /app
+      - type: bind
         source: ../docs
         target: /app/docs
         read_only: true
+      - frontend-node-modules:/app/node_modules
+      - frontend-next:/app/.next
     depends_on:
       api:
         condition: service_healthy
@@ -114,6 +122,10 @@ volumes:
     name: stellaris-hpc-keys
   slurm-state:
     name: stellaris-slurm-state
+  frontend-node-modules:
+    name: stellaris-frontend-node-modules
+  frontend-next:
+    name: stellaris-frontend-next
 
 networks:
   hpc:

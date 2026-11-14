@@ -46,3 +46,7 @@ img, video, audio, svg { max-width: 100%; }
     scroll-behavior: auto !important;
   }
 }
+
+::selection { background: #d8e7ff; color: var(--color-text); }
+a { text-underline-offset: 3px; }
+@media (pointer: coarse) { :root { --control-height: 44px; } }

@@ -3,7 +3,7 @@
 import type { ID } from "@/contracts/api";
 
 const e = encodeURIComponent;
-export type ProjectView = "research" | "studio" | "runs" | "workspace";
+export type ProjectView = "research" | "materials" | "studio" | "graph" | "runs";
 
 export const hrefs = {
   projects: () => "/projects",
@@ -19,6 +19,6 @@ export const hrefs = {
   },
   studio: (p: ID, experiment?: ID) => `/projects/${e(p)}/studio${experiment ? `?experiment=${e(experiment)}` : ""}`,
   run: (p: ID, r: ID) => `/projects/${e(p)}/runs/${e(r)}`,
-  artifact: (p: ID, a: ID) => `/projects/${e(p)}/workspace?artifact=${e(a)}`,
+  artifact: (p: ID, a: ID) => `/projects/${e(p)}/materials?artifact=${e(a)}`,
   report: (p: ID, a: ID) => `/projects/${e(p)}/reports/${e(a)}`,
 };

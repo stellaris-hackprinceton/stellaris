@@ -1,4 +1,4 @@
-.screen { display: flex; flex-direction: column; gap: var(--space-4); max-width: 1200px; }
+.screen { display: flex; flex-direction: column; gap: var(--space-4); max-width: 1200px; container: research / inline-size; }
 .stack { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-3); }
@@ -7,7 +7,7 @@
 .mono { font-family: var(--font-code); font-size: 0.9em; overflow-wrap: anywhere; }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
 .bullets { margin: 0; padding-left: 1.25em; display: flex; flex-direction: column; gap: var(--space-1); max-width: 70ch; }
-.subhead { font-size: var(--text-label); font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.subhead { font-size: var(--text-label); font-weight: 600; color: var(--color-text-muted);  }
 
 .question {
   margin: 0; max-width: 60ch; font-size: 20px; line-height: 1.4; font-weight: 500;
@@ -22,11 +22,11 @@
 
 /* Sources: list + details */
 .split { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
-@media (min-width: 1024px) { .split { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); } }
+@container research (min-width: 860px) { .split { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); } }
 .detailPane { min-width: 0; }
-@media (min-width: 1024px) { .detailPane { position: sticky; top: 72px; align-self: start; max-height: calc(100dvh - 96px); overflow-y: auto; } }
+@container research (min-width: 860px) { .detailPane { position: sticky; top: 0; align-self: start; max-height: calc(100dvh - 96px); overflow-y: auto; } }
 .closeDetails { margin-bottom: var(--space-3); }
-@media (min-width: 1024px) { .closeDetails { display: none; } }
+@container research (min-width: 860px) { .closeDetails { display: none; } }
 
 .card {
   display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); width: 100%;

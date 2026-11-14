@@ -3,6 +3,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import type { Capabilities, UploadRequest } from "@/contracts/api";
 import { Button, Field, Select, StatusBadge } from "@/components/ui";
 import { formatBytes, formatDuration } from "../format";
+import { mimeForFile } from "./fileTypes";
 import styles from "../studio.module.css";
 
 type Kind = UploadRequest["kind"];
@@ -43,12 +44,12 @@ export function FileImport({ uploads, disabled, onUpload }: Props) {
   const url = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
-  const kind = file ? kindForMime(file.type, file.name) : null;
-  const baseMime = file?.type.split(";")[0].toLowerCase() ?? "";
+  const baseMime = file ? mimeForFile(file.type, file.name) : "";
+  const kind = file ? kindForMime(baseMime, file.name) : null;
   const accepted = uploads?.accepted_mime_types ?? [];
   const problems: string[] = [];
   if (file && uploads) {
-    if (!file.type) problems.push("The browser could not determine this file's type.");
+    if (!baseMime) problems.push("The browser could not determine this file's type.");
     else if (!accepted.map((m) => m.toLowerCase()).includes(baseMime)) problems.push(`The server does not accept ${baseMime} files.`);
     if (file.size > uploads.max_file_bytes) problems.push(`The file is ${formatBytes(file.size)}; the limit is ${formatBytes(uploads.max_file_bytes)}.`);
     if (kind === "video" && durationMs != null && durationMs > uploads.max_video_duration_ms) {
@@ -61,7 +62,7 @@ export function FileImport({ uploads, disabled, onUpload }: Props) {
       <div className={styles.varField}>
         <label htmlFor={`${id}-file`} className={styles.smallLabel}>File</label>
         <input id={`${id}-file`} type="file" className={styles.fileInput} disabled={disabled || !uploads}
-          accept={accepted.join(",")} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          accept={[...accepted, ...(accepted.includes("text/x-python") ? [".py"] : [])].join(",")} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         {uploads && <p className={styles.muted}>Up to {formatBytes(uploads.max_file_bytes)}; videos up to {formatDuration(uploads.max_video_duration_ms)}.</p>}
       </div>
 

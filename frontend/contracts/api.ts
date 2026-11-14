@@ -20,7 +20,8 @@ export type Capabilities = {
     audio_analysis: boolean,
     markdown_reports: boolean,
     remote_compute: boolean,
-    collaboration: boolean
+    collaboration: boolean,
+    workspace_files?: boolean
   },
   uploads: {
     accepted_mime_types: string[],
@@ -327,7 +328,8 @@ export type EventPayloads = {
   "claim.created": { claim: Claim },
   "results.updated": { results: RunResults },
   "approval.required": { approval: Approval },
-  "approval.updated": { approval: Approval }
+  "approval.updated": { approval: Approval },
+  "catalog.changed": { changes: { entity: 'file' | 'tag' | 'collection' | 'relation', id: ID | null, revision: number | null, deleted: boolean, bulk?: true }[] }
 }
 
 export type ProjectEvent = {

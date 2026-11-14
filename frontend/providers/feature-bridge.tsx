@@ -30,5 +30,5 @@ export function ProjectShellSlot({ children, project_id }: ProjectProps & { chil
   const Shell = features.ProjectShell
   if (Shell) return <Shell project_id={project_id}>{children}</Shell>
   const base = `/projects/${encodeURIComponent(project_id)}`
-  return <div className={styles.frame}><nav className={styles.nav} aria-label="Project navigation"><Link href="/projects">Projects</Link><Link href={`${base}/research`}>Research</Link><Link href={`${base}/studio`}>Studio</Link><Link href={`${base}/runs`}>Runs</Link><Link href={`${base}/workspace`}>Workspace</Link></nav><p className={styles.muted}>Shared shell and chat await Claude A.</p>{children}</div>
+  return <div className={styles.frame}><nav className={styles.nav} aria-label="Project navigation"><Link href="/projects">Projects</Link><Link href={`${base}/research`}>Research</Link><Link href={`${base}/materials`}>Materials</Link><Link href={`${base}/studio`}>Experiments</Link><Link href={`${base}/graph`}>Knowledge graph</Link><Link href={`${base}/runs`}>Tracker</Link></nav>{children}</div>
 }

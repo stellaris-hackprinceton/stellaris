@@ -56,9 +56,9 @@ export function FindingsSection({ project_id, selected, onSelectSource }: Props)
         <EmptyState title="Finding unavailable">The linked finding is not in this project.</EmptyState>
       )}
       {claims.items.length === 0 ? (
-        <EmptyState title="No findings yet">Findings appear when a research or analysis run saves observations, inferences or hypotheses.</EmptyState>
+        <EmptyState title="No findings yet">Ask a research question in chat or run an analysis. Saved observations, inferences, and hypotheses appear here.</EmptyState>
       ) : shown.length === 0 ? (
-        <EmptyState title="Nothing of this kind yet" />
+        <EmptyState title="No matching findings" />
       ) : (
         <ul className={styles.list} aria-label="Findings">
           {shown.map((c) => (

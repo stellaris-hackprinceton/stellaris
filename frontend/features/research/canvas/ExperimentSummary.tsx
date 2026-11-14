@@ -63,7 +63,7 @@ export function ExperimentSummary({ project_id, experiment: x }: { project_id: I
       </details>
       <p className={styles.muted}>
         {x.input_artifact_ids.length} attached input{x.input_artifact_ids.length === 1 ? "" : "s"} ·{" "}
-        <Link href={hrefs.studio(project_id, x.id)}>Open in Studio</Link>
+        <Link href={hrefs.studio(project_id, x.id)}>Open experiment</Link>
       </p>
     </article>
   );

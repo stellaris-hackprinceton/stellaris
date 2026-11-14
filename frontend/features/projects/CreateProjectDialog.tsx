@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Project } from "@/contracts/api";
 import { useCreateProject } from "@/lib/queries";
 import { Button, Dialog, ErrorNotice, Field, TextArea, TextInput, describeError, errorCode, newCommandKey } from "@/components/ui";
@@ -14,11 +14,17 @@ export function CreateProjectDialog({ open, onClose, onCreated }: Props) {
   const [description, setDescription] = useState("");
   const [touched, setTouched] = useState(false);
   const key = useRef<{ key: string; body: string } | null>(null);
+  const form = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (open) form.current?.querySelector("input")?.focus();
+  }, [open]);
 
   const trimmed = name.trim();
   const nameErr = !trimmed ? "Give the project a name." : trimmed.length > 120 ? "Use 120 characters or fewer." : null;
 
   async function submit() {
+    if (create.isPending) return;
     setTouched(true);
     if (nameErr) return;
     const body = { name: trimmed, description: description.trim(), research_question: question.trim() || null };
@@ -34,13 +40,14 @@ export function CreateProjectDialog({ open, onClose, onCreated }: Props) {
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="New research project">
-      <form className={styles.form} onSubmit={(e) => { e.preventDefault(); void submit(); }} noValidate>
-        <Field label="Project name" error={touched ? nameErr : null}>
-          <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoFocus />
+    <Dialog className={styles.createDialog} open={open} onClose={onClose} title="New research project">
+      <form ref={form} className={styles.form} onSubmit={(e) => { e.preventDefault(); void submit(); }} noValidate>
+        <p className={styles.formIntro}>Give your investigation a home. Your question, experiments, and evidence stay together here.</p>
+        <Field label="Project name" hint="Required. Choose a name you’ll recognize later." error={touched ? nameErr : null}>
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required autoFocus placeholder="e.g. Energy loss in a bouncing ball" />
         </Field>
         <Field label="Research question" hint="Optional. You can refine it later.">
-          <TextArea rows={3} value={question} onChange={(e) => setQuestion(e.target.value)}
+          <TextArea rows={4} value={question} onChange={(e) => setQuestion(e.target.value)}
             placeholder="e.g. How much energy does a tennis ball keep after each bounce?" />
         </Field>
         <Field label="Description" hint="Optional.">
@@ -51,7 +58,7 @@ export function CreateProjectDialog({ open, onClose, onCreated }: Props) {
             action={<Button onClick={() => void submit()} pending={create.isPending}>Retry submission</Button>} />
         )}
         <div className={styles.actions}>
-          <Button type="submit" variant="primary" pending={create.isPending}>Create project</Button>
+          <Button className={styles.primaryAction} type="submit" variant="primary" pending={create.isPending}>{create.isPending ? "Creating project…" : "Create project"}</Button>
           <Button onClick={onClose}>Cancel</Button>
         </div>
       </form>

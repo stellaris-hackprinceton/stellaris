@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-transform-types --test lib/api/http.test.mjs"
+    "test": "node --experimental-transform-types --test lib/api/http.test.mjs features/studio/upload/fileTypes.test.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.107.1",
