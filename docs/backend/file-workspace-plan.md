@@ -3,6 +3,20 @@
 Interface: [../file-workspace-contract.md](../file-workspace-contract.md) (proposed, additive to `/api/v1`).
 Status: **all four slices implemented and Docker-verified; frontend adoption is a separate task.** Prepared 2026-11-14 on branch `backend-v2`.
 
+**Historical foundation status:** frontend adoption in Materials and Knowledge graph is now recorded in [frontend workspace](../frontend-workspace.md). The completed slices below remain historical implementation evidence. The following extension is a separate pending task.
+
+## Pending extension: curated views and saved presentation
+
+Status: **Specified, not implemented or verified.** Implement [contract section 16](../file-workspace-contract.md#16-proposed-curated-views-extension) for the public [Materials views](../materials-views-spec.md) and [Research desk](../research-workspace-spec.md). These requirements add to the foundation scope below.
+
+- [ ] Migrate existing catalog schema v1 to v2 transactionally. Add nullable collection presentation and file artifact kind. Do not rely on CREATE TABLE alone for populated catalogs.
+- [ ] Backfill authoritative kinds through a projection-version change, retaining IDs, bytes, hashes, original timestamps, notes, memberships, and user relations. Projection must not overwrite user presentation.
+- [ ] Extend collection validation/serialization and revision/no-op/event detection. Null clears presentation, omitted PATCH leaves it unchanged, and a complete object replaces it.
+- [ ] Extend file queries and dynamic filters with canonical artifact-kind sets, OR within kinds, AND across constraints, matching dynamic counts, and bound cursors.
+- [ ] Add the capability and focused migration/filter/presentation integration checks before frontend rollout. Preserve foundation defaults and fallback behavior.
+
+UI composition, report-library placement, and media preview rendering remain frontend work. This extension adds organization metadata, not new evidence or agent access to notes.
+
 ## Goal and boundaries
 
 Add a project-scoped file catalog: every artifact and legacy scientific record appears as a

@@ -1,5 +1,7 @@
 # Agent B handoff — draft complete, awaiting Agent C foundation
 
+> Historical handoff. The foundation-waiting status below is not the current runtime status. Next-interface requirements are public in [Research desk](../research-workspace-spec.md), [Materials views](../materials-views-spec.md), and [Reports](../reports-spec.md). Experiment cards expose several plans but keep editing, calibration, upload, and launch in Studio. Reuse saved chart/media previews and measurement qualifications without adding browser physics calculations or interactive cross-run plots. Current repository instructions govern delegation. These changes are specified, not implemented or verified by this handoff.
+
 Status: all Agent B deliverables are drafted. They compile against the contract-derived interface in §3 below. They are **not connected to live data** because C's `contracts/`, `lib/` and `providers/` do not exist yet. No version-control changes have been made.
 
 ## 1. Files

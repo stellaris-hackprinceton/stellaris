@@ -3,6 +3,8 @@
 Contract version: **1.1.0-draft (additive to `/api/v1`)**
 Status: **Implemented and Docker-verified for the backend foundation, with frontend adoption in Materials and Knowledge graph.** See [Unified workspace interface](frontend-workspace.md). Backend progress is tracked in
 [backend/file-workspace-plan.md](backend/file-workspace-plan.md).
+
+**Proposed next version, November 14, 2026:** [Section 16](#16-proposed-curated-views-extension) specifies curated views, collection presentation metadata, and artifact-kind filtering. These additions are **not implemented or verified**. The existing foundation status above applies only to the existing interfaces. The public [Materials specification](materials-views-spec.md) defines the proposed browsing experience.
 Prepared: **November 14, 2026**
 Extends: [frontend-backend-contract.md](frontend-backend-contract.md). Its sections 3 (common
 rules, development mode without authentication), 6 (artifact content), 8 (events), and 9
@@ -13,7 +15,7 @@ rules, development mode without authentication), 6 (artifact content), 8 (events
 Users asked for one free-form workspace of files instead of fixed sections and tables. This
 contract adds that interface:
 
-- Every artifact and every existing scientific record appears as a **file** in one list.
+- Every artifact and every existing scientific record appears as a **file** in one catalog. The current frontend exposes a list. The proposed curated views present that same catalog through distinct widgets without changing record identity.
 - Former fixed categories such as research, hypotheses, results, artifacts, and agent logs
   become **default tags**. Users can add their own tags.
 - Users can write mutable Markdown or plain-text **notes** with retained revisions.
@@ -588,4 +590,86 @@ not complete resources. Do not treat a user tag or relation as scientific eviden
 
 A future graph can use paged files as nodes and paged relations as edges. Filter both sets
 to the intended visible files in the client; an edge is directed from `from_file_id` to
-`to_file_id`. No graph rendering or automatic semantic-link feature is implemented.
+`to_file_id`. No graph rendering endpoint or automatic semantic-link feature is implemented. The current frontend renders explicit relations locally.
+
+## 16. Proposed curated views extension
+
+Status: **Specified, not implemented or verified.** This section describes the next additive interface, provisionally `1.2.0-draft`. Sections 1–15 document the existing foundation. Their types do not gain these fields until this extension is implemented. UI requirements are canonical in [Research desk](research-workspace-spec.md), [Materials views](materials-views-spec.md), and [Reports](reports-spec.md).
+
+### 16.1 Capability and additive types
+
+Add optional `features.workspace_views?: boolean` to capabilities. Missing means false. True certifies support for all of this section: collection presentation reads/writes, artifact-kind file selection, and artifact-kind saved filters. It is independent of `markdown_reports`, which controls report generation. Keep `workspace_files` for the existing catalog foundation.
+
+New clients send the extended fields only when `workspace_views` is true. Older backends reject unknown JSON fields and can ignore unknown query parameters. Sending an unsupported artifact filter could therefore return unrelated files. Never infer support from an unfiltered successful response or from tags.
+
+```ts
+type ViewPreset = "desk" | "literature" | "notes" | "media-data" |
+  "findings" | "measurements" | "all"
+type CollectionPresentation = {
+  preset: ViewPreset,
+  sort: "created_at" | "updated_at" | "name",
+  order: "asc" | "desc"
+}
+type ArtifactKind = "document" | "dataset" | "image" | "video" | "audio" |
+  "code" | "chart" | "report" | "log" | "environment"
+
+// Additive members, not replacements for the foundation types:
+// Collection: presentation?: CollectionPresentation | null
+// CreateCollection / EditCollection: presentation?: CollectionPresentation | null
+// FileFilter: artifact_kinds?: ArtifactKind[]
+// WorkspaceFile: artifact_kind?: ArtifactKind | null
+```
+
+The extended backend returns `presentation` on each collection, null for existing collections without a saved presentation. The UI resolves null/missing to `{preset:"all",sort:"created_at",order:"desc"}`. For new unsaved built-in views, Notes defaults to `updated_at desc` and all others to `created_at desc`.
+
+`WorkspaceFile.artifact_kind` is the authoritative underlying artifact kind for artifact origins and null for records/notes. A user tag or MIME guess cannot populate it. It is display/filter metadata, not a new scientific resource or editable field.
+
+### 16.2 Presentation mutations
+
+Collection POST accepts optional presentation. Collection PATCH leaves it unchanged when omitted, replaces the complete object when supplied, and clears it when null. Require all three members of a non-null object. Reject unknown members and invalid enums with `422 VALIDATION_FAILED` and JSON Pointer field paths. Empty objects do not mean defaults.
+
+Presentation participates in existing collection revision, ETag, idempotency, archive, and `catalog.changed` behavior. Equal canonical values are no-ops. Updating only presentation changes no file memberships, note content, scientific records, or saved dynamic filters. Clients can resolve `412` using an explicitly reviewed retry against the latest revision.
+
+A saved view is an ordinary collection with filter or explicit membership plus presentation. Its preset is not a second membership rule on the server. The client combines the saved collection's members with its currently selected preset as additional query constraints. **Save view** writes the preset's type constraints into a new dynamic filter explicitly. Changing only a saved presentation later leaves those constraints unchanged.
+
+### 16.3 Artifact-kind selection and cursors
+
+Extend `/files` with repeatable `artifact_kind`. One or more values mean OR within that filter. Other constraints, including tags and collection membership, remain AND. `artifact_kind=image&artifact_kind=video&artifact_kind=dataset` selects all three kinds. It never selects a note tagged images.
+
+Saved `FileFilter.artifact_kinds` expresses the same non-empty set. Validate at most ten entries before deduplication, all from ArtifactKind, with no null or non-string entries. Canonicalize by deduplication and lexical sorting. Omission means no artifact-kind constraint. An empty JSON array is invalid. Invalid query values return `400 INVALID_QUERY`, invalid saved-filter bodies return `422 VALIDATION_FAILED`.
+
+Only artifact-origin catalog entries can match an artifact-kind constraint. Contradictory valid constraints, such as `file_kind=note&artifact_kind=report`, match zero files. They do not reinterpret the request. Query and saved collection artifact-kind constraints intersect as ordinary independent filters.
+
+Apply selection before LIMIT and cursor calculation. Bind canonical artifact kinds into cursor state along with project, other filters, sort, and order. Equivalent repeated values in a different order use the same normalized selection. Changed selection with an old cursor is rejected under section 8, not continued over a different dataset. Keep default foundation list order unchanged. Rich views request descending order explicitly.
+
+Examples, valid only after capability rollout:
+
+```text
+GET /files?artifact_kind=report&sort=created_at&order=desc&limit=24
+GET /files?artifact_kind=image&artifact_kind=video&artifact_kind=dataset&sort=created_at&order=desc
+POST /collections
+  {"name":"Motion recordings","filter":{"artifact_kinds":["video"],"status":"active"},
+   "presentation":{"preset":"media-data","sort":"created_at","order":"desc"}}
+PATCH /collections/{id}
+  {"presentation":{"preset":"all","sort":"name","order":"asc"}}
+```
+
+### 16.4 Storage and migration
+
+The current catalog uses SQLite schema version 1 and has no upgrade path for an already-versioned catalog. Changing only a `CREATE TABLE IF NOT EXISTS` statement is insufficient.
+
+Implement a transactional v1 → v2 migration per project catalog, adding nullable `collections.presentation` JSON text and nullable `files.artifact_kind` text. Create an artifact-kind/created-time/ID index for kind-specific browsing. New catalogs initialize the same v2 schema. Set `user_version` only after successful migration. Reopening an upgraded catalog must be a no-op.
+
+Backfill artifact kinds from authoritative artifact records during projection, with a projection-version bump so existing files are revisited even without new project events. Complete backfill before serving kind-filtered requests for that catalog. Preserve file IDs, original dates, content hashes, immutable bytes, note revisions, collection memberships, tags, user relations, and existing collection revisions when presentation is null. Adding selection metadata must not make old material appear newly created.
+
+Projection updates artifact selection metadata only. It never resets saved collection presentation, which is user organization. Keep collection serialization, field whitelists, saved-filter validation, file serialization, filter SQL, counts, and cursor normalization consistent with the migration. Update dynamic collection counts using the same artifact-kind predicate as listings.
+
+Gate capability true on deployment of the complete implementation. A specific project's catalog failure still returns the existing safe retryable 503. No partial migration result or quietly stale classification is served. Rollout deploys backend support before the dependent UI. Rolling back to v1-only application code after migration requires an explicitly compatible release or restoring a verified backup, not an automatic destructive downgrade.
+
+### 16.5 Required verification
+
+Check a new catalog and a populated v1 catalog with notes, revisions, explicit and dynamic collections, and relations. Reopen twice and verify migration idempotency and preserved IDs/content/dates. Simulate migration failure and verify rollback.
+
+Check repeated kinds with reordered/duplicate values, contradictions, invalid values, collection/query intersection, dynamic counts, pagination beyond one page, and changed filters with old cursors. A note tagged reports must never enter the report query.
+
+Check presentation POST/PATCH/null/no-op, ETag conflict, archive rejection, idempotent POST replay, emitted events, and reconnect-driven refresh. Check frontend fallback with the extension capability absent. Record actual results separately when implementation occurs.

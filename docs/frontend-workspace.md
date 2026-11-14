@@ -2,6 +2,16 @@
 
 The project interface organizes saved work through one Materials catalog. Research, Experiments, Knowledge graph, and Tracker provide working views of that project. The [file workspace contract](file-workspace-contract.md) defines catalog behavior. The [scientific contract](frontend-backend-contract.md) remains authoritative for experiment commands and evidence.
 
+## Next interface: specified, not implemented
+
+The public [Research desk specification](research-workspace-spec.md), [Materials views specification](materials-views-spec.md), and [Reports specification](reports-spec.md) define the next implementation. They supersede the presentation described below when that work is built. The remaining sections record the current baseline, not acceptance of the old layout for the next version.
+
+The next Research overview separates Literature, Experiments, Findings, Measurements and results, and Writing. Recent cards, bounded expansion, and labelled add tiles replace the combined text panel. Experiments remain plural and open independent Studio contexts. Materials gains curated presentations and collections with saved presentation metadata. Reports gains its own navigation destination and index. The desk supports these activities in any order.
+
+Backend prerequisites are proposed in [file workspace contract section 16](file-workspace-contract.md#16-proposed-curated-views-extension). No richer view may infer scientific types from user tags or send unsupported kind filters to an older backend. The specs describe pending work, while [Unified workspace verification](verification/unified-workspace.md) remains evidence for the existing implementation only.
+
+The fetched [research extension](research-contract.md) already supports full-text PDF/arXiv ingestion. The proposed Literature UI exposes it with extraction states and a source-linked reader. [Terminal sessions](terminal-contract.md) use separate scratch storage and do not become catalog evidence. [HPC](hpc-contract.md) remains disabled and does not add a widget or new navigation destination in this design.
+
 ## Navigation and routes
 
 One sidebar contains Research (`/research`), Materials (`/materials`), Experiments (`/studio`), Knowledge graph (`/graph`), and Tracker (`/runs`), relative to `/projects/:project_id`. The frontend `/workspace` page is deleted without a redirect or compatibility alias. Internal artifact links open Materials. The backend `/workspace` API is unchanged.

@@ -1,5 +1,9 @@
 # Agent C frontend implementation handoff
 
+> Historical handoff. Its authentication and original integration-status notes are superseded by the current [scientific contract](../frontend-backend-contract.md), [workspace guide](../frontend-workspace.md), and dated verification records. Next work follows the public [Research desk](../research-workspace-spec.md), [Materials views](../materials-views-spec.md), and [Reports](../reports-spec.md) specs. Integration includes the pending [catalog extension](../file-workspace-contract.md#16-proposed-curated-views-extension), shared cache/event invalidation, real descending pagination, and preserved old deep links. No new report backend resource or generator is requested. Current repository instructions govern delegation. This is a pending handoff, not evidence of new implementation.
+
+Fetched backend alignment: include the existing [paper-ingestion extension](../research-contract.md) in frontend types, exhaustive run labels, capability-gated commands, and source/locator readers. Keep backend-added accepted-input fields out of new command bodies. Terminals remain separate session resources and HPC remains disabled. The public specs record these requirements without claiming frontend integration is complete.
+
 Status: **Merged frontend components are connected. Live backend integration and authenticated workflow verification remain pending.**
 
 This handoff implements the accepted Sol plan and the [frontend specification](../frontend-implementation-spec.md) against the [API contract](../archive/frontend-backend-contract-original.md). No backend endpoints, mock server, fixture data, automated tests, or Claude-owned features were added. Nothing was committed, pushed, or deployed.
