@@ -153,6 +153,29 @@ def _register_system_routes(app, config, runtime, manager):
                 },
                 "execution": {
                     "allowed_backends": ["isolated_python"] if workers else [],
+                    # Additive, informational descriptors; they do not change validation.
+                    "analysis_pipelines": (
+                        [
+                            {
+                                "id": "bouncing_ball_v1",
+                                "description": (
+                                    "Tracks one bouncing ball; measures bounce heights and energy ratios. "
+                                    "Object hint does not select a detector."
+                                ),
+                                "requires_code_artifact": False,
+                            },
+                            {
+                                "id": "python_analysis_v1",
+                                "description": (
+                                    "Runs a supplied Python code artifact in an isolated worker; "
+                                    "no automatic implementation generated."
+                                ),
+                                "requires_code_artifact": True,
+                            },
+                        ]
+                        if workers
+                        else []
+                    ),
                     "max_wall_time_s": config.worker_wall_time_s if workers else 0,
                     "max_memory_mb": config.worker_memory_mb if workers else 0,
                     "max_cpu_cores": config.worker_cpus if workers else 0,

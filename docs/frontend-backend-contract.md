@@ -142,6 +142,13 @@ type Capabilities = {
   },
   execution: {
     allowed_backends: ("isolated_python")[],
+    // Optional, additive and informational; clients must tolerate its absence. Lists both
+    // descriptors when workers are available and is [] otherwise. It does not change validation.
+    analysis_pipelines?: {
+      id: "bouncing_ball_v1" | "python_analysis_v1",
+      description: string,
+      requires_code_artifact: boolean
+    }[],
     max_wall_time_s: number,
     max_memory_mb: number,
     max_cpu_cores: number,
@@ -545,7 +552,7 @@ Logs have strictly increasing per-run sequence numbers. Text is escaped when dis
 
 Analysis run validation requires the submitted experiment revision to match the current one. A stale revision returns `409 EXPERIMENT_REVISION_CONFLICT`. Input artifacts must be a nonempty subset of that plan's inputs. `python_analysis_v1` requires a ready Python code artifact. `bouncing_ball_v1` requires exactly one supported video and `code_artifact_id: null`. It persists the exact executed pipeline code as an output artifact.
 
-For `bouncing_ball_v1`, the allowed parameters are `start_time_s` (default `0`), `end_time_s` (default `null`, meaning media end), and `object_hint` (default `"ball"`). The interval must be within the video and have positive duration. Unknown parameters are rejected. Calibration comes from the plan snapshot. The pipeline records its selected baseline, detection method, and any failed detections in provenance. For `python_analysis_v1`, parameters are a JSON object passed to the isolated script, whose exact input/output interface is documented in section 10.
+For `bouncing_ball_v1`, the allowed parameters are `start_time_s` (default `0`), `end_time_s` (default `null`, meaning media end), and `object_hint` (default `"ball"`). The interval must be within the video and have positive duration. Unknown parameters are rejected. `object_hint` is provenance metadata only: it is recorded in output metadata and does not select a detector or change the algorithm, which always tracks one bouncing ball. It cannot make the pipeline count fingers or recognize gestures. Calibration comes from the plan snapshot. The pipeline records its selected baseline, detection method, and any failed detections in provenance. For `python_analysis_v1`, parameters are a JSON object passed to the isolated script, whose exact input/output interface is documented in section 10.
 
 A report request accepts committed evidence from terminal analysis runs, including clearly labeled partial evidence from failed or cancelled runs. At least one evidence run is required and all evidence runs must reference the requested experiment. Methods and calibration descriptions come from each evidence run's accepted snapshot, including when the current experiment has since changed. The report must describe failures and missing measurements. It cannot claim success just because report generation succeeded. Draft research summaries without executed evidence remain chat output in the MVP.
 

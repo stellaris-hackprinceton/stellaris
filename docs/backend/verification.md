@@ -52,3 +52,33 @@ No agent opened `.env` or printed credential values. Frontend files were unchang
 Reproduction commands are in `README.md`. Local logs remain under `/tmp/stellaris-claude/`;
 they are not committed. Test projects remain available because no destructive project-ending
 policy has been approved.
+
+
+## File workspace foundation — 2026-11-14
+
+Observed against rebuilt API and project-runtime images, with the existing volumes preserved:
+
+- `workspace_files_test.py --slice 1`: **76 checks passed** (backfill, deterministic IDs,
+  original downloads/ranges, rendered records/measurements, filters, paging and project scope).
+- `workspace_files_test.py --slice 2`: **112 checks passed** (notes, revisions, ETags,
+  no-ops, Unicode validation, user tags, atomic bulk operations, events and archive rules).
+- `workspace_collections_test.py`: **86 checks passed** (manual/saved collections,
+  filter intersections, user links, exact recorded system edges, limits and protected provenance).
+- `integration_test.py --skip-heartbeat`: **95 existing checks passed**. Only the idle
+  heartbeat-delay check was skipped; upload and event replay checks ran.
+- Catalog metadata survived an API restart unchanged. A separate invalid SQLite fixture
+  returned 503 and was preserved byte-for-byte, then explicitly removed only in that test project.
+- An isolated 5-byte note budget rejected a revision with 413 and preserved content/history.
+- A validated synthetic citation projected exactly one `cites` relation without a model.
+- The offline, network-disabled `agent_runtime_test.py` passed. Public capabilities expose
+  the two actual analysis pipelines and whether each requires a supplied code artifact.
+
+These checks made **no paid application-model calls**. They used explicitly simulated
+worker inputs. No `.env` or host credential files were inspected, and no frontend files
+were changed. No new browser verification was needed for this backend-only change.
+
+The new catalog is a backend-owned per-project SQLite file on the API data volume. Notes
+live there; structured scientific records are projected JSON/CSV files and existing artifact
+bytes remain in their project filesystem. See the file workspace contract and backup notes.
+The hand/finger-analysis bug is diagnosed, with capability/prompt clarification added;
+full pipeline selection or strict target rejection remains a separate product decision.

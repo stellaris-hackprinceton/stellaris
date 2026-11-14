@@ -51,3 +51,16 @@ The current backend-only instruction excludes frontend edits. The choice of stri
 validation changes which previously accepted requests are valid, so it needs an explicit
 product/contract decision before implementation. The file-workspace implementation proceeds
 independently.
+
+## Clarification implementation note
+
+Additive clarification only; the repair decision above remains pending.
+
+- `/capabilities.execution.analysis_pipelines` is an optional list of descriptors
+  (`id`, `description`, `requires_code_artifact`) for `bouncing_ball_v1` and
+  `python_analysis_v1`. It is `[]` when workers are unavailable. `allowed_backends` is unchanged.
+- The bouncing-ball descriptor states that the object hint does not select a detector.
+- The agent's experiment-scope prompt now states the built-in pipeline's limits and that a plan
+  is not an executable analysis without a matching `python_analysis_v1` implementation.
+- No validation guard, required field, frontend change, or analysis algorithm was added.
+  Previously accepted requests are still accepted, and the FAILED runs above are unchanged.
