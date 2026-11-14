@@ -7,6 +7,7 @@ import { ApiError, api, isAuthError } from '@/lib/api'
 import { keys, useProject, useWorkspace } from '@/lib/queries'
 import { applyProjectEvent, cachedActiveRuns } from '@/lib/events/cache'
 import { consumeEvents } from '@/lib/events/stream'
+import { applyTerminalEvent, refreshTerminals } from '@/lib/terminal'
 import { ProjectShellSlot } from './feature-bridge'
 import { ProjectApprovals } from '@/features/execution/approvals'
 import styles from '@/features/execution/sol.module.css'
@@ -57,10 +58,11 @@ export function ProjectRuntime({ project_id, children }: { project_id: string, c
           if (!cursor) await snapshot()
           await consumeEvents(project_id, cursor, signal, async event => {
             if (seen.has(event.cursor)) return
+            applyTerminalEvent(client, event)
             await applyProjectEvent(client, event, signal)
             cursor = event.cursor; seen.add(cursor)
             if (seen.size > 2048) seen.delete(seen.values().next().value!)
-          }, () => { connected = true; openedAt = Date.now(); disconnectedAt = 0; if (fallbackTimer) clearTimeout(fallbackTimer); setConnection('connected') })
+          }, () => { connected = true; openedAt = Date.now(); disconnectedAt = 0; if (fallbackTimer) clearTimeout(fallbackTimer); setConnection('connected'); refreshTerminals(client, project_id) })
         } catch (error) {
           if (signal.aborted) return
           connected = false

@@ -37,7 +37,7 @@ export async function responseError(response: Response): Promise<ApiError> {
   return error
 }
 export async function request<T>(path: string, options: {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: unknown, signal?: AbortSignal,
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', body?: unknown, signal?: AbortSignal,
   command?: CommandOptions, edit?: EditOptions, deleteOptions?: EditOptions | { signal?: AbortSignal }
 } = {}): Promise<ApiResult<T>> {
   const method = options.method ?? 'GET'
