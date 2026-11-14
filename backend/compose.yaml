@@ -1,11 +1,35 @@
-# Single backend Compose configuration.
+# Single local application Compose configuration.
 # Per-project containers are NOT listed here; the api service creates them dynamically.
 #
-#   docker compose --profile build-only build   # builds api, project runtime, and worker images
-#   docker compose up -d                        # starts the api only
+#   docker compose --profile build-only build   # builds all four application images
+#   docker compose up -d --wait                 # starts frontend and API
 name: stellaris
 
 services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        STELLARIS_API_ORIGIN: http://api:8000
+    image: stellaris-frontend:dev
+    ports:
+      - "127.0.0.1:${STELLARIS_FRONTEND_PORT:-3000}:3000"
+    environment:
+      STELLARIS_API_ORIGIN: http://api:8000
+      STELLARIS_DOCS_ROOT: /app/docs
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    volumes:
+      - type: bind
+        source: ../docs
+        target: /app/docs
+        read_only: true
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -24,8 +48,10 @@ services:
       STELLARIS_WORKER_MEMORY_MB: ${STELLARIS_WORKER_MEMORY_MB:-1536}
       STELLARIS_WORKER_CPUS: ${STELLARIS_WORKER_CPUS:-1.0}
       STELLARIS_WORKER_WALL_TIME_S: ${STELLARIS_WORKER_WALL_TIME_S:-600}
+      STELLARIS_ALLOWED_HOSTS: localhost,127.0.0.1,[::1],api
+      STELLARIS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000,http://localhost:${STELLARIS_FRONTEND_PORT:-3000},http://127.0.0.1:${STELLARIS_FRONTEND_PORT:-3000}
     env_file:
-      # User-populated secrets (OPENAI_API_KEY, ...). Optional; never committed or inspected by agents.
+      # Optional user-populated provider credentials, never committed or inspected by agents.
       - path: .env
         required: false
     volumes:

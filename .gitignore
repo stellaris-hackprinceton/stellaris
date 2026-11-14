@@ -1,3 +1,7 @@
 .env
 .env.*
 !.env.example
+
+# Local tools and generated repository graphs.
+/.local/
+/graphify-out/

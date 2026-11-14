@@ -1,4 +1,4 @@
-"""Sources (immutable snapshots) and claims (Contracts.md sections 5-6).
+"""Sources (immutable snapshots) and claims (docs/frontend-backend-contract.md sections 5-6).
 
 Public writes: only manual sources (POST /sources). Agent tools and workers publish
 sources and claims through publish_source() / publish_claim(), which apply the same

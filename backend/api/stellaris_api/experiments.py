@@ -1,4 +1,4 @@
-"""Experiment plans with revisions and ETags (Contracts.md sections 5-6).
+"""Experiment plans with revisions and ETags (docs/frontend-backend-contract.md sections 5-6).
 
 An experiment is a plan, not an execution record. Every save validates that referenced
 artifacts are ready and belong to the project, and that reference-length calibration

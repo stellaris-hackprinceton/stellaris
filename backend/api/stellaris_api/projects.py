@@ -1,4 +1,4 @@
-"""Project routes: create, list, get, patch, workspace, events (Contracts.md sections 5-6, 8)."""
+"""Project routes: create, list, get, patch, workspace, events (docs/frontend-backend-contract.md sections 5-6, 8)."""
 
 import logging
 import time

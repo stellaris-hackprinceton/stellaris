@@ -22,6 +22,7 @@ _LOCKS_GUARD = threading.Lock()
 MAX_AGENT_CONTEXT_BYTES = 8 * 1024 * 1024
 MAX_AGENT_OUTPUT_CHARS = 200_000
 MAX_AGENT_SECONDS = 300
+MAX_AGENT_RETRIEVALS = 3
 DEFAULT_MODEL_PROVIDER = "bedrock"
 DEFAULT_AWS_REGION = "us-east-1"
 DEFAULT_BEDROCK_MODEL_ID = "us.amazon.nova-2-lite-v1:0"
@@ -174,6 +175,27 @@ def _apply_proposal(ctx, event, claim_ids):
         raise RunFailure("INVALID_AGENT_OUTPUT", f"Backend rejected the {kind or 'resource'} proposal: "
                          f"{detail or exc.message}") from exc
     raise RunFailure("INVALID_AGENT_OUTPUT", "The agent proposed an unsupported resource type.")
+
+
+def _retrieval_record(event):
+    """Validate the runner's retrieval provenance: what was searched and which candidates were rejected.
+    It is stored only in the run provenance, never as a source."""
+    def text(value, limit):
+        return isinstance(value, str) and len(value) <= limit
+    candidates = event.get("candidates")
+    if (set(event) != {"type", "provider", "query", "search_query", "candidates"} or event["provider"] != "arxiv"
+            or not text(event["query"], 400) or not text(event["search_query"], 2000)
+            or not isinstance(candidates, list) or len(candidates) > 10):
+        raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned invalid retrieval provenance.")
+    for candidate in candidates:
+        if (not isinstance(candidate, dict) or set(candidate) != {"external_id", "title", "selected", "missing_terms"}
+                or not text(candidate["external_id"], 100) or not text(candidate["title"], 300)
+                or not isinstance(candidate["selected"], bool) or not isinstance(candidate["missing_terms"], list)
+                or len(candidate["missing_terms"]) > 10
+                or any(not text(term, 400) for term in candidate["missing_terms"])):
+            raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned invalid retrieval provenance.")
+    return {"provider": "arxiv", "query": event["query"], "search_query": event["search_query"],
+            "candidates": candidates}
 
 
 def _put_request(container, run_id, request):
@@ -377,6 +399,16 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id)
                     result = _apply_proposal(ctx, event, claim_ids)
                     ctx.log.system(f"Validated {event.get('kind')} proposal: {dumps(result)}")
                     agent_metadata.setdefault("resource_outputs", []).append({"kind": event["kind"], **result})
+                elif event.get("type") == "retrieval":
+                    retrieval = _retrieval_record(event)
+                    retrievals = agent_metadata.setdefault("retrievals", [])
+                    if len(retrievals) >= MAX_AGENT_RETRIEVALS:
+                        raise RunFailure("INVALID_AGENT_STREAM", "The project agent exceeded its retrieval limit.")
+                    retrievals.append(retrieval)
+                    kept = sum(1 for c in retrieval["candidates"] if c["selected"])
+                    ctx.log.system(f"arXiv retrieval {dumps(retrieval['search_query'])}: "
+                                   f"{len(retrieval['candidates'])} retrieved, {kept} matched every term, "
+                                   f"{len(retrieval['candidates']) - kept} rejected as candidates.")
                 elif event.get("type") == "complete":
                     if set(event) != {"type"}:
                         raise RunFailure("INVALID_AGENT_STREAM", "The project agent returned an invalid completion event.")

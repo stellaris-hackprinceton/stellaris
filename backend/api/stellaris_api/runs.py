@@ -1,4 +1,4 @@
-"""Runs, results, measurements, and logs (Contracts.md sections 5-7).
+"""Runs, results, measurements, and logs (docs/frontend-backend-contract.md sections 5-7).
 
 Acceptance: POST /runs validates the request, builds the complete immutable input snapshot
 (experiment revision, artifact hashes/metadata, parameters, executed pipeline code, selected
@@ -475,6 +475,19 @@ def cancel_run(project_id, run_id):
     if signal:
         _manager().request_cancel(run_id)
     return response
+
+
+@bp.get("/<project_id>/runs/<run_id>/approvals")
+def list_approvals(project_id, run_id):
+    """Contract section 7: `200 Page<Approval>`. The MVP has no paid or privileged tool integration,
+    so no approval is ever created and the page is always empty. There is no approval execution
+    machinery; the decision route stays unimplemented until a supported action requires it."""
+    load_visible(g.db, project_id)
+    load_run_row(g.db, project_id, run_id)
+    page_limit()
+    if request.args.get("cursor"):
+        raise ApiError(400, "INVALID_CURSOR", "cursor is invalid.")
+    return json_response({"items": [], "next_cursor": None})
 
 
 @bp.get("/<project_id>/runs/<run_id>/results")

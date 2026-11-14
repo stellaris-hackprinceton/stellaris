@@ -1,4 +1,4 @@
-"""Persisted project events and opaque, project-bound event cursors (Contracts.md section 8).
+"""Persisted project events and opaque, project-bound event cursors (docs/frontend-backend-contract.md section 8).
 
 Events are written with record_event() inside the same transaction as the resource change
 they describe, so an event never points at uncommitted state. Writers use BEGIN IMMEDIATE,

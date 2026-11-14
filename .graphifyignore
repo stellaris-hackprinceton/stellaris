@@ -1,0 +1,10 @@
+.git/**
+.local/**
+graphify-out/**
+**/node_modules/**
+**/.next/**
+**/__pycache__/**
+**/.env
+**/.env.*
+.env
+.env.*
