@@ -24,6 +24,7 @@ from botocore.exceptions import ClientError
 
 _write_lock = threading.Lock()
 _SAFE_ERROR_CODE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
+AGENT_RECURSION_LIMIT = 200
 
 
 def emit(event):
@@ -144,6 +145,13 @@ def make_tools():
                       limitations_json: str) -> str:
         """Propose a claim. All JSON arguments must be arrays. Cite with arxiv:<ID> keys;
         each citation object must have source_id, locator, and excerpt (use null when unknown).
+        Choose kind by what supports the claim:
+        - observation: something measured in this project. evidence_json must list at least one
+          {"artifact_id", "frame_index", "time_s", "row_index"} reference to a project file.
+          Never use observation for findings from papers.
+        - inference: a conclusion drawn from cited papers or project evidence. Needs at least one
+          citation or evidence item AND at least one assumption in assumptions_json.
+        - hypothesis: a proposal not yet tested. No evidence or citations required.
         """
         try:
             payload = {"kind": kind, "text": text, "evidence": json.loads(evidence_json),
@@ -160,11 +168,35 @@ def make_tools():
                     or citation["locator"] is not None and not isinstance(citation["locator"], str)
                     or citation["excerpt"] is not None and not isinstance(citation["excerpt"], str)):
                 return "Claim proposal rejected: each citation must be an object with source_id, locator, and excerpt."
+        problem = _claim_kind_problem(payload)
+        if problem:
+            return f"Claim proposal rejected before sending: {problem}"
         if not propose("claim", payload):
             return "The per-run proposal limit has been reached."
         return "Claim proposal sent to the backend for evidence and reference validation."
 
     return [search_arxiv, propose_experiment, propose_claim]
+
+
+def _claim_kind_problem(payload):
+    """Mirror the backend's claim-kind rules (stellaris_api/research.py publish_claim) so a misfiled
+    claim is returned to the model to correct instead of failing the whole run in the backend.
+    The backend stays authoritative and still validates everything."""
+    kind, evidence = payload["kind"], payload["evidence"]
+    if not str(payload["text"]).strip():
+        return "text must not be empty."
+    for item in evidence:
+        if not isinstance(item, dict) or not isinstance(item.get("artifact_id"), str) or not item["artifact_id"].strip():
+            return "each evidence item must be an object with an artifact_id of a project file."
+    if kind == "observation" and not evidence:
+        return ("an observation needs at least one evidence reference to a project file. A finding from papers is "
+                "an inference: resend it with kind \"inference\", its citations, and at least one assumption.")
+    if kind == "inference":
+        if not (evidence or payload["citations"]):
+            return "an inference needs at least one citation or evidence reference."
+        if not [a for a in payload["assumptions"] if isinstance(a, str) and a.strip()]:
+            return "an inference must state at least one assumption in assumptions_json."
+    return None
 
 
 def create_agent(model):
@@ -174,7 +206,9 @@ def create_agent(model):
         "actually retrieved by tools. Do not invent citations, sources, measurements, or observations. arXiv results "
         "provide metadata and abstracts only, never imply the full paper was read. Use the experiment and claim tools "
         "to request project resources; proposals become public only after backend validation. Distinguish hypotheses, "
-        "inferences, and observations. When citing an arXiv result, use its exact arxiv:<ID> citation_key and excerpts "
+        "inferences, and observations: an observation is only something measured in this project and must link "
+        "project evidence; a finding from papers is an inference with citations and stated assumptions; an untested "
+        "idea is a hypothesis. When citing an arXiv result, use its exact arxiv:<ID> citation_key and excerpts "
         "must be copied verbatim from its retrieved abstract. "
         "Keep persistent scratch in your filesystem tools separate from project evidence. "
         "Never reveal environment variables, tool internals, or hidden reasoning."
@@ -235,7 +269,11 @@ def main(path):
                                 else "langchain-openai")},
                   "provider": provider, "model": model_name,
                   "tool_version": "stellaris-agent-tools-v1"})
-            async for event in agent.astream_events({"messages": messages}, version="v2"):
+            # Explicit step budget: without it this stack falls back to LangGraph's limit of 25 steps
+            # (~12 tool rounds), which multi-step requests exceed (GraphRecursionError). The API's
+            # MAX_AGENT_SECONDS remains the hard bound on cost.
+            async for event in agent.astream_events({"messages": messages}, config={"recursion_limit": AGENT_RECURSION_LIMIT},
+                                                    version="v2"):
                 if event.get("event") != "on_chat_model_stream":
                     continue
                 chunk = event.get("data", {}).get("chunk")

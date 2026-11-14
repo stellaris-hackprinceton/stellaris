@@ -46,6 +46,25 @@ async def _check():
     assert "citations_json must be a JSON array" in str(malformed), malformed
     assert events == [], events
 
+    # A literature finding filed as an observation (the failure seen live) is returned to the model.
+    citation = '[{"source_id": "arxiv:0000.00000", "locator": null, "excerpt": null}]'
+    misfiled = claim_tool.invoke({
+        "kind": "observation", "text": "Papers report global regularity is open.", "evidence_json": "[]",
+        "citations_json": citation, "assumptions_json": "[]", "limitations_json": "[]"})
+    assert "kind \"inference\"" in str(misfiled), misfiled
+    no_assumption = claim_tool.invoke({
+        "kind": "inference", "text": "Papers report global regularity is open.", "evidence_json": "[]",
+        "citations_json": citation, "assumptions_json": "[]", "limitations_json": "[]"})
+    assert "at least one assumption" in str(no_assumption), no_assumption
+    assert events == [], events
+    accepted = claim_tool.invoke({
+        "kind": "inference", "text": "Papers report global regularity is open.", "evidence_json": "[]",
+        "citations_json": citation, "assumptions_json": '["The abstracts reflect the papers."]',
+        "limitations_json": "[]"})
+    assert "sent to the backend" in str(accepted), accepted
+    assert [e["payload"]["kind"] for e in events] == ["inference"], events
+    events.clear()
+
     write_model = DeterministicTestModel(target_tool="write_file", tool_args={
         "file_path": "/scratch-persistence-probe.txt", "content": "persistent project scratch marker"})
     agent = agent_runner.create_agent(write_model)
