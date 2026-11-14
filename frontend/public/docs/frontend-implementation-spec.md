@@ -19,15 +19,14 @@ The requested team is exactly three implementation agents:
 
 These names identify assignment slots. The responsibilities do not depend on a claim about which model is strongest or whether a particular model name is available in a launcher. Two separate Claude sessions fill A and B even if both use the same model.
 
-These planning documents were originally prepared in the Upstream workspace. Their canonical shared location is now **`frontend/public/docs/` in the Stellaris repository**. All implementation paths below are relative to the existing `frontend/` root. An initialized Next.js application already exists there. Extend that application rather than creating a second scaffold or placing web components inside the Upstream game's directory.
+The canonical shared location for these documents is **`frontend/public/docs/` in the Stellaris repository**. All implementation paths below are relative to the existing `frontend/` root. An initialized Next.js application already exists there. Extend that application rather than creating a second scaffold.
 
-The workflow constraints carried forward from this chat are:
+Stellaris workflow rules:
 
-- Do not create, run, or maintain automated tests, harnesses, or fixtures.
-- Do not launch the game or editor for agent-driven verification.
-- Verify through focused source inspection and review. Human interaction review is a separate handoff.
-- Keep shared Stellaris specifications and agent handoffs in `public/docs/` so they can be committed and used by all three agents. Preserve the original workspace's scratchpad and game content.
-- This spec is not a taskboard claim. If implementation is coordinated through the shared board, follow its ownership procedure before claiming work. A role assignment here does not override another chat's claim.
+- Automated tests, builds, application launches, and browser verification are allowed for Stellaris, as clarified by the user on November 14, 2026.
+- Verify changes through focused source review and appropriate automated or application checks. Distinguish verified results from behavior that still needs live backend or human review.
+- Keep shared Stellaris specifications and agent handoffs in `public/docs/` so they can be committed and used by all three agents.
+- Respect the three-agent file ownership boundaries defined in this specification.
 
 ## 2. Product outcome and scope
 
@@ -476,15 +475,15 @@ Do not expand into new modalities or redesign completed screens while this path 
 
 ### Gate 3: source review and human handoff
 
-Review the integrated source for contract alignment, ownership boundaries, media cleanup, access/capability handling, sanitization, state honesty, and failure recovery. Inspect changed files and imports. Do not create or run automated tests, fixture data, browser automation, or gameplay checks under the current project instructions.
+Review the integrated source for contract alignment, ownership boundaries, media cleanup, access/capability handling, sanitization, state honesty, and failure recovery. Inspect changed files and imports. Automated tests, application builds/launches, and browser checks are allowed for Stellaris. Keep test doubles confined to verification and never expose them as real research evidence in the product.
 
-Provide a concise human review itinerary covering project creation, permission denial, capture review, upload failure, plan conflict, analysis failure/cancellation, reconnect, evidence inspection, and report download. These are human interaction checkpoints, not an automated suite. Do not claim they passed unless a human reports the outcome.
+Provide a concise review itinerary covering project creation, permission denial, capture review, upload failure, plan conflict, analysis failure/cancellation, reconnect, evidence inspection, and report download. Automate suitable scenarios and retain human review for physical recording quality and scientific interpretation. Record the actual method and outcome of each completed check.
 
 If compilation, dependency installation, or a development-server run has not been performed under the applicable implementation instructions, state that accurately. This planning document does not launch any application.
 
 ## 10. Completion requirements for the frontend
 
-All items below describe delivered behavior to establish through source review and subsequent human use. They are not instructions to build automated checks.
+All items below describe delivered behavior to establish through source review, appropriate automated checks, and application use. Backend-dependent behavior requires an actual integration environment before it can be reported as verified.
 
 - A real project and all five product areas are reachable through one coherent interface.
 - Every visible server-backed record comes from a documented resource. There are no fabricated results or hidden mock-mode fallbacks.
@@ -516,12 +515,12 @@ If a missing dependency affects a feature, show that limitation and record it in
 
 ### Agent A brief — Claude research/interface owner
 
-Read the supplied Stellaris product document, `frontend-backend-contract.md`, this spec, and applicable project instructions. Implement only the shared UI/styles, shell, projects, and research directories assigned to A. Deliver ProjectsScreen, ProjectShell, and ResearchScreen through their named public exports. Own visual consistency, chat, literature/citation inspection, claim distinctions, and experiment summaries. Consume C's shared API/query layer. Coordinate UI exports before B and C consume them. Do not edit routes, dependencies, transport, Studio, ResultsPane, or C's features. Record changes, focused source review, unresolved dependencies, and human review needs in your handoff. Follow the no-automated-tests rule. Do not spawn additional agents.
+Read the supplied Stellaris product document, `frontend-backend-contract.md`, this spec, and applicable project instructions. Implement only the shared UI/styles, shell, projects, and research directories assigned to A. Deliver ProjectsScreen, ProjectShell, and ResearchScreen through their named public exports. Own visual consistency, chat, literature/citation inspection, claim distinctions, and experiment summaries. Consume C's shared API/query layer. Coordinate UI exports before B and C consume them. Do not edit routes, dependencies, transport, Studio, ResultsPane, or C's features. Record changes, focused source review, unresolved dependencies, and human review needs in your handoff. Use focused tests and application/browser checks where appropriate. Record actual verification outcomes. Do not spawn additional agents.
 
 ### Agent B brief — Claude experiment/results owner
 
-Read the same source documents and project instructions. Implement only Studio, capture/review, upload orchestration UI, plan/calibration editing, and results inspection assigned to B. Deliver StudioScreen and ResultsPane. Use A's UI primitives and C's typed transport/query hooks. Preserve explicit recording/upload consent, cleanup, immutable evidence, saved-revision launches, units, uncertainty, missing values, and simulated-data labels. Keep interactive video-frame calibration unavailable until authoritative frame retrieval is agreed. Do not edit shared routes, configuration, dependencies, transport, or another owner's files. Record source review and human review needs in your handoff. Follow the no-automated-tests rule. Do not spawn additional agents.
+Read the same source documents and project instructions. Implement only Studio, capture/review, upload orchestration UI, plan/calibration editing, and results inspection assigned to B. Deliver StudioScreen and ResultsPane. Use A's UI primitives and C's typed transport/query hooks. Preserve explicit recording/upload consent, cleanup, immutable evidence, saved-revision launches, units, uncertainty, missing values, and simulated-data labels. Keep interactive video-frame calibration unavailable until authoritative frame retrieval is agreed. Do not edit shared routes, configuration, dependencies, transport, or another owner's files. Record source review and human review needs in your handoff. Use focused tests and application/browser checks where appropriate. Record actual verification outcomes. Do not spawn additional agents.
 
 ### Agent C brief — GPT-6.1 Sol integration owner
 
-Read the same source documents and project instructions. Establish the frontend skeleton and shared API types, DTOs, transport, upload-byte transport, resource hooks, query keys, session/capability handling, and the single project SSE runtime. Own routes/configuration/dependencies, Execution, approvals, Workspace, and Reports. Publish the foundation interfaces first so A and B can work independently. Integrate their public exports, coordinate backend gaps, and preserve exact contract semantics. Do not silently modify A/B's private files or invent backend routes/data. Finish with focused source review and a factual integrated handoff, explicitly distinguishing completed code from unverified human interactions. Follow the no-automated-tests rule. Do not spawn additional agents.
+Read the same source documents and project instructions. Establish the frontend skeleton and shared API types, DTOs, transport, upload-byte transport, resource hooks, query keys, session/capability handling, and the single project SSE runtime. Own routes/configuration/dependencies, Execution, approvals, Workspace, and Reports. Publish the foundation interfaces first so A and B can work independently. Integrate their public exports, coordinate backend gaps, and preserve exact contract semantics. Do not silently modify A/B's private files or invent backend routes/data. Finish with focused source review and a factual integrated handoff, explicitly distinguishing completed code from unverified human interactions. Use focused tests and application/browser checks where appropriate. Record actual verification outcomes. Do not spawn additional agents.
