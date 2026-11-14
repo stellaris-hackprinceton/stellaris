@@ -6,9 +6,10 @@ import uuid
 
 from flask import Flask, g, request
 
-from . import artifacts, db, experiments, idempotency, research
+from . import agent_runs, analysis, artifacts, chat, db, experiments, idempotency, reports, research, runs, worker
 from .config import load_config
 from .errors import ApiError, register_error_handlers
+from .executor import RunManager
 from .http import json_response
 from .media import UPLOAD_MIME_TYPES
 from .projects import bp as projects_bp
@@ -32,15 +33,26 @@ def create_app(config=None) -> Flask:
     app.config["STELLARIS"] = config
     runtime = ProjectRuntime(config)
     app.extensions["stellaris_runtime"] = runtime
+    # Shared run executor; agent coordination stays in the project runtime.
+    manager = RunManager(config, runtime)
+    manager.register_handler("agent", agent_runs.handle_agent_run)
+    manager.register_handler("analysis", analysis.handle_analysis)
+    manager.register_handler("report", reports.handle_report)
+    app.extensions["stellaris_runs"] = manager
 
     register_error_handlers(app)
-    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp):
+    for blueprint in (projects_bp, research.bp, experiments.bp, artifacts.bp, runs.bp, chat.bp):
         app.register_blueprint(blueprint)
     _register_guards(app, config)
-    _register_system_routes(app, config, runtime)
+    _register_system_routes(app, config, runtime, manager)
 
-    _recover_database(config)
+    queued, lost_agents = _recover_database(config)
+    agent_runs.cleanup_lost_agents(runtime, lost_agents)
     artifacts.cleanup_uploads(config)
+    analysis.cleanup_run_tmp(config)
+    manager.start()
+    for run_id in queued:  # Accepted before the restart but never started: safe to run now.
+        manager.enqueue(run_id)
     threading.Thread(target=_reconcile_containers, args=(config, runtime), daemon=True,
                      name="stellaris-reconcile").start()
     return app
@@ -78,7 +90,7 @@ def _register_guards(app, config):
             conn.close()
 
 
-def _register_system_routes(app, config, runtime):
+def _register_system_routes(app, config, runtime, manager):
     @app.get("/api/v1/health")
     def health():
         database_ok = True
@@ -109,18 +121,25 @@ def _register_system_routes(app, config, runtime):
 
     @app.get("/api/v1/capabilities")
     def capabilities():
-        # Report only what is actually implemented. Zero limits mean "not available".
-        # Uploads and events are implemented; agent design, analysis, and reports are not yet.
+        # Report only what is actually implemented and available. Zero limits mean "not
+        # available". Video analysis (bouncing_ball_v1) and isolated Python execution need the
+        # worker image; Markdown reports run in the API (they still need evidence runs).
+        workers = manager.worker_available()
+        provider, _model, _runtime_env, agent_error, _message = agent_runs.selected_model_config()
+        agent_configured = agent_error is None
         return json_response(
             {
                 "api_version": "v1",
+                "model_provider": provider,
+                "model_configured": agent_configured,
                 "features": {
-                    "literature_search": False,
-                    "experiment_design": False,
-                    "video_analysis": False,
+                    "literature_search": agent_configured,
+                    "experiment_design": agent_configured,
+                    "research_chat": agent_configured,
+                    "video_analysis": workers,
                     "image_analysis": False,
                     "audio_analysis": False,
-                    "markdown_reports": False,
+                    "markdown_reports": True,
                     "remote_compute": False,
                     "collaboration": False,
                 },
@@ -131,21 +150,23 @@ def _register_system_routes(app, config, runtime):
                     "max_project_bytes": config.max_project_bytes,
                 },
                 "execution": {
-                    "allowed_backends": [],
-                    "max_wall_time_s": 0,
-                    "max_memory_mb": 0,
-                    "max_cpu_cores": 0,
+                    "allowed_backends": ["isolated_python"] if workers else [],
+                    "max_wall_time_s": config.worker_wall_time_s if workers else 0,
+                    "max_memory_mb": config.worker_memory_mb if workers else 0,
+                    "max_cpu_cores": config.worker_cpus if workers else 0,
                     "network_access": False,
                 },
-                "literature_providers": [],
+                "literature_providers": ["arxiv"] if agent_configured else [],
                 "event_retention_seconds": config.event_retention_s,
-                "max_log_chunk_bytes": 0,
+                "max_log_chunk_bytes": config.max_log_chunk_bytes,
             }
         )
 
 
-def _recover_database(config) -> None:
-    """Runs before serving. With one Gunicorn worker nothing else is in flight."""
+def _recover_database(config):
+    """Runs before serving. With one Gunicorn worker nothing else is in flight.
+
+    Returns the IDs of queued runs to re-enqueue."""
     conn = db.connect(config.db_path)
     try:
         with db.transaction(conn):
@@ -155,8 +176,17 @@ def _recover_database(config) -> None:
                 "runtime_error = 'Provisioning interrupted by backend restart.' "
                 "WHERE runtime_state = 'provisioning'"
             ).rowcount
+            queued, lost = runs.recover_after_restart(conn)
         if released or interrupted:
             log.warning("Recovered %d idempotency keys and %d interrupted provisionings", released, interrupted)
+        if lost:
+            log.warning("Marked %d interrupted runs as WORKER_LOST/cancelled: %s", len(lost), ", ".join(lost))
+        lost_agents = []
+        for run_id in lost:
+            row = conn.execute("SELECT project_id,kind FROM runs WHERE id = ?", (run_id,)).fetchone()
+            if row["kind"] == "agent":
+                lost_agents.append((row["project_id"], run_id))
+        return queued, lost_agents
     finally:
         conn.close()
 
@@ -167,6 +197,10 @@ def _reconcile_containers(config, runtime) -> None:
     Missing containers are recreated against the existing workspace volume. A missing
     volume is reported and never replaced with an empty one.
     """
+    try:
+        worker.cleanup_orphans(runtime, lambda: db.connect(config.db_path))
+    except Exception:
+        log.exception("Worker orphan cleanup failed")
     conn = db.connect(config.db_path)
     try:
         project_ids = [r["id"] for r in conn.execute("SELECT id FROM projects WHERE runtime_state = 'ready'")]

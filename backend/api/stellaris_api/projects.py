@@ -247,16 +247,20 @@ def get_workspace(project_id):
         project = to_project(load_visible(conn, project_id))
         counts = {
             table: conn.execute(f"SELECT COUNT(*) FROM {table} WHERE project_id = ?", (project_id,)).fetchone()[0]
-            for table in ("sources", "experiments", "artifacts")
+            for table in ("sources", "experiments", "artifacts", "runs")
         }
+        active = [r["id"] for r in conn.execute(
+            "SELECT id FROM runs WHERE project_id = ? AND status IN ('queued', 'running', 'awaiting_approval', "
+            "'cancelling') ORDER BY created_at, id", (project_id,))]
+        report = conn.execute("SELECT id FROM artifacts WHERE project_id = ? AND kind = 'report' "
+                              "ORDER BY created_at DESC, id DESC LIMIT 1", (project_id,)).fetchone()
         latest = events.latest_sequence(conn, project_id)
     return json_response(
         {
             "project": project,
-            # Runs are not implemented yet, so zero runs and no report are exact.
-            "counts": {**counts, "runs": 0},
-            "active_run_ids": [],
-            "latest_report_artifact_id": None,
+            "counts": counts,
+            "active_run_ids": active,
+            "latest_report_artifact_id": report["id"] if report else None,
             "event_cursor": events.event_cursor(project_id, latest),
         }
     )

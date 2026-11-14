@@ -16,8 +16,12 @@ def is_int(value) -> bool:
 
 
 def is_finite(value) -> bool:
-    return (isinstance(value, (int, float)) and not isinstance(value, bool)
-            and math.isfinite(value))
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def is_timestamp(value) -> bool:

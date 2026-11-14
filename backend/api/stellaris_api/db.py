@@ -75,6 +75,15 @@ CREATE TABLE IF NOT EXISTS claims (
 );
 CREATE INDEX IF NOT EXISTS claims_page ON claims (project_id, created_at, id);
 
+CREATE TABLE IF NOT EXISTS messages (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects (id),
+    role        TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+    created_at  TEXT NOT NULL,
+    doc         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS messages_page ON messages (project_id, created_at, id);
+
 -- Only ready (immutable, stored) artifacts have rows.
 CREATE TABLE IF NOT EXISTS artifacts (
     id            TEXT PRIMARY KEY,
@@ -107,6 +116,43 @@ CREATE TABLE IF NOT EXISTS uploads (
     updated_at           TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS uploads_project ON uploads (project_id, status);
+
+-- Runs: `doc` is the public Run; `snapshot` is the immutable accepted input snapshot
+-- (persisted before the run is enqueued); `warnings` feeds RunResults.
+CREATE TABLE IF NOT EXISTS runs (
+    id            TEXT PRIMARY KEY,
+    project_id    TEXT NOT NULL REFERENCES projects (id),
+    kind          TEXT NOT NULL CHECK (kind IN ('agent', 'analysis', 'report')),
+    experiment_id TEXT,
+    status        TEXT NOT NULL CHECK (status IN ('queued', 'running', 'awaiting_approval', 'cancelling',
+                                                  'succeeded', 'failed', 'cancelled')),
+    created_at    TEXT NOT NULL,
+    doc           TEXT NOT NULL,
+    snapshot      TEXT NOT NULL,
+    warnings      TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS runs_page ON runs (project_id, created_at, id);
+CREATE INDEX IF NOT EXISTS runs_status ON runs (status);
+
+CREATE TABLE IF NOT EXISTS measurements (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects (id),
+    run_id      TEXT NOT NULL REFERENCES runs (id),
+    series      TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    doc         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS measurements_page ON measurements (project_id, run_id, created_at, id);
+
+CREATE TABLE IF NOT EXISTS run_logs (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects (id),
+    run_id      TEXT NOT NULL REFERENCES runs (id),
+    sequence    INTEGER NOT NULL,
+    created_at  TEXT NOT NULL,
+    doc         TEXT NOT NULL,
+    UNIQUE (run_id, sequence)
+);
 """
 
 

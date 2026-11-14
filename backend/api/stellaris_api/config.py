@@ -34,6 +34,19 @@ class Config:
     max_project_bytes: int
     media_probe_timeout_s: float
     event_retention_s: int
+    # Scientific workers (one temporary container per analysis run).
+    worker_image: str
+    worker_memory_mb: int
+    worker_cpus: float
+    worker_pids_limit: int
+    worker_wall_time_s: int
+    worker_output_mb: int
+    worker_tmp_mb: int
+    run_tmp_dir: str
+    pipelines_dir: str
+    max_concurrent_runs: int
+    max_log_chunk_bytes: int
+    max_run_log_bytes: int
 
 
 def load_config() -> Config:
@@ -59,4 +72,17 @@ def load_config() -> Config:
         max_project_bytes=int(_env("STELLARIS_MAX_PROJECT_BYTES", str(2 * 1024 * 1024 * 1024))),
         media_probe_timeout_s=float(_env("STELLARIS_MEDIA_PROBE_TIMEOUT_S", "60")),
         event_retention_s=int(_env("STELLARIS_EVENT_RETENTION_S", str(7 * 24 * 3600))),
+        worker_image=_env("STELLARIS_WORKER_IMAGE", "stellaris-worker:dev"),
+        worker_memory_mb=int(_env("STELLARIS_WORKER_MEMORY_MB", "1536")),
+        worker_cpus=float(_env("STELLARIS_WORKER_CPUS", "1.0")),
+        worker_pids_limit=int(_env("STELLARIS_WORKER_PIDS_LIMIT", "128")),
+        worker_wall_time_s=int(_env("STELLARIS_WORKER_WALL_TIME_S", "600")),
+        worker_output_mb=int(_env("STELLARIS_WORKER_OUTPUT_MB", "256")),
+        worker_tmp_mb=int(_env("STELLARIS_WORKER_TMP_MB", "256")),
+        # Run scratch files (input archives, collected outputs) live in the API volume only.
+        run_tmp_dir=_env("STELLARIS_RUN_TMP_DIR", "/data/runs"),
+        pipelines_dir=_env("STELLARIS_PIPELINES_DIR", "/app/pipelines"),
+        max_concurrent_runs=int(_env("STELLARIS_MAX_CONCURRENT_RUNS", "2")),
+        max_log_chunk_bytes=int(_env("STELLARIS_MAX_LOG_CHUNK_BYTES", "4096")),
+        max_run_log_bytes=int(_env("STELLARIS_MAX_RUN_LOG_BYTES", str(1024 * 1024))),
     )

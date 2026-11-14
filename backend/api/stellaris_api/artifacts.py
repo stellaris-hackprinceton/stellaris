@@ -38,7 +38,7 @@ from .projects import load_visible, load_writable
 from .refs import require_artifacts, require_one
 from .research import get_doc
 from .runtime import STREAM_CHUNK, ArtifactMissing, RuntimeUnavailable
-from .validation import Validator, is_int, is_timestamp
+from .validation import Validator, invalid_reference, is_int, is_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -100,14 +100,23 @@ def _transfer_lock(upload_id: str):
             _busy.discard(upload_id)
 
 
-def _used_bytes(conn, project_id: str, exclude_upload=None) -> int:
+def _used_bytes(conn, project_id: str, exclude_upload=None, audit_run_id=None) -> int:
     stored = conn.execute("SELECT COALESCE(SUM(size_bytes), 0) FROM artifacts WHERE project_id = ?",
                           (project_id,)).fetchone()[0]
     reserved = conn.execute(
         "SELECT COALESCE(SUM(declared_size), 0) FROM uploads WHERE project_id = ? "
         "AND status IN ('pending', 'uploaded') AND id IS NOT ?", (project_id, exclude_upload),
     ).fetchone()[0]
-    return stored + reserved
+    audit_reserved = 0
+    for run in conn.execute("SELECT id, snapshot FROM runs WHERE project_id = ? "
+                            "AND status IN ('queued','running','awaiting_approval','cancelling')", (project_id,)):
+        if run["id"] == audit_run_id:
+            continue
+        budget = json.loads(run["snapshot"]).get("audit_reserve_bytes", 0)
+        consumed = conn.execute("SELECT COALESCE(SUM(size_bytes),0) FROM artifacts WHERE run_id = ? "
+                                "AND kind IN ('log','environment')", (run["id"],)).fetchone()[0]
+        audit_reserved += max(0, budget - consumed)
+    return stored + reserved + audit_reserved
 
 
 def _quota_error() -> ApiError:
@@ -127,7 +136,7 @@ def _hash_file(path: str):
 
 def _stage_owned_file(conn, runtime, config, project_id, path, *, filename, mime_type, kind, origin,
                       experiment_id, run_id, parent_artifact_ids, artifact_id, extra_metadata,
-                      exclude_upload=None, upload=False) -> dict:
+                      exclude_upload=None, upload=False, audit=False) -> dict:
     v = Validator()
     error = filename_error(filename)
     if error:
@@ -144,6 +153,8 @@ def _stage_owned_file(conn, runtime, config, project_id, path, *, filename, mime
     v.check()
     if experiment_id is not None:
         require_one(conn, "experiments", project_id, experiment_id, "/experiment_id")
+    if run_id is not None:
+        require_run(conn, project_id, run_id, "/run_id")
     parents = list(parent_artifact_ids)
     require_artifacts(conn, project_id, parents, "/parent_artifact_ids")
 
@@ -151,7 +162,8 @@ def _stage_owned_file(conn, runtime, config, project_id, path, *, filename, mime
     metadata = {**inspect_file(path, mime_type, config), **(extra_metadata or {})}
     if size > config.max_file_bytes:
         raise ApiError(413, "UPLOAD_TOO_LARGE", "The file exceeds the maximum artifact size.")
-    if _used_bytes(conn, project_id, exclude_upload) + size > config.max_project_bytes:
+    audit_run_id = run_id if audit and kind in ("log", "environment") else None
+    if _used_bytes(conn, project_id, exclude_upload, audit_run_id) + size > config.max_project_bytes:
         raise _quota_error()
 
     artifact_id = artifact_id or new_id("art")
@@ -161,19 +173,36 @@ def _stage_owned_file(conn, runtime, config, project_id, path, *, filename, mime
         "kind": kind, "origin": origin, "filename": filename, "mime_type": mime_type,
         "size_bytes": size, "sha256": sha256, "parent_artifact_ids": parents, "metadata": metadata,
         "created_at": None,
+        # Private (never stored in the public doc): quota re-checked atomically at commit.
+        "_max_project_bytes": config.max_project_bytes,
+        "_audit_run_id": audit_run_id,
     }
 
 
+def require_run(conn, project_id: str, run_id, path: str) -> None:
+    """A run_id written onto an artifact/claim must name a run of this project."""
+    row = None
+    if isinstance(run_id, str):
+        row = conn.execute("SELECT 1 FROM runs WHERE id = ? AND project_id = ?", (run_id, project_id)).fetchone()
+    if row is None:
+        raise invalid_reference([{"path": path, "message": "Run not found in this project."}])
+
+
 def stage_artifact(conn, runtime, config, project_id: str, *, local_path: str, filename: str, mime_type: str,
-                   kind: str, origin: str, experiment_id=None, run_id=None, parent_artifact_ids=()) -> dict:
+                   kind: str, origin: str, experiment_id=None, run_id=None, parent_artifact_ids=(),
+                   artifact_id=None, audit=False) -> dict:
     """Validate a local file and copy its bytes into the project volume. Not yet visible.
 
     Copies local_path into the API's temp dir first (so media inspection never reads caller
     paths), hashes it, inspects media, checks references and quotas, then stores it via the
     Docker archive API. Returns the Artifact dict; publish it with commit_artifact() inside a
-    transaction (possibly together with other run outputs). Raises ApiError (413/415/422),
-    RuntimeUnavailable (Docker), or OSError (unreadable local_path).
+    transaction (possibly together with other run outputs). `artifact_id` may be pre-allocated
+    with new_id("art") when other content must link to it before commit. Raises ApiError
+    (413/415/422), RuntimeUnavailable (Docker), or OSError (unreadable local_path).
+    An uncommitted staged artifact can be removed with discard_staged().
     """
+    if artifact_id is not None and not re.match(r"^art_[0-9a-f]{32}$", artifact_id):
+        raise ValueError("invalid pre-allocated artifact id")
     tmp_dir = ensure_tmp_dir(config)
     fd, copy_path = tempfile.mkstemp(prefix="stage-", suffix=".tmp", dir=tmp_dir)
     try:
@@ -183,18 +212,26 @@ def stage_artifact(conn, runtime, config, project_id: str, *, local_path: str, f
         os.chmod(copy_path, 0o644)
         return _stage_owned_file(conn, runtime, config, project_id, copy_path, filename=filename,
                                  mime_type=mime_type, kind=kind, origin=origin, experiment_id=experiment_id,
-                                 run_id=run_id, parent_artifact_ids=parent_artifact_ids, artifact_id=None,
-                                 extra_metadata=None)
+                                 run_id=run_id, parent_artifact_ids=parent_artifact_ids, artifact_id=artifact_id,
+                                 extra_metadata=None, audit=audit)
     finally:
         _remove(copy_path)
 
 
-def commit_artifact(conn, artifact: dict) -> dict:
+def commit_artifact(conn, artifact: dict, *, exclude_upload=None) -> dict:
     """Make a staged artifact visible: insert its row and artifact.created event.
 
-    Call inside db.transaction(conn). Returns the final Artifact (created_at assigned).
+    Call inside db.transaction(conn). The project quota is re-checked here; writers hold
+    BEGIN IMMEDIATE, so concurrent publishers cannot jointly exceed it (413
+    PROJECT_QUOTA_EXCEEDED rolls the caller's transaction back). `exclude_upload` names an
+    upload whose reservation this artifact replaces. Returns the final Artifact.
     """
-    artifact = {**artifact, "created_at": now_ts()}
+    limit = artifact.get("_max_project_bytes")
+    audit_run_id = artifact.get("_audit_run_id")
+    artifact = {k: v for k, v in artifact.items() if not k.startswith("_")}
+    if limit is not None and _used_bytes(conn, artifact["project_id"], exclude_upload, audit_run_id) + artifact["size_bytes"] > limit:
+        raise _quota_error()
+    artifact["created_at"] = now_ts()
     conn.execute(
         "INSERT INTO artifacts (id, project_id, kind, experiment_id, run_id, size_bytes, sha256, created_at, doc) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -203,6 +240,14 @@ def commit_artifact(conn, artifact: dict) -> dict:
     )
     record_event(conn, artifact["project_id"], "artifact.created", {"artifact": artifact}, run_id=artifact["run_id"])
     return artifact
+
+
+def discard_staged(runtime, staged: dict) -> None:
+    """Best effort: remove the bytes of a staged artifact that will never be committed."""
+    try:
+        runtime.discard_artifact(staged["project_id"], staged["id"])
+    except Exception as exc:  # Logged; an orphaned file only costs space.
+        log.warning("Could not discard staged artifact %s: %s", staged.get("id"), exc)
 
 
 def publish_artifact(runtime, config, project_id: str, *, local_path: str, filename: str, mime_type: str,
@@ -492,10 +537,17 @@ def complete_upload(project_id, upload_id):
                 idempotency.mark_failed(conn, scope, key)
             raise
 
-        with transaction(conn):
-            artifact = commit_artifact(conn, staged)
-            _update_upload(conn, current["id"], status="completed", artifact_id=artifact["id"])
-            idempotency.complete(conn, scope, key, 200, dumps(artifact), {})
+        try:
+            with transaction(conn):
+                artifact = commit_artifact(conn, staged, exclude_upload=current["id"])
+                _update_upload(conn, current["id"], status="completed", artifact_id=artifact["id"])
+                idempotency.complete(conn, scope, key, 200, dumps(artifact), {})
+        except BaseException:
+            # E.g. 413 from the atomic quota check: the upload stays `uploaded` and may be
+            # retried; the stored bytes reuse the reserved artifact path on retry.
+            with transaction(conn):
+                idempotency.mark_failed(conn, scope, key)
+            raise
     _remove(bin_path)
     return json_response(artifact)
 

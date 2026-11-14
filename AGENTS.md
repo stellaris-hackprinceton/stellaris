@@ -12,12 +12,12 @@
 ## Confirmed implementation decisions
 
 - Use LangChain Deep Agents. Each project's research agent runs inside that project's container and receives a project-isolated scratch space through LangChain, separate from published immutable evidence and artifacts.
-- Use OpenAI as the initial model API provider; live provider testing is deferred. Bedrock is a possible later provider, not a requirement to implement both providers now. Model selection remains configurable.
+- Current provider: AWS Bedrock with Amazon Nova, using LangChain ChatBedrockConverse. Configure STELLARIS_MODEL_PROVIDER=bedrock, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, and BEDROCK_MODEL_ID; AWS_SESSION_TOKEN is optional for temporary credentials. The user superseded the initial OpenAI choice. Live provider testing remains deferred until local checks finish and the user authorizes it. Never inspect credentials or load host AWS profiles; runtime receives only the configured provider environment.
 - Create the project container when its project is created and keep it active for the project's duration. Do not add idle shutdown. Define what ends a project's duration before implementing container teardown; preserve its data.
 - Execute scientific analysis in temporary isolated containers per run, separate from persistent project containers.
 - Omit authentication for now, as explicitly requested by the user. Reconcile the session/authentication requirements in `Contracts.md` before implementing routes. Continue enforcing project-scoped references and execution isolation. Do not represent project IDs as an authorization boundary.
 - Docker is available on this Mac, and the user authorizes using the existing Docker runtime for container testing. The restriction on personal applications applies to website-testing applications and profiles, not this authorized runtime.
-- External integrations currently center on LangChain and the initial model provider. Literature-provider choices are not yet confirmed; do not assume credentials or invent retrieved sources.
+- Use LangChain and the configured model provider. The MVP literature tool retrieves public arXiv metadata and abstracts without separate credentials; additional literature providers remain disabled. Save only material actually retrieved and never imply abstracts are full papers.
 
 ## Environment secrets
 
@@ -37,6 +37,7 @@
 
 ## Claude Code delegation
 
+- Current user override: Claude reached its usage limit during implementation. Use Luna (`gpt-6-luna`) subagents for this work until the user changes that preference. Give each writer a distinct file scope and verify its changes. Retain the Claude workflow below for future authorized use; do not retry Claude or switch models to evade its quota.
 - Delegate implementation, investigation, and review primarily to the local Claude Code CLI. Codex owns task breakdown, integration, verification, and the final outcome.
 - Read `CC-Instructions.md` before delegating to Claude Code and follow its preflight, task briefs, tool restrictions, and result inspection workflow.
 - Explicitly select `--model opus` for normal tasks and `--model sonnet` for very light tasks. Preserve configured effort unless the user specifies otherwise.

@@ -32,8 +32,11 @@ log = logging.getLogger(__name__)
 LABEL_MANAGED = "stellaris.managed"
 LABEL_PROJECT = "stellaris.project_id"
 LABEL_ROLE = "stellaris.role"
+LABEL_RUN = "stellaris.run_id"
 WORKSPACE_MOUNT = "/workspace"
 RUNTIME_USER = "10001:10001"
+LAYOUT_SCRIPT = "/opt/stellaris/secure_layout.py"
+LAYOUT_TIMEOUT_S = 60
 
 # Fixed internal storage layout. Artifact files are named only by server-generated IDs;
 # client filenames are labels and never become paths.
@@ -94,13 +97,24 @@ class ProjectRuntime:
     def __init__(self, config):
         self.config = config
         self._client = None
+        self._stream_client = None
         self._lock = threading.Lock()
+        self._lifecycle_locks = {}
 
     def client(self):
         with self._lock:
             if self._client is None:
                 self._client = docker.from_env(timeout=30)
             return self._client
+
+    def stream_client(self):
+        """Client without a socket read timeout, for long-running exec output streams.
+
+        Callers bound wall time themselves (worker watchdog)."""
+        with self._lock:
+            if self._stream_client is None:
+                self._stream_client = docker.from_env(timeout=None)
+            return self._stream_client
 
     def ping(self) -> bool:
         try:
@@ -111,6 +125,12 @@ class ProjectRuntime:
             return False
 
     def ensure(self, project_id: str, *, create_volume: bool, wait_healthy: bool) -> None:
+        with self._lock:
+            lock = self._lifecycle_locks.setdefault(project_id, threading.Lock())
+        with lock:
+            self._ensure(project_id, create_volume=create_volume, wait_healthy=wait_healthy)
+
+    def _ensure(self, project_id: str, *, create_volume: bool, wait_healthy: bool) -> None:
         """Make sure the project's volume exists and its container is running.
 
         create_volume=False is used during reconciliation: a missing volume for an existing
@@ -120,6 +140,7 @@ class ProjectRuntime:
             client = self.client()
             self._ensure_network(client)
             vol = self._ensure_volume(client, project_id, create_volume)
+            self._secure_layout(client, project_id, vol)
             ctr = self._ensure_container(client, project_id, vol)
             if wait_healthy:
                 self._wait_healthy(ctr)
@@ -203,7 +224,77 @@ class ProjectRuntime:
             raise ArtifactMissing(f"{artifact_id} is not a regular file for {project_id}")
         return member.size, tar.extractfile(member), close
 
+    def discard_artifact(self, project_id: str, artifact_id: str) -> None:
+        """Delete the bytes of a staged artifact that was never committed (best effort).
+
+        Fixed argv (no shell); the ID is validated. Runs as uid 0, which owns the artifact
+        directory, inside the running project container. Committed artifacts are never
+        discarded by any caller.
+        """
+        if not ARTIFACT_ID.match(artifact_id):
+            raise ValueError("invalid artifact id")
+        ctr = self._project_container(project_id)
+        try:
+            result = ctr.exec_run(["rm", "-f", "--", f"{ARTIFACT_DIR}/{artifact_id}"], user="0:0")
+        except DockerException as exc:
+            raise RuntimeUnavailable(f"Could not discard artifact for {project_id}: {exc}") from exc
+        if result.exit_code != 0:
+            raise RuntimeUnavailable(f"Discarding {artifact_id} failed with exit code {result.exit_code}.")
+
     # -- internals ---------------------------------------------------------
+
+    def _secure_layout(self, client, project_id: str, vol: str) -> None:
+        """Make /workspace, /workspace/data, and /workspace/data/artifacts root-owned.
+
+        A one-shot helper container (project runtime image, root with only CHOWN/FOWNER/
+        DAC_OVERRIDE, no network) runs secure_layout.py against the volume: /workspace and
+        /workspace/data become root-owned 1777 (sticky: the runtime user can still create and
+        edit its own files, e.g. the workspace marker, but cannot rename or replace the
+        root-owned entries), artifacts/ becomes root-owned 0755, existing artifact files
+        root-owned 0444, and /workspace/scratch stays owned by the runtime user. Works for new
+        and pre-existing volumes; idempotent.
+        """
+        cfg = self.config
+        try:
+            helper = client.containers.create(
+                image=cfg.project_image,
+                command=["python", "-I", LAYOUT_SCRIPT],
+                labels=_labels(project_id, "layout-helper"),
+                volumes={vol: {"bind": WORKSPACE_MOUNT, "mode": "rw"}},
+                user="0:0",
+                network_mode="none",
+                read_only=True,
+                cap_drop=["ALL"],
+                cap_add=["CHOWN", "FOWNER", "DAC_OVERRIDE"],
+                security_opt=["no-new-privileges:true"],
+                mem_limit="128m",
+                pids_limit=16,
+                environment={"STELLARIS_RUNTIME_UID": RUNTIME_USER.split(":")[0]},
+            )
+        except ImageNotFound as exc:
+            raise RuntimeUnavailable(
+                f"Project runtime image {cfg.project_image} not found. "
+                "Build it with: docker compose --profile build-only build"
+            ) from exc
+        try:
+            helper.start()
+            status = helper.wait(timeout=LAYOUT_TIMEOUT_S)
+            if status.get("StatusCode") != 0:
+                output = helper.logs(stdout=True, stderr=True, tail=20).decode("utf-8", "replace")
+                raise RuntimeUnavailable(f"Workspace layout check failed for {project_id}: {output.strip()[:500]}")
+        except DockerException as exc:
+            if isinstance(exc, RuntimeUnavailable):
+                raise
+            raise RuntimeUnavailable(f"Workspace layout helper failed for {project_id}: {exc}") from exc
+        except Exception as exc:  # requests ReadTimeout from wait()
+            if isinstance(exc, RuntimeUnavailable):
+                raise
+            raise RuntimeUnavailable(f"Workspace layout helper did not finish for {project_id}: {exc}") from exc
+        finally:
+            try:
+                helper.remove(force=True)
+            except DockerException:
+                log.warning("Could not remove layout helper for %s", project_id)
 
     def _ensure_network(self, client) -> None:
         name = self.config.project_network
@@ -248,6 +339,14 @@ class ProjectRuntime:
             ctr = self._create_container(client, project_id, name, vol)
         if ctr.labels.get(LABEL_PROJECT) != project_id:
             raise RuntimeUnavailable(f"Container {name} is not labelled for project {project_id}.")
+        expected_image = client.images.get(self.config.project_image).id
+        if ctr.attrs.get("Image") != expected_image:
+            log.info("Updating project runtime image for %s; preserving its workspace volume", project_id)
+            if ctr.status == "paused":
+                ctr.unpause()
+            ctr.stop(timeout=10)
+            ctr.remove()
+            ctr = self._create_container(client, project_id, name, vol)
         if ctr.status == "paused":
             ctr.unpause()
         elif ctr.status in ("created", "exited"):

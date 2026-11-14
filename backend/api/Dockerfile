@@ -15,6 +15,9 @@ WORKDIR /app
 COPY api/requirements.txt /app/requirements.txt
 RUN pip install -r /app/requirements.txt
 COPY api/stellaris_api /app/stellaris_api
+# Pipeline source executed in the isolated worker. The API never imports it; it snapshots the
+# text when a run is accepted and publishes it as the run's immutable code artifact.
+COPY worker/bouncing_ball_v1.py /app/pipelines/bouncing_ball_v1.py
 
 # Runs as root because it is the trusted Docker controller and needs the Docker socket.
 # Project containers and scientific workers never receive that socket.

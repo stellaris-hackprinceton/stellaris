@@ -119,7 +119,10 @@ The frontend reads capabilities before showing upload or execution options. Limi
 ```ts
 type Capabilities = {
   api_version: "v1",
+  model_provider?: "bedrock" | "openai" | null,
+  model_configured?: boolean,
   features: {
+    research_chat?: boolean,
     literature_search: boolean,
     experiment_design: boolean,
     video_analysis: boolean,
@@ -149,6 +152,10 @@ type Capabilities = {
 ```
 
 When uploads, execution, events, or logs are not yet available, their numeric limits are `0`, their lists are empty, and the related features are `false`. A disabled feature returns `409 FEATURE_UNAVAILABLE` if requested directly. Browser camera availability is detected by the frontend and is separate from backend video-analysis support. Browser-produced media MIME types must intersect `accepted_mime_types`. If they do not, the UI offers a supported file upload.
+
+`model_configured` reports only whether the selected provider's required settings are present and locally valid. It does not certify credentials, IAM permissions, model access, or a successful live invocation. Provider selection and credential values stay on the backend. The current default is AWS Bedrock with Amazon Nova; OpenAI is an explicit optional alternative. No credential values appear in capabilities.
+
+Project quotas include space reserved for each accepted run's bounded logs and provenance. A run may be rejected with `413 PROJECT_QUOTA_EXCEEDED` when its audit reservation cannot fit. Ordinary uploads and generated outputs cannot consume that reserved space. If the underlying storage itself becomes unavailable, the backend retains its accepted snapshot and persisted log entries and explicitly warns `PROVENANCE_UNAVAILABLE` when no manifest artifact could be committed.
 
 ## 5. Core resource schemas
 
@@ -689,6 +696,8 @@ All JSON API failures use the following envelope, including validation, access, 
 - `500`: `INTERNAL_ERROR`, without stack traces or private paths.
 - `503`: `SERVICE_UNAVAILABLE`, with `Retry-After` when known.
 
+Run error codes (`Run.error.code`, not HTTP statuses) used by the current backend: `EXECUTION_TIMEOUT`, `RESOURCE_LIMIT_EXCEEDED`, `WORKER_LOST`, `INVALID_OUTPUT` (section 10), `WORKER_FAILED` (analysis code exited non-zero), `WORKER_UNAVAILABLE` (the isolated worker could not be started), `INPUT_UNAVAILABLE` / `INPUT_INTEGRITY_FAILED` (stored input bytes unreadable or not matching the accepted snapshot's hash), `INSUFFICIENT_EVIDENCE` (the pipeline could not support its measurements; committed partial evidence remains), `PROJECT_QUOTA_EXCEEDED`, `FEATURE_UNAVAILABLE`, and `INTERNAL_ERROR`. `POST /runs` returns `409 EXPERIMENT_REVISION_CONFLICT` for a stale `experiment_revision` (section 6).
+
 An external search provider or worker failing after run acceptance changes the persisted Run to `failed` when no useful continuation is possible. It does not retroactively change the accepted HTTP response. Partial source retrieval may instead yield a successful research run with explicit warnings and the available citations.
 
 Clients retry only transient failures using bounded exponential backoff and the original idempotency key. They do not automatically rerun failed scientific work, grant permission, approve an action, or resubmit changed inputs.
@@ -739,6 +748,8 @@ type WorkerResult = {
   warnings: { code: string, message: string }[]
 }
 ```
+
+Current backend rules for worker output (implementation additions within this section's intent): worker artifacts may only have origin `derived`, `simulated`, or `generated` and may not be `report` artifacts; when any analysed input is `simulated`, derived outputs, measurements, and claims are relabelled as simulated and a `ORIGIN_RELABELLED` result warning records it. Measurement units are limited to `px`, `px/s`, `px/s^2`, `s`, `m`, `m/s`, `m/s^2`, and `1`; metre-based units require a `reference_length` calibration snapshot, and `calibration_mode` must equal the snapshot's mode. A worker warning with code `INSUFFICIENT_EVIDENCE` fails the run with that error code while its validated results are still committed as partial evidence.
 
 Measurement and claim keys must be unique within their respective arrays. `measurement_keys` references measurements in that result. `input_artifact_id` references only declared run inputs, including the selected code artifact. Worker claims may cite only sources in the accepted context snapshot. The backend populates all public ownership fields and timestamps, uses the final path segment as the artifact filename, and derives media metadata itself. Worker output never assigns a public project, run, or artifact ID.
 

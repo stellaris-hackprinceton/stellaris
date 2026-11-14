@@ -103,7 +103,13 @@ def main():
     status, _, session = api("GET", "/session")
     check(status == 200 and session["auth_mode"] == "development_none", "GET /session returns dev compatibility body")
     status, _, caps = api("GET", "/capabilities")
-    check(status == 200 and not any(caps["features"].values()), "capabilities advertise no unimplemented features")
+    unimplemented = ("image_analysis", "audio_analysis", "remote_compute",
+                     "collaboration")
+    check(status == 200 and not any(caps["features"][f] for f in unimplemented),
+          "capabilities advertise no unimplemented features")
+    check(all(caps["features"][f] == caps["model_configured"] for f in
+              ("research_chat", "literature_search", "experiment_design")),
+          "research capabilities reflect selected provider configuration without making model calls")
 
     print("2. Project creation and idempotency")
     run = uuid.uuid4().hex[:8]

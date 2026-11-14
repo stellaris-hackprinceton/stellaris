@@ -150,8 +150,8 @@ def publish_claim(conn, project_id: str, *, run_id: str, kind: str, text: str, m
     measurements, or citations plus at least one assumption; cited sources and evidence
     artifacts must belong to the project; a citation excerpt must come from retrieved
     material (none for metadata-only/failed sources, a substring of the abstract for
-    abstract-only sources). Measurements are not implemented yet, so any measurement_ids
-    are rejected as INVALID_REFERENCE. run_id is not checked until runs exist.
+    abstract-only sources). run_id and measurement_ids must belong to the project
+    (422 INVALID_REFERENCE otherwise).
     """
     _project_for_write(conn, project_id, allow_archived)
     data = {"run_id": run_id, "kind": kind, "text": text, "measurement_ids": list(measurement_ids),
@@ -184,9 +184,13 @@ def publish_claim(conn, project_id: str, *, run_id: str, kind: str, text: str, m
             v.error("/assumptions", "An inference must state its assumptions.")
     v.check()
 
-    if data["measurement_ids"]:
+    if conn.execute("SELECT 1 FROM runs WHERE id = ? AND project_id = ?", (run_id, project_id)).fetchone() is None:
+        raise invalid_reference([{"path": "/run_id", "message": "Run not found in this project."}])
+    missing = [i for i, mid in enumerate(data["measurement_ids"]) if conn.execute(
+        "SELECT 1 FROM measurements WHERE id = ? AND project_id = ?", (mid, project_id)).fetchone() is None]
+    if missing:
         raise invalid_reference([{"path": f"/measurement_ids/{i}", "message": "Measurement not found in this project."}
-                                 for i in range(len(data["measurement_ids"]))])
+                                 for i in missing])
     require_artifacts(conn, project_id, [ref["artifact_id"] for ref in evidence], "/evidence")
     errors = []
     for i, cit in enumerate(citations):
@@ -228,7 +232,7 @@ def get_claim(project_id, claim_id):
 
 def get_doc(table: str, project_id: str, resource_id: str) -> dict:
     """Public JSON of one project-owned resource from a fixed internal table name, or 404."""
-    if table not in ("sources", "claims", "experiments", "artifacts"):
+    if table not in ("sources", "claims", "experiments", "artifacts", "runs"):
         raise ValueError(table)
     load_visible(g.db, project_id)
     row = g.db.execute(f"SELECT doc FROM {table} WHERE id = ? AND project_id = ?",

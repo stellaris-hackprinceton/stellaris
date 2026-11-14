@@ -206,7 +206,12 @@ def main():
     check(status == 200 and {"video/mp4", "image/png", "text/csv"} <= set(caps["uploads"]["accepted_mime_types"])
           and caps["uploads"]["max_file_bytes"] > 0 and caps["event_retention_seconds"] > 0,
           "capabilities advertise implemented upload types, limits, and event retention")
-    check(not any(caps["features"].values()), "capabilities still report unimplemented features as false")
+    check(not any(caps["features"][f] for f in ("image_analysis",
+                                                 "audio_analysis", "remote_compute", "collaboration")),
+          "capabilities still report unimplemented features as false")
+    check(all(caps["features"][f] == caps["model_configured"] for f in
+              ("research_chat", "literature_search", "experiment_design")),
+          "research flags track provider configuration without invoking a model")
     max_file = caps["uploads"]["max_file_bytes"]
     status, _, a = api("POST", "/projects", {"name": f"IT A {run}"}, {"Idempotency-Key": key()})
     status_b, _, b = api("POST", "/projects", {"name": f"IT B {run}"}, {"Idempotency-Key": key()})

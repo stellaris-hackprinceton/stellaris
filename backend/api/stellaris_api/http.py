@@ -115,13 +115,15 @@ def decode_cursor(cursor: str) -> dict:
     return state
 
 
-def project_page(conn, table: str, project_id: str, filters: dict):
+def project_page(conn, table: str, project_id: str, filters: dict, fixed=None):
     """Ascending (created_at, id) page of `table` rows for one project.
 
     filters maps query parameter -> (column, allowed_values_or_None). Column names come
-    only from this trusted mapping. Cursors are bound to the table and project and keep
-    their original filters. Returns (rows, next_cursor).
+    only from this trusted mapping. `fixed` maps trusted column names to values set by the
+    route (e.g. the run of a nested route); cursors are bound to them too. Cursors are bound
+    to the table and project and keep their original filters. Returns (rows, next_cursor).
     """
+    fixed = dict(fixed or {})
     limit = page_limit()
     active = {}
     for name, (_column, allowed) in filters.items():
@@ -137,6 +139,7 @@ def project_page(conn, table: str, project_id: str, filters: dict):
         state = decode_cursor(cursor)
         saved = state.get("f")
         if (state.get("v") != 1 or state.get("t") != table or state.get("p") != project_id
+                or state.get("x", {}) != fixed
                 or not isinstance(state.get("c"), str) or not isinstance(state.get("i"), str)
                 or not isinstance(saved, dict) or not set(saved) <= set(filters)
                 or not all(isinstance(v, str) for v in saved.values())):
@@ -148,6 +151,9 @@ def project_page(conn, table: str, project_id: str, filters: dict):
 
     sql = f"SELECT * FROM {table} WHERE project_id = ?"
     params = [project_id]
+    for column, value in fixed.items():
+        sql += f" AND {column} = ?"
+        params.append(value)
     for name, value in active.items():
         sql += f" AND {filters[name][0]} = ?"
         params.append(value)
@@ -161,9 +167,10 @@ def project_page(conn, table: str, project_id: str, filters: dict):
     next_cursor = None
     if len(rows) > limit:
         last = rows[limit - 1]
-        next_cursor = encode_cursor(
-            {"v": 1, "t": table, "p": project_id, "c": last["created_at"], "i": last["id"], "f": active}
-        )
+        state = {"v": 1, "t": table, "p": project_id, "c": last["created_at"], "i": last["id"], "f": active}
+        if fixed:
+            state["x"] = fixed
+        next_cursor = encode_cursor(state)
     return rows[:limit], next_cursor
 
 

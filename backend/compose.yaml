@@ -1,7 +1,7 @@
 # Single backend Compose configuration.
 # Per-project containers are NOT listed here; the api service creates them dynamically.
 #
-#   docker compose --profile build-only build   # builds api + project runtime images
+#   docker compose --profile build-only build   # builds api, project runtime, and worker images
 #   docker compose up -d                        # starts the api only
 name: stellaris
 
@@ -20,6 +20,10 @@ services:
       STELLARIS_PROJECT_NETWORK: stellaris-projects
       STELLARIS_PROJECT_MEMORY_MB: ${STELLARIS_PROJECT_MEMORY_MB:-512}
       STELLARIS_PROJECT_CPUS: ${STELLARIS_PROJECT_CPUS:-1.0}
+      STELLARIS_WORKER_IMAGE: stellaris-worker:dev
+      STELLARIS_WORKER_MEMORY_MB: ${STELLARIS_WORKER_MEMORY_MB:-1536}
+      STELLARIS_WORKER_CPUS: ${STELLARIS_WORKER_CPUS:-1.0}
+      STELLARIS_WORKER_WALL_TIME_S: ${STELLARIS_WORKER_WALL_TIME_S:-600}
     env_file:
       # User-populated secrets (OPENAI_API_KEY, ...). Optional; never committed or inspected by agents.
       - path: .env
@@ -38,6 +42,15 @@ services:
       context: .
       dockerfile: project_runtime/Dockerfile
     image: stellaris-project-runtime:dev
+
+  # Build-only service: scientific worker image. The api creates one temporary container
+  # from it per analysis run (no network, no socket, no project volume).
+  worker:
+    profiles: ["build-only"]
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    image: stellaris-worker:dev
 
 volumes:
   api-data:
