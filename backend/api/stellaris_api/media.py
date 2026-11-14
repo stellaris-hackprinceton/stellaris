@@ -5,7 +5,7 @@ Client MIME types and timing claims are not trusted:
     find a video stream, and must decode at least one frame. Dimensions, duration, frame
     count, and nominal frame rate come from ffprobe.
   * text: the whole file must be strict UTF-8 without NUL bytes (streamed, bounded memory).
-  * application/json (generated artifacts only): strict JSON with finite numbers.
+  * application/json: strict JSON with finite numbers.
 
 ffprobe parses untrusted media inside the trusted API container, so it runs as uid/gid
 65534 with address-space and CPU rlimits, a wall-clock timeout, an empty environment, and
@@ -37,7 +37,7 @@ TYPES = {
     "text/javascript": ("text", None, {"code"}, {"code"}),
     "application/javascript": ("text", None, {"code"}, {"code"}),
     "text/x-shellscript": ("text", None, {"code"}, {"code"}),
-    "application/json": ("json", None, set(), {"dataset", "environment", "document", "log"}),
+    "application/json": ("json", None, {"dataset", "document"}, {"dataset", "environment", "document", "log"}),
     "application/pdf": ("pdf", None, {"document"}, {"document"}),
     "application/gzip": ("gzip", None, set(), {"document"}),
     "application/x-tar": ("tar", None, set(), {"document"}),

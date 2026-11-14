@@ -91,3 +91,11 @@ Startup reconciliation now recreates/updates active projects only; explicitly re
 archived runtimes are not resurrected. Existing archived containers are not automatically
 stopped or deleted. Workspace volumes and scientific records survive container cleanup.
 This does not add idle shutdown or a project/data deletion endpoint.
+
+## Experiment data uploads
+
+Studio exposes Upload data file on every experiment tab. It opens the existing file
+import flow, preserving origin declarations, upload validation, limits and explicit
+attachment to the selected plan. JSON is accepted as a dataset or document and retains
+the existing strict, finite-number JSON validation (16 MiB parser limit). CSV, text and
+other supported files remain capability-driven; this is not an unrestricted binary upload.

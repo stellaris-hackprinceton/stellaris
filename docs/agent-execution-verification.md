@@ -67,3 +67,11 @@ a chat request to generate or revise code on the selected experiment, without cr
 a replacement or executing it. Isolated WebKit verified both states against the existing
 hand-gesture plans and checked the exact experiment/artifact targets. No model request
 was sent. Agent instructions now distinguish a saved plan from confirmed attached code.
+
+## Generic experiment upload follow-up
+
+Added Upload data file to the experiment header, opening and focusing the existing
+file import flow. JSON datasets/documents now use the existing strict validator.
+Isolated WebKit uploaded the real document-counts.json dataset, declared its generated
+origin and attached it to the paper-structure experiment. The saved implementation was
+preserved and no page errors or model requests occurred.

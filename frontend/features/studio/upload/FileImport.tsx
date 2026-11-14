@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Capabilities, UploadRequest } from "@/contracts/api";
 import { Button, Field, Select, StatusBadge } from "@/components/ui";
 import { formatBytes, formatDuration } from "../format";
@@ -14,8 +14,8 @@ export function kindForMime(mime: string, filename: string): Kind {
   if (m.startsWith("video/")) return "video";
   if (m.startsWith("image/")) return "image";
   if (m.startsWith("audio/")) return "audio";
-  if (m === "text/csv" || m === "application/json" || /\.(csv|tsv|json|parquet)$/i.test(filename)) return "dataset";
-  if (m === "text/x-python" || /\.py$/i.test(filename)) return "code";
+  if (m === "text/csv" || m === "application/json" || (m === "text/plain" && /\.(txt|tsv)$/i.test(filename))) return "dataset";
+  if (["text/x-python", "text/javascript", "application/javascript", "text/x-shellscript"].includes(m) || /\.(py|js|sh)$/i.test(filename)) return "code";
   return "document";
 }
 
@@ -30,11 +30,14 @@ type Props = {
   uploads: Capabilities["uploads"] | undefined;
   disabled: boolean;
   onUpload: (file: File, kind: Kind, origin: Origin) => void;
+  autoFocus?: boolean;
+  onPickerFocused?: () => void;
 };
 
 /** Pick a file, check it locally against published limits, preview it, then upload explicitly. */
-export function FileImport({ uploads, disabled, onUpload }: Props) {
+export function FileImport({ uploads, disabled, onUpload, autoFocus = false, onPickerFocused }: Props) {
   const id = useId();
+  const picker = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [origin, setOrigin] = useState<Origin>("observed");
   const [measured, setMeasured] = useState<{ file: File; ms: number } | null>(null);
@@ -47,6 +50,11 @@ export function FileImport({ uploads, disabled, onUpload }: Props) {
   const baseMime = file ? mimeForFile(file.type, file.name) : "";
   const kind = file ? kindForMime(baseMime, file.name) : null;
   const accepted = uploads?.accepted_mime_types ?? [];
+  const extensionTypes: [string, string[]][] = [
+    [".csv", ["text/csv"]], [".json", ["application/json"]], [".txt", ["text/plain"]], [".tsv", ["text/plain"]],
+    [".py", ["text/x-python"]], [".js", ["text/javascript", "application/javascript"]], [".sh", ["text/x-shellscript"]],
+  ];
+  const acceptedExtensions = extensionTypes.filter(([, types]) => types.some((type) => accepted.includes(type))).map(([extension]) => extension);
   const problems: string[] = [];
   if (file && uploads) {
     if (!baseMime) problems.push("The browser could not determine this file's type.");
@@ -57,12 +65,19 @@ export function FileImport({ uploads, disabled, onUpload }: Props) {
     }
   }
 
+  useEffect(() => {
+    if (autoFocus && !disabled && uploads && picker.current) {
+      picker.current.focus();
+      onPickerFocused?.();
+    }
+  }, [autoFocus, disabled, uploads, onPickerFocused]);
+
   return (
     <div className={styles.stack}>
       <div className={styles.varField}>
         <label htmlFor={`${id}-file`} className={styles.smallLabel}>File</label>
-        <input id={`${id}-file`} type="file" className={styles.fileInput} disabled={disabled || !uploads}
-          accept={[...accepted, ...(accepted.includes("text/x-python") ? [".py"] : [])].join(",")} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <input ref={picker} id={`${id}-file`} type="file" className={styles.fileInput} disabled={disabled || !uploads}
+          accept={[...accepted, ...acceptedExtensions].join(",")} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         {uploads && <p className={styles.muted}>Up to {formatBytes(uploads.max_file_bytes)}; videos up to {formatDuration(uploads.max_video_duration_ms)}.</p>}
       </div>
 
