@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- Artifact previews require session cookies that the image optimizer cannot forward. */
 
 import Link from 'next/link'
+import { humanizeName } from '@/components/ui'
 import { ReportCard } from '@/features/reports/ReportCard'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -154,7 +155,7 @@ function RunBody({ project_id, id, visible }: { project_id: string, id: string, 
 }
 
 export function MeasurementRow({ m }: { m: Measurement }) {
-  return <li>{m.quantity}: {m.status === 'valid' && m.value !== null ? m.value : m.status === 'rejected' ? 'Rejected' : 'Missing'} {m.unit}{m.uncertainty.absolute !== null ? ` ± ${m.uncertainty.absolute}` : ' · Uncertainty not recorded'} · {m.data_origin} · calibration {m.calibration_mode === 'none' ? 'none' : 'reference length'}{m.time_s !== null ? ` · t=${m.time_s} s` : ''}</li>
+  return <li>{humanizeName(m.quantity)}: {m.status === 'valid' && m.value !== null ? m.value : m.status === 'rejected' ? 'Rejected' : 'Missing'} {m.unit}{m.uncertainty.absolute !== null ? ` ± ${m.uncertainty.absolute}` : ' · Uncertainty not recorded'} · {m.data_origin} · calibration {m.calibration_mode === 'none' ? 'none' : 'reference length'}{m.time_s !== null ? ` · t=${m.time_s} s` : ''}</li>
 }
 
 function ChartThumb({ project_id, id }: { project_id: string, id: string }) {

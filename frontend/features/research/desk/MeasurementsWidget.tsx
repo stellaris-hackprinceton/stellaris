@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ID, Measurement } from "@/contracts/api";
 import { useExperiment, useMeasurements, useRun, useRunResults } from "@/lib/queries";
 import { useCatalogView } from "@/lib/queries/views";
-import { Button, ErrorNotice, Skeleton, StatusBadge, describeError } from "@/components/ui";
+import { Button, ErrorNotice, Skeleton, StatusBadge, describeError, humanizeName } from "@/components/ui";
 import { hrefs } from "@/components/shell/hrefs";
 import { RUN_STATUS_LABEL, runTone } from "./ActiveWork";
 import { ListState, MediaPreview, Widget, WidgetFooter, dateLabel, listHasBlockingState, useDisclosure } from "./Widget";
@@ -59,7 +59,7 @@ function MeasurementSet({ project_id, run_id, expanded }: { project_id: ID; run_
               <caption>Sample of saved measurements</caption>
               <thead><tr><th scope="col">Quantity</th><th scope="col">Value</th><th scope="col">Unit</th><th scope="col">Uncertainty</th><th scope="col">Origin</th><th scope="col">Calibration</th></tr></thead>
               <tbody>{sample.map((m) => <tr key={m.id}>
-                <td>{m.quantity}{m.series ? <span className={styles.meta}> · {m.series}</span> : null}</td>
+                <td title={`${m.series} · ${m.quantity}`}>{humanizeName(m.quantity)}{m.series ? <span className={styles.meta}> · {humanizeName(m.series)}</span> : null}</td>
                 <td className={styles.num} title={m.value != null ? String(m.value) : undefined}>{m.status === "missing" ? "Missing" : m.status === "rejected" ? "Rejected" : m.value != null ? nf.format(m.value) : "Missing"}</td>
                 <td>{unit(m.unit)}</td>
                 <td>{m.uncertainty.absolute != null ? `±${nf.format(m.uncertainty.absolute)}${m.uncertainty.method ? ` (${m.uncertainty.method})` : ""}` : "Uncertainty not recorded"}</td>

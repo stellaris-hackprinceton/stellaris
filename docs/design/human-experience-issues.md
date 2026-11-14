@@ -47,6 +47,8 @@ Open questions:
 
 No table structure or responsive solution is selected here.
 
+**Progress, November 14, 2026:** Report Markdown now renders through one sanitized renderer (`frontend/components/ui/MarkdownView.tsx`). Table headings no longer wrap, numbers align right, uncertainty explanations and missing-value reasons sit in a smaller line under their value, known stored names show reader-facing labels (`apex_height_px` → “Peak heights (px)”, with the original in a tooltip), and resource IDs become short linked chips. Wide tables scroll inside their own region. Downloads keep the original Markdown. Which columns belong in the primary reading view remains open.
+
 ## HX-03: “Evidence and provenance” is difficult to understand
 
 **Status:** Open. Label difficulty reported by the user. Raw references are visible in screenshot 1.
@@ -66,6 +68,8 @@ An additional visible ambiguity is that Artifact and Measurements share a legend
 The user suggested Obsidian's graph as a visual reference. Record that as a direction for investigation, not a decision to copy its behavior or change Stellaris's relationship model. Directed scientific lineage and user-created relationships still have distinct meanings.
 
 Open questions concern node scale, link emphasis, label readability and layering, and what should remain visible while inspecting a neighborhood. No graph implementation or styling change is approved.
+
+**Progress, November 14, 2026:** The earlier layout placed files on a spiral sorted by type and ignored relations, so links crossed the whole canvas. Connections now uses a deterministic force layout driven by recorded relations, small filled nodes sized by link count, one distinct color per role, and one line per connected pair. Hovering or focusing a file highlights its links with direction arrows and dims the rest; labels draw in a top layer so they are never hidden. Zoom follows the pointer. Directed provenance and dashed user relations stay distinct.
 
 ## HX-05: Fixed panel widths do not fit different tasks
 

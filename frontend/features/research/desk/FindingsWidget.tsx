@@ -5,7 +5,7 @@ import type { Citation, Claim, EvidenceRef, ID } from "@/contracts/api";
 import { artifactContentUrl } from "@/lib/api";
 import { useArtifact, useClaim, useMeasurements, useRunResults, useSource } from "@/lib/queries";
 import { useCatalogView, type ViewFile } from "@/lib/queries/views";
-import { Button, ErrorNotice, Skeleton, describeError } from "@/components/ui";
+import { Button, ErrorNotice, Skeleton, describeError, humanizeName } from "@/components/ui";
 import { hrefs } from "@/components/shell/hrefs";
 import type { CitationFocus } from "./SourceInspector";
 import { CardError, CardSkeleton, ListState, MediaPreview, Widget, WidgetFooter, dateLabel, listHasBlockingState, useDisclosure } from "./Widget";
@@ -76,7 +76,7 @@ function MeasurementReferences({ project_id, run_id, ids }: { project_id: ID; ru
   return <ul>{ids.map((id) => {
     const measurement = byId.get(id);
     if (measurement) return <li key={id}>
-      <Link href={hrefs.run(project_id, run_id)}>{measurement.quantity}: {measurement.status === "missing" ? "Missing" : measurement.status === "rejected" ? "Rejected" : measurement.value ?? "Missing"} {measurement.unit}</Link>
+      <Link href={hrefs.run(project_id, run_id)}>{humanizeName(measurement.quantity)}: {measurement.status === "missing" ? "Missing" : measurement.status === "rejected" ? "Rejected" : measurement.value ?? "Missing"} {measurement.unit}</Link>
       <span className={styles.meta}> · {measurement.data_origin} · calibration {measurement.calibration_mode} · {measurement.uncertainty.absolute == null ? "uncertainty not recorded" : `uncertainty ±${measurement.uncertainty.absolute} ${measurement.unit}`}</span>
     </li>;
     return <li key={id}>

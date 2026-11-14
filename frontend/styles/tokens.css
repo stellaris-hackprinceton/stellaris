@@ -1,11 +1,23 @@
-/* Shared experiment studio design tokens. */
+/*
+ * Continuous studio tokens (docs/design/continuous-studio-direction.md).
+ * Surface roles, outermost first:
+ *   --color-background  surround: sidebar, utility header, empty app space
+ *   --color-canvas      the main working field, modestly separated from the surround
+ *   --color-surface     panels, cards, inputs and overlays placed on the canvas
+ *   --color-surface-muted  quiet fills: table heads, hovered rows, skeletons
+ * Light is the default; dark applies with [data-theme="dark"], or with the OS setting when no
+ * explicit choice is stored ([data-theme] absent). The inline script in app/layout.tsx sets it.
+ */
 :root {
-  --color-background: #f3f4f6;
+  color-scheme: light;
+  --color-background: #e8eaef;
+  --color-canvas: #f4f5f8;
   --color-surface: #ffffff;
   --color-surface-muted: #eceef2;
-  --color-text: #242630;
-  --color-text-muted: #606575;
-  --color-border: #cdd1da;
+  --color-text: #22242d;
+  --color-text-muted: #5b6070;
+  --color-border: #d3d6de;
+  --color-control-border: #858b9b;
   --color-accent: #6435c9;
   --color-accent-hover: #5227ae;
   --color-accent-contrast: #ffffff;
@@ -15,15 +27,31 @@
   --color-warning-surface: #fff2d9;
   --color-danger: #af303d;
   --color-danger-surface: #fbe9ec;
-  --color-selection: #ede7fa;
+  --color-selection: #ece6fa;
   --color-selection-text: #49229c;
-  --color-control-border: #858b9b;
-  --color-nav-background: #e7e9ee;
-  --color-nav-text: #242630;
-  --color-nav-muted: #606575;
-  --color-nav-selected: #ede7fa;
+  --color-nav-background: var(--color-background);
+  --color-nav-text: #22242d;
+  --color-nav-muted: #5b6070;
+  --color-nav-selected: #ffffff;
   --color-focus: #6435c9;
-  --shadow-overlay: 0 8px 24px #2426301f;
+  --color-backdrop: rgb(20 22 30 / 0.45);
+  --color-media-backdrop: #0b0c10;
+  --color-terminal: #12141a;
+  --color-terminal-text: #e3e6ec;
+  --shadow-overlay: 0 8px 24px rgb(34 36 45 / 0.14);
+
+  /* Connections graph roles: distinct hues, each >= 3:1 against the canvas. */
+  --graph-artifact: #2f6db3;
+  --graph-source: #6435c9;
+  --graph-claim: #b4306a;
+  --graph-experiment: #a85800;
+  --graph-run: #5d6577;
+  --graph-run-measurements: #1e7a58;
+  --graph-note: #7d6a00;
+  --graph-record: #737887;
+  --graph-edge: rgb(91 96 112 / 0.38);
+  --graph-edge-strong: rgb(34 36 45 / 0.8);
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -43,4 +71,87 @@
   --text-title: 18px;
   --sidebar-width: 224px;
   --chat-rail-width: 360px;
+}
+
+/* Dark studio. Kept in sync in both blocks below (explicit choice, and OS preference). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-background: #111318;
+  --color-canvas: #171a20;
+  --color-surface: #1e2129;
+  --color-surface-muted: #272b35;
+  --color-text: #e6e8ee;
+  --color-text-muted: #a0a6b4;
+  --color-border: #2e323d;
+  --color-control-border: #6b7385;
+  --color-accent: #a68eff;
+  --color-accent-hover: #bba8ff;
+  --color-accent-contrast: #15121f;
+  --color-success: #62cf9d;
+  --color-success-surface: #142a20;
+  --color-warning: #e9b45c;
+  --color-warning-surface: #2e2413;
+  --color-danger: #f2838f;
+  --color-danger-surface: #34181d;
+  --color-selection: #2d2652;
+  --color-selection-text: #d8ceff;
+  --color-nav-text: #e6e8ee;
+  --color-nav-muted: #a0a6b4;
+  --color-nav-selected: #1e2129;
+  --color-focus: #bba8ff;
+  --color-backdrop: rgb(4 5 8 / 0.62);
+  --color-terminal: #0d0f13;
+  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.55);
+  --graph-artifact: #6ba8ef;
+  --graph-source: #a68eff;
+  --graph-claim: #f07ba9;
+  --graph-experiment: #f0a254;
+  --graph-run: #9ba3b6;
+  --graph-run-measurements: #62cf9d;
+  --graph-note: #d8c25c;
+  --graph-record: #8c92a1;
+  --graph-edge: rgb(160 166 180 / 0.3);
+  --graph-edge-strong: rgb(230 232 238 / 0.85);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-background: #111318;
+    --color-canvas: #171a20;
+    --color-surface: #1e2129;
+    --color-surface-muted: #272b35;
+    --color-text: #e6e8ee;
+    --color-text-muted: #a0a6b4;
+    --color-border: #2e323d;
+    --color-control-border: #6b7385;
+    --color-accent: #a68eff;
+    --color-accent-hover: #bba8ff;
+    --color-accent-contrast: #15121f;
+    --color-success: #62cf9d;
+    --color-success-surface: #142a20;
+    --color-warning: #e9b45c;
+    --color-warning-surface: #2e2413;
+    --color-danger: #f2838f;
+    --color-danger-surface: #34181d;
+    --color-selection: #2d2652;
+    --color-selection-text: #d8ceff;
+    --color-nav-text: #e6e8ee;
+    --color-nav-muted: #a0a6b4;
+    --color-nav-selected: #1e2129;
+    --color-focus: #bba8ff;
+    --color-backdrop: rgb(4 5 8 / 0.62);
+    --color-terminal: #0d0f13;
+    --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.55);
+    --graph-artifact: #6ba8ef;
+    --graph-source: #a68eff;
+    --graph-claim: #f07ba9;
+    --graph-experiment: #f0a254;
+    --graph-run: #9ba3b6;
+    --graph-run-measurements: #62cf9d;
+    --graph-note: #d8c25c;
+    --graph-record: #8c92a1;
+    --graph-edge: rgb(160 166 180 / 0.3);
+    --graph-edge-strong: rgb(230 232 238 / 0.85);
+  }
 }

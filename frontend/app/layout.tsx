@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AppProviders } from "@/providers/app-providers";
 import { Geist, Geist_Mono } from "next/font/google";
+import { THEME_INIT_SCRIPT } from "@/components/ui/themeScript";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,7 +25,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable}`}
+      // The theme script sets data-theme before hydration.
+      suppressHydrationWarning
     >
+      <head><script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} /></head>
       <body><Suspense fallback={<p>Opening Stellaris…</p>}><AppProviders>{children}</AppProviders></Suspense></body>
     </html>
   );

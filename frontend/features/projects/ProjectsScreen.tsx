@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useProjects } from "@/lib/queries";
-import { Button, ErrorNotice, PlusIcon, Skeleton, Tabs, TimestampLabel, describeError } from "@/components/ui";
+import { Button, ErrorNotice, PlusIcon, Skeleton, Tabs, ThemeToggle, TimestampLabel, describeError } from "@/components/ui";
 import { StellarisMark } from "@/components/ui/StellarisMark";
 import { hrefs } from "@/components/shell/hrefs";
 import { CreateProjectDialog } from "./CreateProjectDialog";
@@ -24,6 +24,7 @@ export function ProjectsScreen() {
           <StellarisMark className={styles.brandMark} />
           <span>Stellaris</span>
         </div>
+        <ThemeToggle className={styles.themeToggle} />
       </div>
       <header className={styles.header}>
         <div className={styles.intro}>

@@ -56,7 +56,7 @@ The violet in the image is a reference accent, not a newly fixed palette require
 
 A mode switch should preserve work and should not change what the data means. Do not invert scientific images, video, figures, or plots blindly. Charts and terminal output need deliberate legible treatments appropriate to each mode.
 
-A visible light/dark choice is confirmed. Its placement, initial mode, persistence, system-preference behavior, and any separate System option are not yet decided. The reference contains no reliable design for this control.
+A visible light/dark choice is confirmed. **Decided November 14, 2026:** one icon control in the top-right utility bar (and on Projects) cycles System → Light → Dark. New visitors follow the operating-system setting. An explicit choice is saved per browser and applied before first paint. Tokens live in `frontend/styles/tokens.css`, which documents the surround, canvas, and surface roles. Scientific images and backend chart PNGs are not inverted; charts sit on a light plate in dark mode. The terminal stays dark in both modes.
 
 ## Top bar and navigation authority
 

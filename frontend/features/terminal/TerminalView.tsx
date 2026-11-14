@@ -51,10 +51,12 @@ export function TerminalView({ project_id, session, archived, visible, onEscape 
   useEffect(() => {
     const el = host.current
     if (!el) return
+    // The terminal stays dark in both themes; its colors come from the shared tokens.
+    const token = (name: string, fallback: string) => getComputedStyle(el).getPropertyValue(name).trim() || fallback
     const t = new Terminal({
       scrollback: 5000, cursorBlink: true, fontSize: 13,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-      theme: { background: '#0f141a', foreground: '#e6edf3' },
+      theme: { background: token('--color-terminal', '#12141a'), foreground: token('--color-terminal-text', '#e3e6ec'), cursor: token('--color-terminal-text', '#e3e6ec'), selectionBackground: '#3b3566' },
     })
     const f = new FitAddon()
     t.loadAddon(f)

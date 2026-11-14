@@ -1,5 +1,6 @@
 "use client";
 import type { ID, Measurement } from "@/contracts/api";
+import { humanizeName } from "@/components/ui";
 import { ORIGIN_LABEL, STATUS_LABEL, formatValue, unitLabel } from "./format";
 import styles from "./results.module.css";
 
@@ -24,11 +25,11 @@ export function MeasurementTable({ measurements, selected, onSelect }: Props) {
   return (
     <div className={styles.groups}>
       {groups.map((g) => (
-        <section key={g.key} className={styles.group} aria-label={`${g.series}: ${g.quantity}`}>
-          <h4 className={styles.groupTitle}>
-            {g.series} · {g.quantity} <span className={styles.unit}>({unitLabel(g.unit)})</span>
+        <section key={g.key} className={styles.group} aria-label={`${humanizeName(g.quantity)}, ${humanizeName(g.series)}`}>
+          <h4 className={styles.groupTitle} title={`${g.series} · ${g.quantity}`}>
+            {humanizeName(g.quantity)} <span className={styles.unit}>{humanizeName(g.series)} · {unitLabel(g.unit)}</span>
           </h4>
-          <div className={styles.tableWrap} role="region" aria-label={`${g.series} ${g.quantity} table`} tabIndex={0}>
+          <div className={styles.tableWrap} role="region" aria-label={`${humanizeName(g.quantity)} table`} tabIndex={0}>
             <table className={styles.table}>
               <thead>
                 <tr>
