@@ -6,7 +6,8 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from report_agent import create_report_agent, extract_final_analysis
+from report_agent import (ReportOutputInvalid, ReportOutputNotJson, ReportOutputTruncated,
+                          create_report_agent, extract_final_analysis)
 
 
 class ReportFixtureModel(BaseChatModel):
@@ -72,7 +73,37 @@ def test_final_json_rejects_non_json_and_malformed_shape():
         raise AssertionError("invalid output must fail")
 
 
+_VALID = ('{"assessment":"mixed","interpretation_markdown":"Assessment: mixed.",'
+          '"limitations":["Small sample"],"references":["run_fixture"]}')
+
+
+def _final(content, metadata=None):
+    return {"messages": [AIMessage(content=content, response_metadata=metadata or {})]}
+
+
+def test_final_json_tolerates_fences_and_surrounding_prose():
+    for wrapped in (f"```json\n{_VALID}\n```", f"Here is the analysis:\n{_VALID}\nDone.",
+                    [{"type": "text", "text": f"```\n{_VALID}\n```"}]):
+        assert extract_final_analysis(_final(wrapped))["assessment"] == "mixed"
+
+
+def test_final_json_failures_are_distinguishable():
+    cases = [(_final(_VALID[:-40], {"stopReason": "max_tokens"}), ReportOutputTruncated),
+             (_final(_VALID, {"finish_reason": "length"}), ReportOutputTruncated),
+             (_final(_VALID[:-40]), ReportOutputNotJson),
+             (_final('{"assessment":"proven","interpretation_markdown":"x","limitations":[],"references":[]}'),
+              ReportOutputInvalid)]
+    for result, expected in cases:
+        try:
+            extract_final_analysis(result)
+        except expected:
+            continue
+        raise AssertionError(f"expected {expected.__name__}")
+
+
 if __name__ == "__main__":
     asyncio.run(_check())
     test_final_json_rejects_non_json_and_malformed_shape()
+    test_final_json_tolerates_fences_and_surrounding_prose()
+    test_final_json_failures_are_distinguishable()
     print("PASS: real Deep Agent graph, bounded report tools, final JSON extraction without reasoning")
