@@ -1,7 +1,7 @@
 # Stellaris
 
 
-[![Watch the video](https://youtube.com)](https://www.youtube.com/watch?v=FbN8rAKbveQ)
+[![Watch the video](https://img.youtube.com/vi/FbN8rAKbveQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=FbN8rAKbveQ)
 
 
 A persistent research workspace: ask a question, gather literature, run real experiments on your data in isolated workers, and turn the saved evidence into a scientific report. Every source, dataset, run, measurement and chart stays connected in one project.
