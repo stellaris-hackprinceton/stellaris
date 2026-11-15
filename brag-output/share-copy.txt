@@ -1,0 +1,5 @@
+Ask Stellaris a research question and it does the science: searches arXiv and pulls the full papers, designs the experiment, writes and runs the analysis in a sandboxed container, records experiments from your webcam, and writes the report. On 25,000 real records it found r = 0.503 and fit W = −37.46 + 55.06 × H.
+
+Stellaris: from question to discovery. Built at HackPrinceton Fall '26 with LangChain Deep Agents on Amazon Bedrock.
+
+Music: "Voxel Revolution" by Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License, http://creativecommons.org/licenses/by/4.0/
