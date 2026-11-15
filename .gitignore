@@ -14,6 +14,7 @@
 # screenshots, music previews and older cuts are regenerable and stay untracked.
 /brag-output/*
 !/brag-output/brag.mp4
+!/brag-output/brag-readme-720p.mp4
 !/brag-output/brag.jpg
 !/brag-output/share-copy.txt
 !/brag-output/brag-plan.md
