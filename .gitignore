@@ -17,10 +17,12 @@
 !/brag-output/brag.jpg
 !/brag-output/share-copy.txt
 !/brag-output/brag-plan.md
+!/brag-output/devpost-thumbnail.png
 !/brag-output/composition2/
 !/brag-output/work/
 /brag-output/work/*
 !/brag-output/work/render.cjs
+!/brag-output/work/thumbnail.cjs
 !/brag-output/work/capture.cjs
 !/brag-output/work/capture2.cjs
 !/brag-output/work/music2.m4a
