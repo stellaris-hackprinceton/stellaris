@@ -1,5 +1,7 @@
 # Stellaris
 
+![Brag_Video](https://github.com/stellaris-hackprinceton/stellaris/raw/refs/heads/main/brag-output/brag.mp4)
+
 A persistent research workspace: ask a question, gather literature, run real experiments on your data in isolated workers, and turn the saved evidence into a scientific report. Every source, dataset, run, measurement and chart stays connected in one project.
 
 Stellaris works across subjects and levels of difficulty. These projects each start from one research question:
