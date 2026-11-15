@@ -2,7 +2,9 @@
 
 
 
-![Stellaris_Video_720p](https://github.com/user-attachments/assets/6a70d5d1-7502-4266-aae8-6584b55ae6d7)
+https://github.com/user-attachments/assets/6a70d5d1-7502-4266-aae8-6584b55ae6d7
+
+[▶ Watch on YouTube](https://www.youtube.com/watch?v=FbN8rAKbveQ)
 
 
 
