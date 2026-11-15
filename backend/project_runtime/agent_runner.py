@@ -27,9 +27,15 @@ from botocore.exceptions import ClientError
 from report_agent import create_report_agent, extract_final_analysis
 
 _write_lock = threading.Lock()
+# Deep Agents runs parallel tool calls in threads. The API requires request IDs in strict sequence,
+# so allocating an ID and emitting its request must happen atomically.
+_tool_request_lock = threading.Lock()
 _SAFE_ERROR_CODE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 AGENT_RECURSION_LIMIT = 200
 MAX_TOOL_CHARS = 12_000
+MAX_OUTPUT_TOKENS = 4096
+# Report analysis returns its whole Markdown narrative inside one JSON object, so it needs more room.
+REPORT_MAX_OUTPUT_TOKENS = 8192
 INGEST_WAIT_S = 400
 MAX_AGENT_INGESTIONS = 2
 TOOL_REPLY_WAIT_S = 480
@@ -212,11 +218,12 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
     def backend_tool(name, payload):
         """Synchronous, run-correlated request to the trusted API process."""
         nonlocal tool_request_count
-        if tool_request_count >= MAX_BACKEND_TOOL_REQUESTS:
-            return {"ok": False, "error": "The per-run backend tool limit has been reached."}
-        tool_request_count += 1
-        request_id = f"{run_id}-{tool_request_count}"
-        emit({"type": "tool_request", "request_id": request_id, "name": name, "payload": payload})
+        with _tool_request_lock:
+            if tool_request_count >= MAX_BACKEND_TOOL_REQUESTS:
+                return {"ok": False, "error": "The per-run backend tool limit has been reached."}
+            tool_request_count += 1
+            request_id = f"{run_id}-{tool_request_count}"
+            emit({"type": "tool_request", "request_id": request_id, "name": name, "payload": payload})
         path = f"/tmp/stellaris-agent-{request_id}-reply.json"
         deadline = time.monotonic() + TOOL_REPLY_WAIT_S
         while not os.path.exists(path):
@@ -461,6 +468,16 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
         status, bounded logs and outputs;
         failed execution can be corrected by saving a new immutable implementation and retrying.
 
+        Use these output kind/mime_type combinations:
+        - JSON: kind "dataset" or "document", mime_type "application/json".
+        - CSV: kind "dataset", mime_type "text/csv".
+        - Markdown report: kind "report", mime_type "text/markdown".
+        - PNG chart: kind "chart", mime_type "image/png".
+        Never label JSON as "report" or use "table" as an artifact kind.
+        result.json is the required output manifest, not a report artifact.
+        If validation fails, correct the script's artifact declarations,
+        save a new implementation, and retry.
+
         Code reads /input/manifest.json (schema stellaris.worker_manifest.v1); inputs[] gives artifact_id and
         read-only path. Read input files only. Write derived files under /output and /output/result.json with
         exactly {"measurements":[],"claims":[],"artifacts":[],"warnings":[]}.
@@ -676,16 +693,17 @@ def main(path):
     pid_path = f"/tmp/stellaris-agent-{run_id}.pid"
     with open(pid_path, "x", encoding="ascii") as pid_file:
         pid_file.write(str(os.getpid()))
+    max_tokens = REPORT_MAX_OUTPUT_TOKENS if request.get("mode") == "report" else MAX_OUTPUT_TOKENS
     try:
         if provider == "bedrock":
             model = ChatBedrockConverse(model_id=model_name, region_name=region,
                                         aws_access_key_id=access_key, aws_secret_access_key=secret_key,
-                                        aws_session_token=session_token or None, max_tokens=4096, temperature=0,
+                                        aws_session_token=session_token or None, max_tokens=max_tokens, temperature=0,
                                         config=BotocoreConfig(connect_timeout=8, read_timeout=45,
                                                               retries={"mode": "standard", "max_attempts": 2}))
         else:
             model = ChatOpenAI(model=model_name, api_key=api_key, timeout=45, max_retries=1,
-                               max_tokens=4096, temperature=0, streaming=True)
+                               max_tokens=max_tokens, temperature=0, streaming=True)
         papers = request.pop("papers", None)
         generation = request.get("snapshot", {}).get("chat_generation", 0)
         if not isinstance(generation, int) or generation < 0:
@@ -708,11 +726,12 @@ def main(path):
 
                 def report_backend_tool(name, payload):
                     nonlocal report_tool_count
-                    if report_tool_count >= 160:
-                        raise RuntimeError("report backend tool limit reached")
-                    report_tool_count += 1
-                    request_id = f"{run_id}-{report_tool_count}"
-                    emit({"type": "tool_request", "request_id": request_id, "name": name, "payload": payload})
+                    with _tool_request_lock:
+                        if report_tool_count >= 160:
+                            raise RuntimeError("report backend tool limit reached")
+                        report_tool_count += 1
+                        request_id = f"{run_id}-{report_tool_count}"
+                        emit({"type": "tool_request", "request_id": request_id, "name": name, "payload": payload})
                     reply_path = f"/tmp/stellaris-agent-{request_id}-reply.json"
                     deadline = time.monotonic() + TOOL_REPLY_WAIT_S
                     while not os.path.exists(reply_path):

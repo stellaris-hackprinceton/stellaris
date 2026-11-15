@@ -33,6 +33,11 @@ services:
         read_only: true
       - frontend-node-modules:/app/node_modules
       - frontend-next:/app/.next
+    # The dev server compiles routes on first request (and after branch switches with polling),
+    # which can stall the proxied health probe past the image's 5s timeout. Allow for that here.
+    healthcheck:
+      timeout: 30s
+      retries: 5
     depends_on:
       api:
         condition: service_healthy
