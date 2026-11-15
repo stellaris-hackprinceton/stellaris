@@ -124,13 +124,15 @@ class ProjectRuntime:
                 self._client = None
             return False
 
-    def ensure(self, project_id: str, *, create_volume: bool, wait_healthy: bool) -> None:
+    def ensure(self, project_id: str, *, create_volume: bool, wait_healthy: bool, refresh_image: bool = True) -> None:
+        """refresh_image=False keeps an existing container on its current image (startup reconciliation);
+        the next real use (agent run, project creation) then performs the image update for that project."""
         with self._lock:
             lock = self._lifecycle_locks.setdefault(project_id, threading.Lock())
         with lock:
-            self._ensure(project_id, create_volume=create_volume, wait_healthy=wait_healthy)
+            self._ensure(project_id, create_volume=create_volume, wait_healthy=wait_healthy, refresh_image=refresh_image)
 
-    def _ensure(self, project_id: str, *, create_volume: bool, wait_healthy: bool) -> None:
+    def _ensure(self, project_id: str, *, create_volume: bool, wait_healthy: bool, refresh_image: bool = True) -> None:
         """Make sure the project's volume exists and its container is running.
 
         create_volume=False is used during reconciliation: a missing volume for an existing
@@ -141,7 +143,7 @@ class ProjectRuntime:
             self._ensure_network(client)
             vol = self._ensure_volume(client, project_id, create_volume)
             self._secure_layout(client, project_id, vol)
-            ctr = self._ensure_container(client, project_id, vol)
+            ctr = self._ensure_container(client, project_id, vol, refresh_image)
             if wait_healthy:
                 self._wait_healthy(ctr)
         except RuntimeUnavailable:
@@ -331,7 +333,7 @@ class ProjectRuntime:
             raise RuntimeUnavailable(f"Volume {name} is not labelled for project {project_id}.")
         return name
 
-    def _ensure_container(self, client, project_id: str, vol: str):
+    def _ensure_container(self, client, project_id: str, vol: str, refresh_image: bool = True):
         name = container_name(project_id)
         try:
             ctr = client.containers.get(name)
@@ -339,8 +341,8 @@ class ProjectRuntime:
             ctr = self._create_container(client, project_id, name, vol)
         if ctr.labels.get(LABEL_PROJECT) != project_id:
             raise RuntimeUnavailable(f"Container {name} is not labelled for project {project_id}.")
-        expected_image = client.images.get(self.config.project_image).id
-        if ctr.attrs.get("Image") != expected_image:
+        expected_image = client.images.get(self.config.project_image).id if refresh_image else None
+        if expected_image and ctr.attrs.get("Image") != expected_image:
             log.info("Updating project runtime image for %s; preserving its workspace volume", project_id)
             if ctr.status == "paused":
                 ctr.unpause()

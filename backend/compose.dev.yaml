@@ -1,0 +1,26 @@
+# Hot-reload frontend for development. Layer it over the main file:
+#   docker compose -f backend/compose.yaml -f backend/compose.dev.yaml up -d --wait
+# The dev server compiles each route on first request, so first loads are slow; use the
+# default production frontend (compose.yaml alone) for demos.
+services:
+  frontend:
+    build:
+      target: development
+    image: stellaris-frontend:dev
+    environment:
+      NODE_ENV: development
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - type: bind
+        source: ../frontend
+        target: /app
+      - type: bind
+        source: ../docs
+        target: /app/docs
+        read_only: true
+      - frontend-node-modules:/app/node_modules
+      - frontend-next:/app/.next
+    # First-request compiles can stall the proxied health probe past the image's 5s timeout.
+    healthcheck:
+      timeout: 30s
+      retries: 5

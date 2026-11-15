@@ -31,6 +31,12 @@ const STATUS = /^(valid|missing|rejected):\s*([\s\S]+)$/;
 // through sanitizing so KaTeX, which runs afterwards on the sanitized tree, can typeset them.
 const schema = {
   ...defaultSchema,
+  // `artifact://` survives sanitizing only so urlPolicy can resolve it to a project file (or drop it).
+  protocols: {
+    ...defaultSchema.protocols,
+    href: [...(defaultSchema.protocols?.href ?? []), "artifact"],
+    src: [...(defaultSchema.protocols?.src ?? []), "artifact"],
+  },
   attributes: {
     ...defaultSchema.attributes,
     code: [...(defaultSchema.attributes?.code ?? []), ["className", /^language-./, "math-inline", "math-display"]],
@@ -52,10 +58,25 @@ export function normalizeMathDelimiters(markdown: string) {
     .replace(INLINE_MATH, (_, tex: string) => `$${tex.trim()}$`)).join("");
 }
 
-// Project file images load; everything else needs an http(s), mailto, same-site or anchor URL.
-function safeUrl(url: string, key: string) {
-  if (key === "src") return /^\/api\/v1\/projects\/[^/]+\/artifacts\/[^/]+\/content(?:\?|$)/.test(url) ? url : "";
-  return /^(https?:\/\/|mailto:|\/[^/]|#)/i.test(url) ? url : "";
+const ARTIFACT_REF = /^artifact:\/\/(art_[0-9a-f]{12,})$/;
+
+/**
+ * Project file images load; everything else needs an http(s), mailto, same-site or anchor URL.
+ * Agents cite saved files as `artifact://art_…`: within a project, images resolve to the file's
+ * inline content and links open it in Library. Without a project, such references stay inert.
+ */
+function urlPolicy(projectId?: string) {
+  return (url: string, key: string) => {
+    const ref = ARTIFACT_REF.exec(url);
+    if (ref) {
+      if (!projectId) return "";
+      return key === "src"
+        ? `/api/v1/projects/${encodeURIComponent(projectId)}/artifacts/${ref[1]}/content?disposition=inline`
+        : hrefs.artifact(projectId, ref[1]);
+    }
+    if (key === "src") return /^\/api\/v1\/projects\/[^/]+\/artifacts\/[^/]+\/content(?:\?|$)/.test(url) ? url : "";
+    return /^(https?:\/\/|mailto:|\/[^/]|#)/i.test(url) ? url : "";
+  };
 }
 
 function idHref(projectId: string, prefix: string, id: string) {
@@ -106,7 +127,7 @@ function components(projectId?: string): Components {
 export function MarkdownView({ markdown, className, projectId }: MarkdownViewProps) {
   return (
     <div className={cx(styles.markdown, className)}>
-      <ReactMarkdown skipHtml remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeSanitize, schema], [rehypeKatex, katexOptions]]} urlTransform={safeUrl} components={components(projectId)}>
+      <ReactMarkdown skipHtml remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeSanitize, schema], [rehypeKatex, katexOptions]]} urlTransform={urlPolicy(projectId)} components={components(projectId)}>
         {normalizeMathDelimiters(markdown)}
       </ReactMarkdown>
     </div>

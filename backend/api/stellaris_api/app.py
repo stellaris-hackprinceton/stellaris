@@ -278,7 +278,9 @@ def _reconcile_containers(config, runtime) -> None:
         conn.close()
     for project_id in project_ids:
         try:
-            runtime.ensure(project_id, create_volume=False, wait_healthy=False)
+            # Starting stopped containers is cheap; image updates wait for each project's next use,
+            # so a rebuilt runtime image does not recreate every project's container at startup.
+            runtime.ensure(project_id, create_volume=False, wait_healthy=False, refresh_image=False)
         except RuntimeUnavailable as exc:
             log.error("Reconciliation failed for %s: %s", project_id, exc)
         except Exception:

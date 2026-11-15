@@ -6,3 +6,7 @@ opencv-python-headless==4.10.0.84
 av==13.1.0
 matplotlib==3.9.2
 pypdf==7.0.1
+# Tabular statistics and modelling for agent-generated analysis scripts.
+pandas==2.2.3
+scipy==1.14.1
+scikit-learn==1.5.2

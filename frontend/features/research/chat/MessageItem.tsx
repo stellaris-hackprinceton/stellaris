@@ -25,7 +25,7 @@ export function MessageItem({ message, claims, artifacts }: Props) {
       </header>
 
       {message.content_markdown ? (
-        <MarkdownView markdown={message.content_markdown} />
+        <MarkdownView markdown={message.content_markdown} projectId={p} />
       ) : message.status === "streaming" ? (
         <p className={styles.muted}>Working on it…</p>
       ) : null}
