@@ -2,4 +2,4 @@ Ask Stellaris a research question and it does the science: searches arXiv and pu
 
 Stellaris: from question to discovery. Built at HackPrinceton Fall '26 with LangChain Deep Agents on Amazon Bedrock.
 
-Music: "Floating Cities" by Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License, http://creativecommons.org/licenses/by/4.0/
+Music: "Voxel Revolution" by Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License, http://creativecommons.org/licenses/by/4.0/
