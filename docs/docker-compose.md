@@ -13,7 +13,15 @@ The build creates four images: frontend, API, project runtime, and scientific wo
 
 Open `http://localhost:3000`. The frontend waits for the API health check, then proxies `/api/v1` to `http://api:8000` over Docker's network. The API is also published at `http://127.0.0.1:8000` for local inspection. Both ports bind only to loopback because authentication is intentionally omitted in this development MVP.
 
-The frontend runs the Next.js development server with hot reload by default. Save a frontend component or stylesheet and the open page updates without rebuilding the image. The first page request can take longer while Next.js compiles it.
+The frontend runs a production Next.js build by default, so pages load immediately (use this for demos). Frontend source changes require `docker compose -f backend/compose.yaml build frontend` followed by `up -d`.
+
+For hot reload while editing the frontend, layer the development override:
+
+```sh
+docker compose -f backend/compose.yaml -f backend/compose.dev.yaml up -d --wait
+```
+
+The development server compiles each route on its first request, so first loads can take a minute.
 
 No model credentials are needed to open the workspace or use provider-independent processing. Live research chat, experiment-design tools, and new agent-analyzed reports require model configuration. Saved reports remain readable without it. Feature availability comes from `/api/v1/capabilities`.
 
@@ -55,9 +63,9 @@ Replace 3000 if using a custom frontend port. Health reports database and Docker
 
 ## Rebuild and stop
 
-Frontend source changes appear through the bind mount without rebuilding. Compose uses Webpack with file polling so edits are detected through Windows Docker Desktop. Linux dependencies and Next.js build output live in separate Docker volumes, keeping them separate from host `node_modules` and `.next` directories.
+With the development override, frontend source changes appear through the bind mount without rebuilding. It uses Webpack with file polling so edits are detected through Windows Docker Desktop. Linux dependencies and Next.js build output live in separate Docker volumes, keeping them separate from host `node_modules` and `.next` directories.
 
-After changing `frontend/package.json` or `frontend/package-lock.json`, restart the frontend. Startup checks both files against the installed dependencies and runs `npm ci` when they differ. Unchanged dependencies are reused. Installing dependencies can take several minutes:
+With the development override, after changing `frontend/package.json` or `frontend/package-lock.json`, restart the frontend. Startup checks both files against the installed dependencies and runs `npm ci` when they differ. Unchanged dependencies are reused. Installing dependencies can take several minutes:
 
 ```sh
 docker compose -f backend/compose.yaml restart frontend

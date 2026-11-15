@@ -7,37 +7,22 @@ name: stellaris
 
 services:
   frontend:
+    # Production build: fast page loads for demos and normal use. For hot reload while editing
+    # the frontend, add the override: -f backend/compose.yaml -f backend/compose.dev.yaml
     build:
       context: ..
       dockerfile: frontend/Dockerfile
-      target: development
+      target: runtime
       args:
         STELLARIS_API_ORIGIN: http://api:8000
-    image: stellaris-frontend:dev
+    image: stellaris-frontend:latest
     ports:
       - "127.0.0.1:${STELLARIS_FRONTEND_PORT:-3000}:3000"
     environment:
-      NODE_ENV: development
       STELLARIS_API_ORIGIN: http://api:8000
       STELLARIS_DOCS_ROOT: /app/docs
-      WATCHPACK_POLLING: "true"
       HOSTNAME: 0.0.0.0
       PORT: "3000"
-    volumes:
-      - type: bind
-        source: ../frontend
-        target: /app
-      - type: bind
-        source: ../docs
-        target: /app/docs
-        read_only: true
-      - frontend-node-modules:/app/node_modules
-      - frontend-next:/app/.next
-    # The dev server compiles routes on first request (and after branch switches with polling),
-    # which can stall the proxied health probe past the image's 5s timeout. Allow for that here.
-    healthcheck:
-      timeout: 30s
-      retries: 5
     depends_on:
       api:
         condition: service_healthy

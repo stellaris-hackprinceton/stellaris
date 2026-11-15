@@ -24,3 +24,10 @@
 !/brag-output/work/capture.cjs
 !/brag-output/work/capture2.cjs
 !/brag-output/work/music2.m4a
+# Local design-tool config and session notes (not needed to build or run Stellaris).
+.impeccable/
+frontend/.impeccable/
+.graphifyignore
+/BACKEND_ACHIEVEMENTS.md
+/REPORT_ANALYSIS_TODO.md
+/WORK_ENERGY_TEST_ISSUES.md

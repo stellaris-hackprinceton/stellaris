@@ -142,7 +142,9 @@ _EXPERIMENT_SCOPE = (
     "A plan alone is not an executed analysis. Generated code must be saved as an immutable implementation and "
     "run through the isolated analysis tool. Use only the runtimes and inputs the backend accepts; report missing "
     "dependencies or unavailable modalities honestly. Never invent observations or claim execution without a "
-    "successful run and actual output artifacts.")
+    "successful run and actual output artifacts. When the user asks for a scientific report, do not generate one "
+    "with an analysis script: summarize the saved evidence briefly and tell them to open Reports and choose "
+    "Generate report, which runs the dedicated report analysis over the selected experiments and sources.")
 
 
 def experiment_problems(payload, known_artifacts):
@@ -471,9 +473,10 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
         Use these output kind/mime_type combinations:
         - JSON: kind "dataset" or "document", mime_type "application/json".
         - CSV: kind "dataset", mime_type "text/csv".
-        - Markdown report: kind "report", mime_type "text/markdown".
+        - Markdown summary: kind "document", mime_type "text/markdown". Analysis scripts cannot create
+          "report" artifacts; scientific reports are generated from the project's Reports page.
         - PNG chart: kind "chart", mime_type "image/png".
-        Never label JSON as "report" or use "table" as an artifact kind.
+        Never use kind "report" (the backend rejects it), label JSON as a report, or use "table" as an artifact kind.
         result.json is the required output manifest, not a report artifact.
         If validation fails, correct the script's artifact declarations,
         save a new implementation, and retry.
@@ -493,7 +496,8 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
         (derived/simulated/generated), mime_type, and parents; use kind "dataset" for CSV output (never "table"),
         and parents use those same input/output references. Warnings require code and message. Never invent
         observations or evidence. Use only libraries/commands
-        already installed for the selected runtime; network access and package downloads are unavailable."""
+        already installed for the selected runtime (Python 3.12 provides numpy, pandas, scipy, scikit-learn, matplotlib (Agg), opencv-python-headless, av, pypdf, and the standard library; Node.js and bash for the other runtimes);
+        network access and package downloads are unavailable."""
         try:
             input_ids = json.loads(input_artifact_ids_json)
         except (TypeError, ValueError):
@@ -648,7 +652,7 @@ def create_agent(model, artifact_ids=None, papers=None, run_id="", chat_generati
         "write only under /output. They must write /output/result.json with exactly the measurements, claims, "
         "artifacts, and warnings arrays; follow the execute_analysis tool's item schemas and cite only real input "
         "or output artifacts. Never fabricate observations or evidence. Use only already-installed Python, "
-        "JavaScript, or shell libraries/commands; network access and package downloads are unavailable. "
+        "JavaScript, or shell libraries/commands (Python 3.12 provides numpy, pandas, scipy, scikit-learn, matplotlib (Agg), opencv-python-headless, av, pypdf, and the standard library); network access and package downloads are unavailable. "
         "For material organization, use list_materials with its returned cursor to page, then use only the "
         "documented tag and collection operations; an ask permission response means the request is pending. "
         "The supplied project_artifacts metadata and list_materials artifact rows identify project-wide inputs. "
@@ -700,7 +704,9 @@ def main(path):
                                         aws_access_key_id=access_key, aws_secret_access_key=secret_key,
                                         aws_session_token=session_token or None, max_tokens=max_tokens, temperature=0,
                                         config=BotocoreConfig(connect_timeout=8, read_timeout=45,
-                                                              retries={"mode": "standard", "max_attempts": 2}))
+                                                              # Bedrock occasionally returns transient 5xx errors
+                                                              # mid-conversation; back off and retry before failing.
+                                                              retries={"mode": "standard", "max_attempts": 4}))
         else:
             model = ChatOpenAI(model=model_name, api_key=api_key, timeout=45, max_retries=1,
                                max_tokens=max_tokens, temperature=0, streaming=True)
@@ -756,19 +762,35 @@ def main(path):
             # Explicit step budget: without it this stack falls back to LangGraph's limit of 25 steps
             # (~12 tool rounds), which multi-step requests exceed (GraphRecursionError). The API's
             # MAX_AGENT_SECONDS remains the hard bound on cost.
+            # Each model turn (between tool calls) starts a new paragraph; without a break, turns run
+            # together ("…rerunning.The corrected…") and a following Markdown heading is not parsed.
+            wrote_text, pending_break = False, False
+
+            def emit_text(text):
+                nonlocal wrote_text, pending_break
+                if pending_break:
+                    emit({"type": "delta", "text": "\n\n"})
+                    pending_break = False
+                emit({"type": "delta", "text": text})
+                wrote_text = True
+
             async for event in agent.astream_events({"messages": messages}, config={"recursion_limit": AGENT_RECURSION_LIMIT},
                                                     version="v2"):
-                if event.get("event") != "on_chat_model_stream":
+                kind = event.get("event")
+                if kind == "on_chat_model_start":
+                    pending_break = wrote_text
+                    continue
+                if kind != "on_chat_model_stream":
                     continue
                 chunk = event.get("data", {}).get("chunk")
                 content = getattr(chunk, "content", None)
                 if isinstance(content, str) and content:
-                    emit({"type": "delta", "text": content})
+                    emit_text(content)
                 elif isinstance(content, list):
                     for part in content:
                         if (isinstance(part, dict) and part.get("type") in (None, "text")
                                 and isinstance(part.get("text"), str) and part["text"]):
-                            emit({"type": "delta", "text": part["text"]})
+                            emit_text(part["text"])
             emit({"type": "complete"})
 
         asyncio.run(stream())

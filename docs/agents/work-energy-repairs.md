@@ -1,6 +1,6 @@
 # Work–energy test repairs
 
-Repairs for the confirmed findings in `WORK_ENERGY_TEST_ISSUES.md` (an untracked file, preserved unchanged). Implemented by Claude (Opus) as a bounded task. Claude made the changes without running commands; Codex subsequently verified them locally, as recorded below.
+Repairs for the confirmed findings from a local work–energy test session (notes not committed). Implemented by Claude (Opus) as a bounded task. Claude made the changes without running commands; Codex subsequently verified them locally, as recorded below.
 
 ## 1. Experiment proposal rejected (`/calibration/mode`)
 

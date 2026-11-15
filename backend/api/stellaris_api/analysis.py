@@ -55,6 +55,9 @@ LOCAL_KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$")
 PATH_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 WARNING_CODE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 UNITS = {"px", "s", "m", "m/s", "m/s^2", "1", "px/s", "px/s^2"}
+# Script analyses of uploaded tables may keep the source columns' own short unit labels
+# (for example "in", "lb", "kg/m^2", "%", "pounds per inch"); assumptions must still state them.
+TABULAR_UNIT = re.compile(r"^(?=.*\S)[A-Za-z0-9%/^*(). \-]{1,40}$")
 METRIC_UNITS = {"m", "m/s", "m/s^2"}
 WORKER_ARTIFACT_ORIGINS = {"derived", "simulated", "generated"}
 RESERVED_OUTPUTS = {"result.json", "provenance.json"}
@@ -224,8 +227,11 @@ def validate_result(raw: bytes, files: dict, rejected: dict, *, input_ids: set, 
         for key in ("series", "quantity"):
             if not isinstance(m[key], str) or not 0 < len(m[key]) <= 200:
                 errors.append(f"{p}/{key} must be a string of 1-200 characters")
-        if not isinstance(m["unit"], str) or m["unit"] not in UNITS:
-            errors.append(f"{p}/unit must be one of {sorted(UNITS)}")
+        if not isinstance(m["unit"], str) or not (m["unit"] in UNITS or (tabular_units and TABULAR_UNIT.match(m["unit"]))):
+            errors.append(f"{p}/unit must be one of {sorted(UNITS)}"
+                          + (" or a short source-column unit label such as 'in' or 'lb'" if tabular_units else ""))
+        elif tabular_units and m["unit"] not in UNITS and not m["assumptions"]:
+            errors.append(f"{p}/assumptions must state the source column and its unit")
         elif m["unit"] in METRIC_UNITS and calibration_mode != "reference_length" and not tabular_units:
             errors.append(f"{p}/unit {m['unit']!r} needs a physical scale, but the run's calibration mode is 'none'")
         if m["calibration_mode"] != calibration_mode:

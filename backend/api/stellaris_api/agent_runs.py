@@ -175,7 +175,20 @@ def _apply_proposal(ctx, event, claim_ids):
                         citation["source_id"] = source["id"]
                     citations.append(citation)
                 payload["citations"] = citations
-                claim = research.publish_claim(ctx.conn, ctx.project_id, run_id=ctx.run_id, **payload)
+                try:
+                    claim = research.publish_claim(ctx.conn, ctx.project_id, run_id=ctx.run_id, **payload)
+                except ApiError as exc:
+                    # An excerpt that cannot be matched to the retrieved text is dropped rather than
+                    # failing the whole run; the citation itself stays, and the run log records it.
+                    paths = [f.get("path", "") for f in exc.details.get("field_errors", [])]
+                    bad = {int(m.group(1)) for m in (re.fullmatch(r"/citations/(\d+)/excerpt", p) for p in paths) if m}
+                    if not paths or len(bad) != len(paths):
+                        raise
+                    payload["citations"] = [{**c, "excerpt": None} if i in bad else c for i, c in enumerate(citations)]
+                    claim = research.publish_claim(ctx.conn, ctx.project_id, run_id=ctx.run_id, **payload)
+                    log = getattr(ctx, "log", None)
+                    if log is not None:
+                        log.system(f"Dropped {len(bad)} citation excerpt(s) not found in retrieved source text.")
                 claim_ids.append(claim["id"])
                 return {"claim_id": claim["id"]}
     except ApiError as exc:
@@ -540,7 +553,15 @@ def _run_agent(ctx, request, env, claim_ids, agent_metadata, provider, model_id,
                         ctx.log.system(f"Paper ingestion for the agent: {delivery['status']} ({delivery.get('run_id')}, {delivery.get('code', 'ok')}).")
                         _deliver_paper(container, ctx.run_id, index, delivery)
                         continue
-                    result = _apply_proposal(ctx, event, claim_ids)
+                    try:
+                        result = _apply_proposal(ctx, event, claim_ids)
+                    except RunFailure as failure:
+                        # A rejected claim is not saved, but it should not discard the rest of the answer.
+                        if event.get("kind") != "claim" or failure.code != "INVALID_AGENT_OUTPUT":
+                            raise
+                        ctx.log.system(f"Rejected claim proposal (not saved): {failure.message}")
+                        agent_metadata.setdefault("rejected_proposals", []).append({"kind": "claim", "reason": failure.message})
+                        continue
                     ctx.log.system(f"Validated {event.get('kind')} proposal: {dumps(result)}")
                     agent_metadata.setdefault("resource_outputs", []).append({"kind": event["kind"], **result})
                 elif event.get("type") == "retrieval":
