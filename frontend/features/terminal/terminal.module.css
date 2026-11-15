@@ -1,11 +1,13 @@
 .panel {
-  flex: 0 0 auto; display: flex; flex-direction: column; gap: var(--space-2);
-  height: 40dvh; min-height: 220px; padding: var(--space-2) var(--space-4) var(--space-3);
+  position: relative; flex: 0 0 auto; display: flex; flex-direction: column; gap: var(--space-2);
+  height: var(--terminal-height, 40dvh); min-height: 160px; padding: var(--space-2) var(--space-4) var(--space-3);
   border-top: 1px solid var(--color-border); background: var(--color-surface);
 }
 .panel[hidden] { display: none; }
+.resize { top: -4px; }
 @media (max-width: 767px) {
   .panel { position: fixed; inset: auto 0 0 0; z-index: 5; height: 75dvh; }
+  .resize { display: none; }
 }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .title { margin: 0; font-size: 14px; font-weight: 600; }
@@ -14,7 +16,7 @@
 .note { margin: 0; font-size: 12px; color: var(--color-text-muted); }
 .body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .viewport { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--space-2); }
-.xterm { flex: 1; min-height: 0; padding: 4px; background: #0f141a; border-radius: var(--radius-control); overflow: hidden; }
+.xterm { flex: 1; min-height: 0; padding: 4px; background: var(--color-terminal); border-radius: var(--radius-control); overflow: hidden; }
 .xterm:focus-within { outline: 2px solid var(--color-focus); outline-offset: 1px; }
 .inputStatus { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-height: 1.25rem; font-size: 12px; color: var(--color-text-muted); }
 .dialogActions { display: flex; flex-wrap: wrap; gap: var(--space-2); }

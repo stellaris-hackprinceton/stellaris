@@ -11,6 +11,12 @@ export type { StatusTone, ErrorNoticeProps } from "./Feedback";
 export { ArtifactLink, TimestampLabel } from "./Links";
 export type { ArtifactLinkProps } from "./Links";
 export { MarkdownView } from "./MarkdownView";
+export { ThemeToggle } from "./ThemeToggle";
+export { ResizeHandle, usePanelSize } from "./ResizeHandle";
+export type { ResizeHandleProps } from "./ResizeHandle";
+export { describeResourceId, humanizeName } from "./scienceLabels";
+export { setThemePreference, useThemePreference } from "./theme";
+export type { ThemePreference } from "./theme";
 export type { MarkdownViewProps } from "./MarkdownView";
 export { describeError, errorCode, newCommandKey } from "./errors";
 export {

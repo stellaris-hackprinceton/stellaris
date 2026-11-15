@@ -7,23 +7,38 @@
 .toolbar, .listHead { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
 .toolbar p, .hint, .loaders p, .listHead span { color: var(--color-text-muted); font-size: var(--text-label); }
 .buttons { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-.graphWrap { height: 430px; border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-surface); overflow: hidden; }
-.graph { display: block; width: 100%; height: 100%; min-height: 0; touch-action: none; cursor: grab; }
+.graphWrap { position: relative; height: var(--graph-height, 560px); border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-surface); overflow: hidden; }
+.heightHandle { bottom: 0; }
+.graph { display: block; width: 100%; height: 100%; min-height: 0; touch-action: none; cursor: grab; user-select: none; }
 .graph:active { cursor: grabbing; }
-.edge line { stroke: var(--color-control-border); stroke-width: 1.5; }
-.edge[data-origin="user"] line { stroke-dasharray: 5 5; stroke: var(--color-accent); }
-.edge text { fill: var(--color-text-muted); font-size: 13px; text-anchor: middle; paint-order: stroke; stroke: var(--color-surface); stroke-width: 4px; stroke-linejoin: round; }
-.edge marker path { fill: var(--color-control-border); }
-.node { cursor: pointer; outline: none; }
+
+.edge line { stroke: var(--graph-edge); stroke-width: 1; transition: stroke .15s ease, opacity .15s ease; }
+.edge[data-origin="user"] line:not(.edgeHit) { stroke: var(--color-accent); stroke-dasharray: 4 4; opacity: .55; }
+.edge .edgeHit { stroke: transparent; stroke-width: 10; stroke-dasharray: none; opacity: 1; }
+.edge[data-active="true"] line:not(.edgeHit) { stroke: var(--graph-edge-strong); stroke-width: 1.5; opacity: 1; }
+.edge[data-origin="user"][data-active="true"] line:not(.edgeHit) { stroke: var(--color-accent); }
+.edge[data-dim="true"] { opacity: .25; }
+.arrow { fill: var(--graph-edge-strong); }
+.arrowUser { fill: var(--color-accent); }
+
+.node { cursor: pointer; outline: none; transition: opacity .15s ease; }
+.node[data-dim="true"] { opacity: .2; }
 .node .hitTarget { fill: transparent; stroke: none; pointer-events: all; }
-.node .visibleNode { fill: var(--color-surface); stroke: var(--color-accent); stroke-width: 2.5; transition: fill .12s ease; pointer-events: none; }
-.node[data-role="artifact"] .visibleNode, .node[data-role="run_measurements"] .visibleNode { stroke: var(--color-success); }
-.node[data-role="note"] .visibleNode, .node[data-role="experiment"] .visibleNode { stroke: var(--color-warning); }
-.node[data-role="claim"] .visibleNode { stroke: var(--color-danger); }
-.node[data-role="run"] .visibleNode { stroke: var(--color-text-muted); }
-.node:hover .visibleNode, .node:focus .visibleNode, .node[aria-pressed="true"] .visibleNode { fill: var(--color-accent); }
-.node text { display: none; fill: var(--color-text); font-size: 13px; text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: var(--color-surface); stroke-width: 4px; stroke-linejoin: round; }
-.node[data-active="true"] text { display: block; }
+.node .visibleNode { fill: var(--graph-record); stroke: var(--color-surface); stroke-width: 1.5; pointer-events: none; transition: transform .15s ease; }
+.node[data-role="artifact"] .visibleNode { fill: var(--graph-artifact); }
+.node[data-role="source"] .visibleNode { fill: var(--graph-source); }
+.node[data-role="claim"] .visibleNode { fill: var(--graph-claim); }
+.node[data-role="experiment"] .visibleNode { fill: var(--graph-experiment); }
+.node[data-role="run"] .visibleNode { fill: var(--graph-run); }
+.node[data-role="run_measurements"] .visibleNode { fill: var(--graph-run-measurements); }
+.node[data-role="note"] .visibleNode { fill: var(--graph-note); }
+.node[data-active="true"] .visibleNode { transform: scale(1.25); }
+.node:focus-visible .visibleNode { stroke: var(--color-focus); stroke-width: 2.5; }
+.selectedRing { fill: none; stroke: var(--color-text); stroke-width: 1.5; pointer-events: none; }
+
+.labels text { fill: var(--color-text-muted); font-size: 13px; pointer-events: none; paint-order: stroke; stroke: var(--color-surface); stroke-width: 4px; stroke-linejoin: round; }
+.graph[data-highlighting="true"] .labels text { fill: var(--color-text); }
+.labels text[data-active="true"] { font-weight: 600; }
 .hint { padding: 0 var(--space-3) var(--space-3); margin: 0; }
 .loaders { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .loaders p { margin: 0; }
@@ -32,12 +47,16 @@
 .legend { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-4); color: var(--color-text-muted); font-size: 13px; }
 .roleLegend, .lineLegend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
 .roleLegend span, .lineLegend span { display: inline-flex; align-items: center; gap: var(--space-1); }
-.roleLegend i { width: 12px; height: 12px; border: 2px solid var(--color-accent); border-radius: 50%; }
-.roleLegend i[data-role="artifact"], .roleLegend i[data-role="run_measurements"] { border-color: var(--color-success); }
-.roleLegend i[data-role="note"], .roleLegend i[data-role="experiment"] { border-color: var(--color-warning); }
-.roleLegend i[data-role="claim"] { border-color: var(--color-danger); }
-.roleLegend i[data-role="run"] { border-color: var(--color-text-muted); }
-.lineLegend i { display: inline-block; width: 22px; border-top: 2px solid var(--color-control-border); }
+.roleLegend i { width: 10px; height: 10px; border-radius: 50%; background: var(--graph-record); }
+.roleLegend i[data-role="artifact"] { background: var(--graph-artifact); }
+.roleLegend i[data-role="source"] { background: var(--graph-source); }
+.roleLegend i[data-role="claim"] { background: var(--graph-claim); }
+.roleLegend i[data-role="experiment"] { background: var(--graph-experiment); }
+.roleLegend i[data-role="run"] { background: var(--graph-run); }
+.roleLegend i[data-role="run_measurements"] { background: var(--graph-run-measurements); }
+.roleLegend i[data-role="note"] { background: var(--graph-note); }
+.sizeKey { padding-left: var(--space-3); border-left: 1px solid var(--color-border); }
+.lineLegend i { display: inline-block; width: 22px; border-top: 2px solid var(--graph-edge-strong); opacity: .6; }
 .lineLegend i[data-origin="user"] { border-top-style: dashed; border-color: var(--color-accent); }
 .fileList { border-top: 1px solid var(--color-border); padding-top: var(--space-2); }
 .fileList summary { display: flex; justify-content: space-between; gap: var(--space-2); min-height: 44px; align-items: center; cursor: pointer; font-weight: 600; }
@@ -46,5 +65,5 @@
 .fileList button { display: flex; width: 100%; min-height: 44px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: var(--space-1) var(--space-2); text-align: left; color: inherit; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-control); font: inherit; cursor: pointer; }
 .fileList button[aria-pressed="true"] { border-color: var(--color-accent); }
 .fileList button span { font-size: 12px; color: var(--color-text-muted); }
-@media (max-width: 640px) { .graphWrap { height: 390px; } }
-@media (prefers-reduced-motion: reduce) { .node circle { transition: none; } }
+@media (max-width: 640px) { .graphWrap { height: 400px; } .heightHandle { display: none; } }
+@media (prefers-reduced-motion: reduce) { .node, .node .visibleNode, .edge line { transition: none; } }

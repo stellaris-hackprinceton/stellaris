@@ -2,14 +2,14 @@
 /* eslint-disable @next/next/no-img-element -- Artifact previews require session cookies that the image optimizer cannot forward. */
 
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Collection, CollectionPresentation, ViewPreset, WorkspaceFile } from '@/contracts/catalog'
 import { catalogApi, invalidateCatalog, useCatalogMutation, useCollection, useCollections, useFile, useFiles, useOriginFile, useTags } from '@/lib/catalog'
 import { api, artifactContentUrl } from '@/lib/api'
 import { keys, useArtifact, useMeasurements, useProject, useRunResults } from '@/lib/queries'
-import { Sheet, newCommandKey } from '@/components/ui'
+import { ResizeHandle, Sheet, newCommandKey, usePanelSize } from '@/components/ui'
 import { ErrorNotice, projectHref, runHref } from '@/features/execution/feedback'
 import { AddSourceDialog } from '@/features/research/canvas/AddSourceDialog'
 import { MaterialInspector } from './MaterialInspector'
@@ -18,6 +18,8 @@ import { MaterialCard, MeasurementRow, materialTypeLabel } from './MaterialCard'
 import { MaterialUpload } from './MaterialUpload'
 import { MEDIA_KINDS, VIEW_OPTIONS, browseKey, describeFilter, matchesPreset, parseBrowseState, resolvedPresentation, savedViewFilter, viewFilters, viewLabel, type BrowseState, type SortField, type SortOrder } from './views'
 import styles from './materials.module.css'
+
+const INSPECTOR = { initial: 344, min: 300, max: 720 }
 
 /**
  * Optional hooks for features owned elsewhere (Chat drafts, paper ingestion, extracted-paper reader).
@@ -116,6 +118,9 @@ export function MaterialsViews({ project_id, integrations = {} }: { project_id: 
   const pageRef = useRef<HTMLElement | null>(null)
   const width = useWidth(pageRef)
   const wide = width === null || width >= 1008
+  // The inspector can grow until the catalog keeps 560px; the gap between them is 24px.
+  const inspectorMax = Math.max(INSPECTOR.min, Math.min(INSPECTOR.max, (width ?? 1280) - 560 - 24))
+  const [inspectorWidth, setInspectorWidth, resetInspectorWidth] = usePanelSize('stellaris.inspectorWidth', INSPECTOR.initial, INSPECTOR.min, inspectorMax)
 
   const navigate: Nav = useCallback((updates, mode) => {
     const p = new URLSearchParams(search.toString())
@@ -258,8 +263,9 @@ export function MaterialsViews({ project_id, integrations = {} }: { project_id: 
       {origin.is_loading ? `Finding the linked ${state.origin.type}…` : origin.error ? <>The linked {state.origin.type} could not be resolved. <button type="button" onClick={() => void origin.refetch()}>Retry</button></> : origin.missing ? <>{origin.bounded ? `The linked ${state.origin.type} was not found in the checked page. This backend cannot resolve it directly.` : `The linked ${state.origin.type} is not in this project’s catalog.`} <button type="button" onClick={closeInspector}>Dismiss</button></> : null}
     </div>}
 
-    <div className={wide && inspectorOpen ? styles.browseWithInspector : styles.browse}>
+    <div className={wide && inspectorOpen ? styles.browseWithInspector : styles.browse} style={{ '--inspector-width': `${inspectorWidth}px` } as CSSProperties}>
       <div className={styles.browseMain}>{content}</div>
+      {wide && inspectorOpen && <ResizeHandle label="Resize details panel" axis="x" direction={-1} value={inspectorWidth} min={INSPECTOR.min} max={inspectorMax} onChange={setInspectorWidth} onReset={resetInspectorWidth} className={styles.inspectorHandle} />}
       {wide && inspectorOpen && <aside className={styles.inspectorColumn}>{creatingNote ? <section className={styles.inspector}>{panel}</section> : panel}</aside>}
     </div>
     {!wide && <Sheet open={inspectorOpen} onClose={() => creatingNote ? setCreatingNote(false) : closeInspector()} title={creatingNote ? 'New note' : 'Material details'}>{panel}</Sheet>}

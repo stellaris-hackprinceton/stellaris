@@ -31,7 +31,7 @@ export function AttachmentPicker({ project_id, selected, onChange, disabled }: P
         onClick={() => { setDraft(selected); setOpen(true); }}
       />
       <Dialog open={open} onClose={() => setOpen(false)} title="Attach project files">
-        <p className={styles.muted}>Only files already saved in this project can be attached. Upload new recordings in Studio.</p>
+        <p className={styles.muted}>Choose from files already saved in this project. To add a new file, upload it in Library (Add), then attach it here.</p>
         {artifacts.error != null ? (
           <ErrorNotice {...describeError(artifacts.error, "Files could not be loaded")} action={<Button onClick={artifacts.refetch}>Try again</Button>} />
         ) : artifacts.is_loading ? (

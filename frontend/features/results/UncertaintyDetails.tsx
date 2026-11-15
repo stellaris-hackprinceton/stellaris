@@ -1,4 +1,5 @@
 import type { ID, Measurement } from "@/contracts/api";
+import { humanizeName } from "@/components/ui";
 import { Button } from "@/components/ui";
 import { EvidenceViewer } from "./EvidenceViewer";
 import { ORIGIN_LABEL, STATUS_LABEL, unitLabel } from "./format";
@@ -9,7 +10,7 @@ export function UncertaintyDetails({ project_id, m, onClose }: { project_id: ID;
   return (
     <section className={styles.details} aria-labelledby={`m-${m.id}`}>
       <div className={styles.detailsHead}>
-        <h4 id={`m-${m.id}`}>{m.series} · {m.quantity}{m.time_s != null && ` at ${m.time_s} s`}</h4>
+        <h4 id={`m-${m.id}`}>{humanizeName(m.quantity)} · {humanizeName(m.series)}{m.time_s != null && ` at ${m.time_s} s`}</h4>
         <Button onClick={onClose}>Close</Button>
       </div>
       <dl className={styles.dl}>

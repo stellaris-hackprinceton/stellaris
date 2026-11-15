@@ -47,6 +47,8 @@ Open questions:
 
 No table structure or responsive solution is selected here.
 
+**Progress, November 14, 2026:** Report Markdown now renders through one sanitized renderer (`frontend/components/ui/MarkdownView.tsx`). Table headings no longer wrap, numbers align right, uncertainty explanations and missing-value reasons sit in a smaller line under their value, known stored names show reader-facing labels (`apex_height_px` → “Peak heights (px)”, with the original in a tooltip), and resource IDs become short linked chips. Wide tables scroll inside their own region. Downloads keep the original Markdown. Which columns belong in the primary reading view remains open.
+
 ## HX-03: “Evidence and provenance” is difficult to understand
 
 **Status:** Open. Label difficulty reported by the user. Raw references are visible in screenshot 1.
@@ -67,6 +69,8 @@ The user suggested Obsidian's graph as a visual reference. Record that as a dire
 
 Open questions concern node scale, link emphasis, label readability and layering, and what should remain visible while inspecting a neighborhood. No graph implementation or styling change is approved.
 
+**Progress, November 14, 2026:** The earlier layout placed files on a spiral sorted by type and ignored relations, so links crossed the whole canvas. Connections now uses a deterministic force layout driven by recorded relations, small filled nodes sized by link count, one distinct color per role, and one line per connected pair. Hovering or focusing a file highlights its links with direction arrows and dims the rest; labels draw in a top layer so they are never hidden. Zoom follows the pointer. Directed provenance and dashed user relations stay distinct.
+
 ## HX-05: Fixed panel widths do not fit different tasks
 
 **Status:** Open. Reported by the user.
@@ -74,6 +78,8 @@ Open questions concern node scale, link emphasis, label readability and layering
 The user wants adjustable sidebar and panel widths. Current fixed sizes can be acceptable for one task and severely constrain another. Reading a long interpretation, inspecting a graph item, and using Assistant have different space needs.
 
 The exact panels covered, resize behavior, limits, persistence, keyboard access, and narrow-screen behavior remain undecided. This log records the need for adjustable space without prescribing a control or layout system.
+
+**Progress, November 14, 2026:** The user asked for most workspace areas to be resizable. Drag handles now adjust the sidebar and Assistant widths, the terminal height, the Library details panel width, and the Connections graph height. Each size is saved per browser, clamped so the work area keeps at least 640px (560px beside the Library details panel), adjustable with arrow keys (Shift for larger steps, Home/End for limits), and reset by double-click. Handles are hidden where the panel becomes a sheet on narrow screens.
 
 ## HX-06: Library filtering feels cluttered and unintuitive
 

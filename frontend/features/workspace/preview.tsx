@@ -2,22 +2,15 @@
 /* eslint-disable @next/next/no-img-element -- Artifact previews require session cookies that the image optimizer cannot forward. */
 
 import { useQuery } from '@tanstack/react-query'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import rehypeSanitize from 'rehype-sanitize'
+import { MarkdownView } from '@/components/ui'
 import type { Artifact } from '@/contracts/api'
 import { artifactContentUrl, readText } from '@/lib/api'
 import { ErrorNotice } from '@/features/execution/feedback'
 import styles from '@/features/execution/sol.module.css'
 
-export function SafeMarkdown({ text }: { text: string }) {
-  return <div className={styles.markdown}><ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} urlTransform={(url, key) => {
-    if (key === 'src') {
-      // Only project file images can load automatically.
-      return /^\/api\/v1\/projects\/[^/]+\/artifacts\/[^/]+\/content(?:\?|$)/.test(url) ? url : ''
-    }
-    return /^(https?:\/\/|mailto:|\/[^/]|#)/i.test(url) ? url : ''
-  }} components={{ a: ({ href, children }) => <a href={href} rel="noopener noreferrer">{children}</a>, img: ({ src, alt }) => typeof src === 'string' && src ? <img src={src} alt={alt ?? 'Research figure'} loading="lazy" /> : <span>Image unavailable in this preview</span> }}>{text}</ReactMarkdown></div>
+/** Sanitized Markdown for project files; resource IDs link within this project when it is known. */
+export function SafeMarkdown({ text, project_id }: { text: string, project_id?: string }) {
+  return <MarkdownView markdown={text} projectId={project_id} />
 }
 function formatJson(text: string) {
   try { return JSON.stringify(JSON.parse(text), null, 2) } catch { return text }
@@ -28,7 +21,7 @@ function TextPreview({ artifact, project_id, mime }: { artifact: Artifact, proje
   // types (JSON, for example, is attachment-only), which made inline requests for JSON fail with 400.
   const text = useQuery({ queryKey: ['project', project_id, 'artifact-text', artifact.id, artifact.sha256], queryFn: ({ signal }) => readText(artifactContentUrl(project_id, artifact.id), signal), retry: false })
   const body = text.data && mime === 'application/json' && !text.data.truncated ? formatJson(text.data.text) : text.data?.text
-  return <><ErrorNotice error={text.error} />{text.isPending && <p>Loading text preview…</p>}{text.data?.truncated && <p className={styles.notice}>This preview is limited to the first 256 KiB. Download the file to view its complete contents.</p>}{text.data && (artifact.kind === 'report' || mime === 'text/markdown' ? <SafeMarkdown text={text.data.text} /> : <pre tabIndex={0} aria-label={`Contents of ${artifact.filename}`}>{body}</pre>)}</>
+  return <><ErrorNotice error={text.error} />{text.isPending && <p>Loading text preview…</p>}{text.data?.truncated && <p className={styles.notice}>This preview is limited to the first 256 KiB. Download the file to view its complete contents.</p>}{text.data && (artifact.kind === 'report' || mime === 'text/markdown' ? <SafeMarkdown text={text.data.text} project_id={project_id} /> : <pre tabIndex={0} aria-label={`Contents of ${artifact.filename}`}>{body}</pre>)}</>
 }
 export function ArtifactPreview({ artifact, project_id }: { artifact: Artifact, project_id: string }) {
   if (artifact.project_id !== project_id) return <p role="alert">File unavailable in this project.</p>

@@ -35,7 +35,7 @@ textarea.input { resize: vertical; min-height: 96px; }
   background: var(--color-surface); color: var(--color-text);
   width: min(32rem, calc(100vw - 2 * var(--space-4))); max-height: calc(100vh - 2 * var(--space-4));
 }
-.dialog::backdrop, .sheet::backdrop { background: rgba(21, 33, 43, 0.45); }
+.dialog::backdrop, .sheet::backdrop { background: var(--color-backdrop); }
 .overlayBody { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); }
 .overlayHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .sheet {
@@ -90,8 +90,40 @@ textarea.input { resize: vertical; min-height: 96px; }
 .artifactLink { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); overflow-wrap: anywhere; }
 .meta { color: var(--color-text-muted); font-size: var(--text-label); }
 
-/* Markdown (plain-text fallback until a renderer is pinned) */
-.markdown { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 72ch; }
+/* Markdown: prose keeps a reading measure; tables and code may use the full column. */
+.markdown { line-height: 1.65; overflow-wrap: break-word; min-width: 0; }
+.markdown > * + * { margin-top: 0.85em; }
+.markdown > :is(p, ul, ol, blockquote, h1, h2, h3, h4) { max-width: 72ch; }
+.markdown :is(h1, h2, h3, h4) { margin-top: 1.6em; }
+.markdown > :first-child { margin-top: 0; }
+.markdown h1 { font-size: 24px; line-height: 30px; }
+.markdown h2 { font-size: 20px; line-height: 26px; }
+.markdown h3 { font-size: 17px; line-height: 24px; }
+.markdown :is(ul, ol) { padding-left: 1.4em; margin-bottom: 0; }
+.markdown li + li { margin-top: 0.3em; }
+.markdown blockquote { margin-inline: 0; padding-left: var(--space-4); border-left: 1px solid var(--color-control-border); color: var(--color-text-muted); }
+.markdown :not(pre) > code { padding: 1px 5px; border-radius: 4px; background: var(--color-surface-muted); font-size: 0.86em; overflow-wrap: anywhere; }
+.markdown pre { padding: var(--space-3) var(--space-4); border-radius: var(--radius-control); background: var(--color-surface-muted); overflow-x: auto; font-size: 13px; line-height: 1.6; }
+.markdown img { display: block; max-width: 100%; height: auto; border-radius: var(--radius-control); border: 1px solid var(--color-border); background: #fff; }
+.markdown hr { border: 0; border-top: 1px solid var(--color-border); }
+
+.mdTable { max-width: 100%; overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-surface); }
+.mdTable:focus-visible { outline-offset: 0; }
+.mdTable table { width: 100%; border-collapse: collapse; font-size: var(--text-label); line-height: 20px; }
+.mdTable th { padding: var(--space-2) var(--space-3); text-align: left; font-weight: 600; white-space: nowrap; color: var(--color-text-muted); background: var(--color-surface-muted); border-bottom: 1px solid var(--color-border); }
+.mdTable td { padding: var(--space-2) var(--space-3); vertical-align: top; border-bottom: 1px solid var(--color-border); }
+.mdTable tbody tr:last-child td { border-bottom: 0; }
+.mdTable tbody tr:hover { background: var(--color-surface-muted); }
+.mdTable td strong { font-weight: 600; color: var(--color-warning); }
+.mdNum { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mdTight, .mdName { white-space: nowrap; }
+.mdName { font-weight: 500; }
+.mdWide { min-width: 12rem; max-width: 20rem; }
+.mdWide > .mdNum { display: block; text-align: left; }
+.mdNote { display: block; margin-top: 2px; color: var(--color-text-muted); font-size: 12px; line-height: 17px; }
+.idLink { text-decoration: none; }
+.idChip { display: inline-block; padding: 0 6px; border: 1px solid var(--color-border); border-radius: 4px; font-size: 12px; line-height: 20px; white-space: nowrap; color: var(--color-text); background: var(--color-surface-muted); font-variant-numeric: tabular-nums; }
+.idLink:hover .idChip { border-color: var(--color-accent); color: var(--color-accent); }
 .sheet .overlayBody { height: 100%; min-height: 0; }
 
 .button { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
@@ -100,3 +132,8 @@ textarea.input { resize: vertical; min-height: 96px; }
 .errorTone { background: var(--color-danger-surface); }
 .info { background: var(--color-selection); color: var(--color-selection-text); }
 .dialog, .sheet { box-shadow: var(--shadow-overlay); }
+
+/* KaTeX: wide display equations scroll on their own instead of widening the panel. */
+.markdown :global(.katex) { font-size: 1.05em; }
+.markdown :global(.katex-display) { margin: 0.6em 0; padding: 2px 0; overflow-x: auto; overflow-y: hidden; }
+.mdTable :global(.katex) { white-space: nowrap; }

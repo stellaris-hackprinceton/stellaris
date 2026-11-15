@@ -55,3 +55,8 @@ a { text-underline-offset: 3px; }
 button, input, textarea, select { font-family: inherit; }
 input::placeholder, textarea::placeholder { color: var(--color-text-muted); opacity: 1; }
 button, a, input, select, textarea { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
+
+/* While a panel edge is dragged (components/ui/ResizeHandle.tsx). */
+html[data-resizing="x"] { cursor: col-resize; user-select: none; }
+html[data-resizing="y"] { cursor: row-resize; user-select: none; }
+html[data-resizing] iframe, html[data-resizing] video { pointer-events: none; }

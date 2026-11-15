@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { ID } from "@/contracts/api";
 import { useEditProject, useProject } from "@/lib/queries";
 import {
-  Button, ChatIcon, Dialog, ErrorNotice, IconButton, MenuIcon, Skeleton, StatusBadge, describeError,
+  Button, ChatIcon, Dialog, ErrorNotice, IconButton, MenuIcon, Skeleton, StatusBadge, ThemeToggle, describeError,
 } from "@/components/ui";
 import { MoreIcon } from "@/components/ui/icons";
 import { ConnectionStatus } from "./ConnectionStatus";
@@ -54,6 +54,7 @@ export function ProjectHeader({ project_id, showMenuButton, onOpenMenu, chatOpen
           className={styles.chatToggle}
           onClick={onToggleTerminal}
         ><span aria-hidden="true" className={styles.terminalGlyph}>&gt;_</span><span>Terminal</span></Button>
+        <ThemeToggle className={styles.themeToggle} />
         <details className={styles.projectMenu}>
           <summary aria-label="Project actions" title="Project actions"><MoreIcon /></summary>
           <div className={styles.menuPanel}>

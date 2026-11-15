@@ -1,50 +1,26 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ID } from "@/contracts/api";
 import type { WorkspaceFile } from "@/contracts/catalog";
-import { Button, EmptyState, ErrorNotice, Field, Select, Sheet, Skeleton } from "@/components/ui";
+import { Button, EmptyState, ErrorNotice, Field, ResizeHandle, Select, Sheet, Skeleton, usePanelSize } from "@/components/ui";
 import { useCollections, useFiles, useRelations, useTags } from "@/lib/catalog";
 import { useCapabilities } from "@/lib/queries";
 import { MaterialInspector } from "@/features/materials/MaterialInspector";
 import styles from "./graph.module.css";
+import { fitToViewport, forceLayout } from "./layout";
 
 const PAGE_SIZE = 100;
 const NODE_CAP = 200;
 const EDGE_CAP = 200;
+const MIN_ZOOM = .4, MAX_ZOOM = 3;
 type Point = { x: number; y: number };
+type View = { k: number; x: number; y: number };
+/** One drawn line per connected pair; direction is kept per relation. */
+type Pair = { a: ID; b: ID; forward: boolean; backward: boolean; user: boolean; titles: string[] };
 
 function cluster(file: WorkspaceFile) { return file.file_kind === "record" ? file.origin?.type ?? "record" : file.file_kind; }
-function layout(files: WorkspaceFile[], width: number, height: number) {
-  const ordered = [...files].sort((a, b) => cluster(a).localeCompare(cluster(b)) || a.id.localeCompare(b.id));
-  const points = new Map<ID, Point>();
-  const cx = width / 2, cy = height / 2, rx = Math.max(30, cx - 56), ry = Math.max(30, cy - 56);
-  const anchor = ordered.find(file => file.origin?.type === "run") ?? ordered.find(file => file.origin?.type === "claim") ?? ordered[0];
-  if (!anchor) return { points, height };
-  if (ordered.length <= 12) {
-    points.set(anchor.id, { x: cx, y: cy });
-    const rest = ordered.filter(file => file.id !== anchor.id);
-    rest.forEach((file, index) => {
-      const angle = -Math.PI / 2 + index * Math.PI * 2 / rest.length;
-      points.set(file.id, { x: cx + Math.cos(angle) * rx, y: cy + Math.sin(angle) * ry });
-    });
-  } else {
-    ordered.forEach((file, index) => {
-      const angle = index * 2.399963, radius = Math.sqrt((index + .5) / ordered.length);
-      points.set(file.id, { x: cx + Math.cos(angle) * rx * radius, y: cy + Math.sin(angle) * ry * radius });
-    });
-    const minimum = Math.min(52, Math.sqrt(width * height / ordered.length) * .8);
-    const rows = [...points.values()];
-    for (let pass = 0; pass < 24; pass++) for (let i = 0; i < rows.length; i++) for (let j = i + 1; j < rows.length; j++) {
-      const a = rows[i], b = rows[j], dx = b.x - a.x, dy = b.y - a.y, distance = Math.hypot(dx, dy) || 1;
-      if (distance >= minimum) continue;
-      const shift = (minimum - distance) / 2, x = dx / distance * shift, y = dy / distance * shift;
-      a.x = Math.max(28, Math.min(width - 28, a.x - x)); a.y = Math.max(28, Math.min(height - 28, a.y - y));
-      b.x = Math.max(28, Math.min(width - 28, b.x + x)); b.y = Math.max(28, Math.min(height - 28, b.y + y));
-    }
-  }
-  return { points, height };
-}
+const nodeRadius = (degree: number) => degree === 0 ? 4 : Math.min(13, 4.5 + 2.1 * Math.sqrt(degree));
 
 const ROLE_LABEL: Record<string, string> = { artifact: "Artifact", source: "Source", claim: "Finding", experiment: "Experiment", run: "Run", run_measurements: "Measurements", note: "Note", record: "Record" };
 
@@ -57,10 +33,10 @@ export function KnowledgeGraph({ project_id }: { project_id: ID }) {
   const [hoveredId, setHoveredId] = useState<ID | null>(null);
   const [focus, setFocus] = useState<ID | null>(null);
   const [dismissedInspector, setDismissedInspector] = useState<ID | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
+  const [view, setView] = useState<View>({ k: 1, x: 0, y: 0 });
   const [drag, setDrag] = useState<{ id: number; x: number; y: number; origin: Point } | null>(null);
-  const [viewport, setViewport] = useState({ width: 900, height: 430 });
+  const [viewport, setViewport] = useState({ width: 900, height: 520 });
+  const [graphHeight, setGraphHeight, resetGraphHeight] = usePanelSize("stellaris.graphHeight", 560, 320, 1200);
   const graphRef = useRef<SVGSVGElement>(null);
   const graphWrapRef = useRef<HTMLDivElement>(null);
   const filters = useMemo(() => ({ limit: PAGE_SIZE, ...(tag ? { tags: [tag] } : {}), ...(collection ? { collection_id: collection } : {}) }), [tag, collection]);
@@ -70,22 +46,46 @@ export function KnowledgeGraph({ project_id }: { project_id: ID }) {
   const capabilities = useCapabilities();
   const visible = files.items.slice(0, NODE_CAP);
   const visibleIds = useMemo(() => new Set(visible.map((f) => f.id)), [visible]);
-  const geometry = useMemo(() => layout(visible, viewport.width, viewport.height), [visible, viewport]);
-  const positions = geometry.points;
   const matchingEdges = useMemo(() => relations.items.filter((r) => visibleIds.has(r.from_file_id) && visibleIds.has(r.to_file_id)), [relations.items, visibleIds]);
   const edges = matchingEdges.slice(0, EDGE_CAP);
+  const names = useMemo(() => new Map(visible.map((f) => [f.id, f.name])), [visible]);
+  // Collapse parallel and reverse relations into one line per pair so hubs are not buried in arrowheads.
+  const pairs = useMemo(() => {
+    const byPair = new Map<string, Pair>();
+    for (const edge of edges) {
+      if (edge.from_file_id === edge.to_file_id) continue;
+      const [a, b] = edge.from_file_id < edge.to_file_id ? [edge.from_file_id, edge.to_file_id] : [edge.to_file_id, edge.from_file_id];
+      const key = `${a}\u0000${b}`;
+      const pair = byPair.get(key) ?? { a, b, forward: false, backward: false, user: false, titles: [] };
+      if (edge.from_file_id === a) pair.forward = true; else pair.backward = true;
+      if (edge.created_by === "user") pair.user = true;
+      pair.titles.push(`${edge.type}: ${names.get(edge.from_file_id) ?? edge.from_file_id} → ${names.get(edge.to_file_id) ?? edge.to_file_id}`);
+      byPair.set(key, pair);
+    }
+    return [...byPair.values()];
+  }, [edges, names]);
+  const adjacency = useMemo(() => {
+    const map = new Map<ID, Set<ID>>(visible.map((f) => [f.id, new Set<ID>()]));
+    for (const p of pairs) { map.get(p.a)?.add(p.b); map.get(p.b)?.add(p.a); }
+    return map;
+  }, [visible, pairs]);
+  const radiusOf = useCallback((id: ID) => nodeRadius(adjacency.get(id)?.size ?? 0), [adjacency]);
+  // Layout depends only on files and links; resizing refits without re-running the simulation.
+  const layoutPoints = useMemo(() => forceLayout(visible.map((f) => f.id), pairs.map((p) => ({ source: p.a, target: p.b })), radiusOf), [visible, pairs, radiusOf]);
+  const positions = useMemo(() => fitToViewport(layoutPoints, viewport.width, viewport.height, 48), [layoutPoints, viewport]);
   const selected = visible.find((f) => f.id === selectedId);
-  const activeCaptionId = hoveredId ?? focus ?? selectedId;
-  const activeEdgeId = activeCaptionId ? edges.find((edge) => edge.from_file_id === activeCaptionId || edge.to_file_id === activeCaptionId)?.id : undefined;
+  const activeId = hoveredId ?? focus ?? (selected ? selected.id : null);
   useEffect(() => {
     if (selectedId && !selected && files.has_next_page && files.items.length < NODE_CAP && !files.is_fetching_next_page) void files.load_next_page();
   }, [selectedId, selected, files]);
-  const neighbors = useMemo(() => {
-    if (!focus) return null;
-    const ids = new Set<ID>([focus]);
-    for (const edge of edges) if (edge.from_file_id === focus || edge.to_file_id === focus) { ids.add(edge.from_file_id); ids.add(edge.to_file_id); }
-    return ids;
-  }, [focus, edges]);
+  // Hovering, focusing or selecting a file highlights it with its direct links; everything else recedes.
+  const highlighted = useMemo(() => activeId ? new Set<ID>([activeId, ...(adjacency.get(activeId) ?? [])]) : null, [activeId, adjacency]);
+  const labelled = useMemo(() => {
+    if (highlighted) return new Set([...highlighted].sort((x, y) => (x === activeId ? -1 : y === activeId ? 1 : (adjacency.get(y)?.size ?? 0) - (adjacency.get(x)?.size ?? 0))).slice(0, 14));
+    if (view.k >= 1.6) return new Set(visible.map((f) => f.id));
+    // At rest, name only the most connected files so the picture stays readable.
+    return new Set(visible.filter((f) => (adjacency.get(f.id)?.size ?? 0) >= 2).sort((x, y) => (adjacency.get(y.id)?.size ?? 0) - (adjacency.get(x.id)?.size ?? 0)).slice(0, 6).map((f) => f.id));
+  }, [highlighted, activeId, adjacency, view.k, visible]);
   const setSelected = useCallback((id: ID | null) => {
     setDismissedInspector(null);
     setFocus(null);
@@ -95,8 +95,13 @@ export function KnowledgeGraph({ project_id }: { project_id: ID }) {
   }, [router, search]);
   const loadMoreNodes = () => { if (visible.length < NODE_CAP && files.has_next_page) void files.load_next_page(); };
   const loadMoreEdges = () => { if (relations.has_next_page) void relations.load_next_page(); };
-  const onPointerDown = (e: PointerEvent<SVGSVGElement>) => { if (e.target !== e.currentTarget) return; e.currentTarget.setPointerCapture(e.pointerId); setDrag({ id: e.pointerId, x: e.clientX, y: e.clientY, origin: pan }); };
-  const onPointerMove = (e: PointerEvent<SVGSVGElement>) => { if (drag?.id === e.pointerId) { const rect = e.currentTarget.getBoundingClientRect(); setPan({ x: drag.origin.x + (e.clientX - drag.x) * viewport.width / rect.width, y: drag.origin.y + (e.clientY - drag.y) * geometry.height / rect.height }); } };
+  const onPointerDown = (e: PointerEvent<SVGSVGElement>) => { if (e.target !== e.currentTarget && !(e.target as Element).hasAttribute("data-backdrop")) return; e.currentTarget.setPointerCapture(e.pointerId); setDrag({ id: e.pointerId, x: e.clientX, y: e.clientY, origin: { x: view.x, y: view.y } }); };
+  const onPointerMove = (e: PointerEvent<SVGSVGElement>) => { if (drag?.id === e.pointerId) { const rect = e.currentTarget.getBoundingClientRect(); const ratio = viewport.width / rect.width; setView((v) => ({ ...v, x: drag.origin.x + (e.clientX - drag.x) * ratio, y: drag.origin.y + (e.clientY - drag.y) * ratio })); } };
+  /** Zooms by `factor` keeping the point (cx, cy), in viewBox units, fixed on screen. */
+  const zoomAt = useCallback((factor: number, cx: number, cy: number) => setView((v) => {
+    const k = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, v.k * factor)), ratio = k / v.k;
+    return { k, x: cx - (cx - v.x) * ratio, y: cy - (cy - v.y) * ratio };
+  }), []);
   useEffect(() => {
     const element = graphRef.current;
     const container = graphWrapRef.current;
@@ -108,10 +113,14 @@ export function KnowledgeGraph({ project_id }: { project_id: ID }) {
     const observer = new ResizeObserver(resize);
     observer.observe(container);
     resize();
-    const zoomAtWheel = (event: WheelEvent) => { event.preventDefault(); setZoom((v) => Math.max(.55, Math.min(2.2, v * (event.deltaY < 0 ? 1.1 : .9)))); };
+    const zoomAtWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = element.getBoundingClientRect(), ratio = rect.width ? element.viewBox.baseVal.width / rect.width : 1;
+      zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, (event.clientX - rect.left) * ratio, (event.clientY - rect.top) * ratio);
+    };
     element.addEventListener("wheel", zoomAtWheel, { passive: false });
     return () => { observer.disconnect(); element.removeEventListener("wheel", zoomAtWheel); };
-  }, [files.is_loading, capabilities.is_loading, capabilities.data?.features.workspace_files]);
+  }, [files.is_loading, capabilities.is_loading, capabilities.data?.features.workspace_files, zoomAt]);
 
   if (!capabilities.is_loading && !capabilities.data?.features.workspace_files) return <div className={styles.screen} data-workspace-wide="true">
     <header className={styles.header}><div><h1>Connections</h1><p>Explore saved files and their recorded links. Lines reflect explicit relations or provenance recorded by Stellaris.</p></div></header>
@@ -129,22 +138,54 @@ export function KnowledgeGraph({ project_id }: { project_id: ID }) {
     {files.is_loading ? <Skeleton height="24rem" /> : files.items.length === 0 ? <EmptyState title="No files match this view">Add or restore project materials in Library. The graph includes only catalog files and recorded relations.</EmptyState> : <>
       <div className={styles.toolbar}>
         <p aria-live="polite">{visible.length} files loaded{files.has_next_page ? " so far" : " (all matching files)"} · {edges.length} links between these files{relations.has_next_page ? " in the loaded relation pages" : " across the loaded relation catalog"}</p>
-        <div className={styles.buttons}><Button onClick={() => { setZoom((v) => Math.min(2.2, v * 1.2)); }}>Zoom in</Button><Button onClick={() => { setZoom((v) => Math.max(.55, v / 1.2)); }}>Zoom out</Button><Button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); setFocus(null); }}>Reset view</Button></div>
+        <div className={styles.buttons}><Button onClick={() => zoomAt(1.25, viewport.width / 2, viewport.height / 2)}>Zoom in</Button><Button onClick={() => zoomAt(1 / 1.25, viewport.width / 2, viewport.height / 2)}>Zoom out</Button><Button onClick={() => { setView({ k: 1, x: 0, y: 0 }); setFocus(null); }}>Reset view</Button></div>
       </div>
-      <div ref={graphWrapRef} className={styles.graphWrap}>
-        <svg ref={graphRef} className={styles.graph} viewBox={`0 0 ${viewport.width} ${geometry.height}`} preserveAspectRatio="none" role="group" aria-label="Interactive project knowledge graph" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={() => setDrag(null)} onPointerCancel={() => setDrag(null)}>
-          <g transform={`translate(${pan.x} ${pan.y}) translate(${viewport.width / 2} ${geometry.height / 2}) scale(${zoom}) translate(${-viewport.width / 2} ${-geometry.height / 2})`}>
-            {edges.map((edge) => { const a = positions.get(edge.from_file_id), b = positions.get(edge.to_file_id); if (!a || !b) return null; const length = Math.hypot(b.x-a.x,b.y-a.y) || 1, margin = Math.min(18,length*.3), dx = (b.x-a.x)/length*margin, dy = (b.y-a.y)/length*margin; return <g key={edge.id} className={styles.edge} data-origin={edge.created_by} opacity={neighbors && (!neighbors.has(edge.from_file_id) || !neighbors.has(edge.to_file_id)) ? .12 : .8}><title>{`${edge.type}: ${visible.find(file=>file.id===edge.from_file_id)?.name ?? edge.from_file_id} to ${visible.find(file=>file.id===edge.to_file_id)?.name ?? edge.to_file_id}`}</title><line x1={a.x+dx} y1={a.y+dy} x2={b.x-dx} y2={b.y-dy} markerEnd="url(#arrow)" />{edge.id === activeEdgeId && <text x={(a.x+b.x)/2} y={(a.y+b.y)/2-5}>{edge.type}</text>}</g>; })}
-            <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="var(--color-control-border)" /></marker></defs>
-            {visible.map((file) => { const p = positions.get(file.id)!; const dim = neighbors && !neighbors.has(file.id); const role = cluster(file); return <g key={file.id} className={styles.node} transform={`translate(${p.x} ${p.y})`} data-role={role} data-active={activeCaptionId === file.id || undefined} role="button" tabIndex={0} aria-label={`${file.name}, ${ROLE_LABEL[role] ?? role}, ${edges.filter((e) => e.from_file_id === file.id || e.to_file_id === file.id).length} loaded links`} aria-pressed={selectedId === file.id} opacity={dim ? .22 : 1} onPointerEnter={() => setHoveredId(file.id)} onPointerLeave={() => setHoveredId(null)} onFocus={() => setHoveredId(file.id)} onBlur={() => setHoveredId(null)} onClick={() => setSelected(file.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(file.id); } if (e.key.toLowerCase() === "f") setFocus(file.id); }}>
-              <title>{file.name}</title><circle className={styles.hitTarget} r="24" /><circle className={styles.visibleNode} r={file.file_kind === "record" ? 12 : 15} data-kind={file.file_kind} /><text y="31" x={p.x < viewport.width / 3 ? 18 : p.x > viewport.width * 2 / 3 ? -18 : 0} style={{ textAnchor: p.x < viewport.width / 3 ? "start" : p.x > viewport.width * 2 / 3 ? "end" : "middle" }}>{file.name.length > 34 ? `${file.name.slice(0, 32)}…` : file.name}</text>
-            </g>; })}
+      <div ref={graphWrapRef} className={styles.graphWrap} style={{ "--graph-height": `${graphHeight}px` } as CSSProperties}>
+        <ResizeHandle label="Resize graph height" axis="y" value={graphHeight} min={320} max={1200} onChange={setGraphHeight} onReset={resetGraphHeight} className={styles.heightHandle} />
+        <svg ref={graphRef} className={styles.graph} viewBox={`0 0 ${viewport.width} ${viewport.height}`} role="group" aria-label="Interactive project knowledge graph" data-highlighting={highlighted ? "true" : undefined} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={() => setDrag(null)} onPointerCancel={() => setDrag(null)}>
+          <defs>
+            <marker id="graph-arrow" viewBox="0 0 8 8" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" refX="8" refY="4" orient="auto-start-reverse"><path d="M0,0.5 L8,4 L0,7.5 z" className={styles.arrow} /></marker>
+            <marker id="graph-arrow-user" viewBox="0 0 8 8" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" refX="8" refY="4" orient="auto-start-reverse"><path d="M0,0.5 L8,4 L0,7.5 z" className={styles.arrowUser} /></marker>
+          </defs>
+          <rect data-backdrop="true" width={viewport.width} height={viewport.height} fill="transparent" />
+          <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+            <g className={styles.edges}>{pairs.map((pair) => {
+              const a = positions.get(pair.a), b = positions.get(pair.b); if (!a || !b) return null;
+              const on = !!highlighted && highlighted.has(pair.a) && highlighted.has(pair.b) && (pair.a === activeId || pair.b === activeId);
+              const length = Math.hypot(b.x - a.x, b.y - a.y) || 1, ux = (b.x - a.x) / length, uy = (b.y - a.y) / length;
+              // Trim to the node edges so arrowheads touch, rather than sit inside, their files.
+              const ta = radiusOf(pair.a) + 2, tb = radiusOf(pair.b) + 2;
+              if (length <= ta + tb) return null;
+              const marker = `url(#${pair.user ? "graph-arrow-user" : "graph-arrow"})`;
+              return <g key={`${pair.a}-${pair.b}`} className={styles.edge} data-origin={pair.user ? "user" : "system"} data-active={on || undefined} data-dim={highlighted && !on ? "true" : undefined}>
+                <title>{pair.titles.join("\n")}</title>
+                <line x1={a.x + ux * ta} y1={a.y + uy * ta} x2={b.x - ux * tb} y2={b.y - uy * tb} markerEnd={on && pair.forward ? marker : undefined} markerStart={on && pair.backward ? marker : undefined} />
+                <line className={styles.edgeHit} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
+              </g>;
+            })}</g>
+            <g>{visible.map((file) => {
+              const p = positions.get(file.id); if (!p) return null;
+              const role = cluster(file), degree = adjacency.get(file.id)?.size ?? 0, r = nodeRadius(degree);
+              return <g key={file.id} className={styles.node} transform={`translate(${p.x} ${p.y})`} data-role={role} data-active={activeId === file.id || undefined} data-dim={highlighted && !highlighted.has(file.id) ? "true" : undefined} role="button" tabIndex={0} aria-label={`${file.name}, ${ROLE_LABEL[role] ?? role}, ${degree} linked ${degree === 1 ? "file" : "files"}`} aria-pressed={selectedId === file.id} onPointerEnter={() => setHoveredId(file.id)} onPointerLeave={() => setHoveredId(null)} onFocus={() => setHoveredId(file.id)} onBlur={() => setHoveredId(null)} onClick={() => setSelected(file.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(file.id); } if (e.key.toLowerCase() === "f") setFocus(file.id); }}>
+                <title>{file.name}</title>
+                <circle className={styles.hitTarget} r={Math.max(r + 6, 12)} />
+                {selectedId === file.id && <circle className={styles.selectedRing} r={r + 4} />}
+                <circle className={styles.visibleNode} r={r} />
+              </g>;
+            })}</g>
+            {/* Labels draw last so a hovered name is never hidden behind other files or links. */}
+            <g className={styles.labels} aria-hidden="true">{visible.filter((f) => labelled.has(f.id)).map((file) => {
+              const p = positions.get(file.id); if (!p) return null;
+              const r = radiusOf(file.id), screenX = p.x * view.k + view.x, flip = screenX > viewport.width * .72;
+              const name = file.name.length > 40 ? `${file.name.slice(0, 38)}…` : file.name;
+              return <text key={file.id} data-active={activeId === file.id || undefined} x={p.x + (flip ? -(r + 6) : r + 6)} y={p.y + 4} textAnchor={flip ? "end" : "start"} style={{ fontSize: `${13 / Math.max(view.k, .8)}px` }}>{name}</text>;
+            })}</g>
           </g>
         </svg>
       </div>
-      <p className={styles.hint}>Drag to pan · scroll to zoom · select a node to inspect. Press F on a node to focus its loaded neighborhood.</p>
+      <p className={styles.hint}>Hover a file to see its links and their direction. Drag to pan, scroll to zoom, select a file to inspect it. Press F on a file to keep its neighborhood in focus.</p>
       <div className={styles.legend} aria-label="Graph legend">
-        <div className={styles.roleLegend}>{[...new Set(visible.map(cluster))].map((role) => <span key={role}><i data-role={role} />{ROLE_LABEL[role] ?? role}</span>)}</div>
+        <div className={styles.roleLegend}>{[...new Set(visible.map(cluster))].sort().map((role) => <span key={role}><i data-role={role} />{ROLE_LABEL[role] ?? role}</span>)}<span className={styles.sizeKey}>Larger dots have more links</span></div>
         <div className={styles.lineLegend}><span><i data-origin="system" />Recorded provenance</span><span><i data-origin="user" />User relation</span></div>
       </div>
       <div className={styles.loaders}>
