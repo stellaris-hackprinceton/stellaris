@@ -98,3 +98,5 @@ Reports are generated from saved evidence rather than written freehand in chat. 
 ## Documentation
 
 All authored documentation lives in [`docs/`](docs/README.md). Start with the [Compose guide](docs/docker-compose.md). The frontend also serves this documentation tree at `/docs/`. Product scope is in the [product vision](docs/product-vision.md), the API in the [frontend-backend contract](docs/frontend-backend-contract.md), and design direction in [`docs/design/`](docs/design/).
+
+The [paper-experiment video handoff](docs/brag-paper-final/README.md) includes the production brief, animation proposal, original recordings, visual references, and verification instructions for a separate production agent.
