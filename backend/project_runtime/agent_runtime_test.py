@@ -99,6 +99,8 @@ def _check_arxiv_fixture(events):
         ("0000.00002v1", ["work energy", "theorem"])], rejected
     tool = next(t for t in agent_runner.make_tools() if t.name == "search_arxiv")
     assert "stopwords" in str(tool.invoke({"query": "the and of"}))
+    save = next(t for t in agent_runner.make_tools() if t.name == "save_source")
+    assert "Only candidates" in str(save.invoke({"arxiv_id": "arxiv:0000.00001v1"})), "unsearched records are not saved"
     assert events == [], events
 
 

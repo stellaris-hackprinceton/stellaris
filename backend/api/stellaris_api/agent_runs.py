@@ -24,7 +24,7 @@ MAX_AGENT_OUTPUT_CHARS = 200_000
 MAX_AGENT_SECONDS = 480
 MAX_PAPER_CONTEXT_BYTES = 4 * 1024 * 1024
 MAX_AGENT_INGESTIONS = 2
-MAX_AGENT_RETRIEVALS = 3
+MAX_AGENT_RETRIEVALS = 5
 MAX_AGENT_TOOL_REQUESTS = 100
 DEFAULT_MODEL_PROVIDER = "bedrock"
 DEFAULT_AWS_REGION = "us-east-1"
@@ -685,5 +685,5 @@ def handle_agent_run(ctx):
             raise
         except Exception as exc:
             _finish_message(ctx, status="interrupted")
-            log.warning("Agent run %s failed (%s)", ctx.run_id, type(exc).__name__)
+            log.warning("Agent run %s failed (%s)", ctx.run_id, type(exc).__name__, exc_info=True)
             raise RunFailure("AGENT_PROVIDER_ERROR", "The configured model request failed.", True) from exc

@@ -72,6 +72,7 @@ _ARXIV_STOPWORDS = {
 # Unicode letters and digits (no underscore), so terms such as "Schrödinger" stay whole words.
 _ARXIV_WORD = re.compile(r"[^\W_]+")
 MAX_ARXIV_TERMS = 6
+MAX_ARXIV_SEARCHES = 5
 
 
 def _normalized_words(text):
@@ -213,6 +214,7 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
     known_artifacts = set(artifact_ids or ())
     papers = dict(papers or {})
     search_count = 0
+    retrieved, saved = {}, set()
     proposal_count = 0
     ingest_count = 0
     tool_request_count = 0
@@ -262,13 +264,17 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
 
     @tool
     def search_arxiv(query: str) -> str:
-        """Search arXiv metadata and abstracts; at most three searches per run. Use 2-5 specific keywords;
+        """Search arXiv metadata and abstracts; at most five searches per run. Use 2-5 specific keywords;
         every keyword is required, and "quoted phrases" or hyphenated words match as phrases, e.g.
-        `"work energy theorem" kinetic`. Only records whose title or abstract contain every term are saved
-        as sources; other retrieved records are reported as rejected candidates."""
+        `"work energy theorem" kinetic`. Keep the project's subject terms (the quantities or phenomenon being
+        studied) in every query; a method-only query such as `semiparametric regression` returns papers from
+        unrelated fields. If results are off-topic, retry with the field's established terms (a named index,
+        law or measure) rather than generic method words. Records whose title or abstract contain every term are returned as candidates; nothing
+        is saved until you call save_source for the relevant ones. Other records are rejected candidates."""
         nonlocal search_count
-        if search_count >= 3:
-            return "The per-run arXiv search limit has been reached."
+        if search_count >= MAX_ARXIV_SEARCHES:
+            return ("The per-run arXiv search limit has been reached; no new search ran. Earlier searches in this "
+                    "run did execute: work from the candidates they returned, and say plainly if none were relevant.")
         query = query.strip()
         if not query or len(query) > 400:
             return "Query must contain 1 to 400 characters."
@@ -277,7 +283,7 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
             return "Query needs at least one specific keyword besides stopwords."
         search_count += 1
         search_query = build_arxiv_query(terms)
-        params = urllib.parse.urlencode({"search_query": search_query, "start": 0, "max_results": 3,
+        params = urllib.parse.urlencode({"search_query": search_query, "start": 0, "max_results": 8,
                                          "sortBy": "relevance", "sortOrder": "descending"})
         url = "https://export.arxiv.org/api/query?" + params
         request = urllib.request.Request(url, headers={"User-Agent": "StellarisResearch/1.0"})
@@ -306,19 +312,35 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
                   "selected": False, "missing_terms": c["missing_terms"]} for c in rejected]})
         found = []
         for payload in selected:
-            if not propose("source", payload):
-                break
-            found.append({"title": payload["title"], "url": payload["url"], "abstract": payload["abstract"],
+            retrieved[_unversioned(payload["external_id"])] = payload
+            found.append({"title": payload["title"], "url": payload["url"], "abstract": payload["abstract"][:700],
                           "citation_key": "arxiv:" + payload["external_id"]})
         notes = [{"title": c["record"]["title"], "missing_terms": c["missing_terms"]} for c in rejected]
         if not found:
-            return ("No retrieved arXiv record contained every search term in its title or abstract; no source was "
+            return ("No retrieved arXiv record contained every search term in its title or abstract; nothing can be "
                     "saved. Do not cite these candidates. Rejected candidates: " + json.dumps(notes, ensure_ascii=False))
-        message = ("Retrieved arXiv title and abstract metadata; full papers were not inspected. Records proposed for "
-                   "backend validation: " + json.dumps(found, ensure_ascii=False))
+        message = ("Retrieved arXiv title and abstract metadata; full papers were not inspected. Nothing is saved yet: "
+                   "call save_source for each candidate that is actually about the project's subject, and skip the "
+                   "rest. Candidates: " + json.dumps(found, ensure_ascii=False))
         if notes:
-            message += " Rejected candidates (not saved; do not cite): " + json.dumps(notes, ensure_ascii=False)
+            message += " Rejected candidates (cannot be saved; do not cite): " + json.dumps(notes, ensure_ascii=False)
         return message
+
+    @tool
+    def save_source(arxiv_id: str) -> str:
+        """Save one candidate returned by search_arxiv as a project source. Save only records whose title and
+        abstract are about the project's subject; a paper that merely shares a method or a word (for example
+        "weight" in an unrelated field) does not belong in the project. Save a record before citing it."""
+        key = _unversioned(arxiv_id.strip().removeprefix("arxiv:"))
+        payload = retrieved.get(key)
+        if payload is None:
+            return "Only candidates returned by search_arxiv in this run can be saved."
+        if key in saved:
+            return "Already saved."
+        if not propose("source", payload):
+            return "The per-run proposal limit has been reached."
+        saved.add(key)
+        return f"Saved arxiv:{payload['external_id']} ({payload['title'][:120]}) for backend validation."
 
     @tool
     def read_paper(source: str, section: str = "", start_paragraph: int = 1) -> str:
@@ -587,7 +609,7 @@ def make_tools(artifact_ids=None, papers=None, run_id=""):
             return "The per-run proposal limit has been reached."
         return "Claim proposal sent to the backend for evidence and reference validation."
 
-    return [search_arxiv, request_full_text, read_paper, search_paper, propose_experiment,
+    return [search_arxiv, save_source, request_full_text, read_paper, search_paper, propose_experiment,
             save_experiment_implementation, execute_analysis, list_materials, organize_materials, propose_claim]
 
 
@@ -636,7 +658,7 @@ def create_agent(model, artifact_ids=None, papers=None, run_id="", chat_generati
         "inferences, and observations: an observation is only something measured in this project and must link "
         "project evidence; a finding from papers is an inference with citations and stated assumptions; an untested "
         "idea is a hypothesis. When citing an arXiv result, use its exact arxiv:<ID> citation_key and excerpts "
-        "must be copied verbatim from retrieved abstract or full text, with exact full-text locators. Cite only records the search tool saved, never "
+        "must be copied verbatim from retrieved abstract or full text, with exact full-text locators. Cite only records you saved with save_source (or whose full text was retrieved), never "
         "rejected candidates; if no relevant paper was saved, say so. " + _EXPERIMENT_SCOPE + " A tool reply "
         "that reports problems means nothing was saved: correct the input and retry, or explain the limitation. "
         "When creating or designing an experiment, include an executable implementation by default when feasible, "
