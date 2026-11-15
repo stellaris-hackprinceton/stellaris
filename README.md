@@ -2,6 +2,14 @@
 
 A persistent research workspace: ask a question, gather literature, run real experiments on your data in isolated workers, and turn the saved evidence into a scientific report. Every source, dataset, run, measurement and chart stays connected in one project.
 
+Stellaris works across subjects and levels of difficulty. These projects each start from one research question:
+
+![Sample projects in mathematics, finance and physics](docs/assets/tutorial/00-sample-projects.png)
+
+- **Mathematics, advanced:** Can we find and verify a better bound for integer multiplication by improving κ? (builds on the OpenAI and CrocSwap repositories)
+- **Finance, intermediate:** Do stock returns individualized or under index vs ETFs follow a normal distribution?
+- **Physics, introductory:** How does length of a pendulum or the weight of the end influence its period?
+
 ## Run with Docker Compose
 
 Start Docker Desktop, then run from the repository root:
@@ -83,9 +91,9 @@ Reports are generated from saved evidence rather than written freehand in chat. 
 
 ### 9. See how everything connects
 
-**Connections** draws every saved file and its recorded provenance: the dataset, each analysis run, the charts and CSVs it produced, findings, and the sources they cite. Hover a file to highlight its links.
+**Connections** draws every saved file and its recorded provenance: datasets, each analysis run, the charts and CSVs it produced, findings, and the sources they cite. Linked files cluster together, larger dots have more links, and hovering a file highlights its neighborhood with link directions. This example comes from a bouncing-ball study with several analysis runs:
 
-![Connections graph after the full session](docs/assets/tutorial/09-connections-graph.png)
+![Connections graph of a project with several analysis runs](docs/assets/tutorial/09-connections-graph.png)
 
 ## Documentation
 
