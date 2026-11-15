@@ -1,5 +1,7 @@
-.shell { display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); height: 100dvh; overflow: hidden; background: var(--color-background); }
-.shell[data-chat-rail="open"] { grid-template-columns: var(--sidebar-width) minmax(704px, 1fr) var(--chat-rail-width); }
+.shell { position: relative; display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); height: 100dvh; overflow: hidden; background: var(--color-background); }
+.shell[data-chat-rail="open"] { grid-template-columns: var(--sidebar-width) minmax(640px, 1fr) var(--chat-rail-width); }
+.sidebarHandle { left: calc(var(--sidebar-width) - 4px); }
+.railHandle { right: calc(var(--chat-rail-width) - 4px); }
 .skipLink { position: absolute; left: -9999px; top: 8px; z-index: 10; background: var(--color-surface); padding: 8px 12px; }
 .skipLink:focus { left: 8px; }
 .sidebar { height: 100dvh; overflow-y: auto; border-right: 1px solid var(--color-border); background: var(--color-nav-background); color: var(--color-nav-text); }
@@ -49,7 +51,7 @@
 .mobileBrand svg { width: 24px; height: 24px; }
 @media (max-width: 1023px) { .connectionLabel { font-size: 0; gap: 0; } }
 @media (max-width: 767px) {
- .sidebar { display: none; }
+ .sidebar, .sidebarHandle { display: none; }
  .mobileControls { display: flex; align-items: center; gap: 6px; flex: none; }
  .shell { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 100dvh; overflow: visible; }
  .header { padding: 8px 16px; gap: 6px; }

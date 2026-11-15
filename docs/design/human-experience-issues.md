@@ -79,6 +79,8 @@ The user wants adjustable sidebar and panel widths. Current fixed sizes can be a
 
 The exact panels covered, resize behavior, limits, persistence, keyboard access, and narrow-screen behavior remain undecided. This log records the need for adjustable space without prescribing a control or layout system.
 
+**Progress, November 14, 2026:** The user asked for most workspace areas to be resizable. Drag handles now adjust the sidebar and Assistant widths, the terminal height, the Library details panel width, and the Connections graph height. Each size is saved per browser, clamped so the work area keeps at least 640px (560px beside the Library details panel), adjustable with arrow keys (Shift for larger steps, Home/End for limits), and reset by double-click. Handles are hidden where the panel becomes a sheet on narrow screens.
+
 ## HX-06: Library filtering feels cluttered and unintuitive
 
 **Status:** Open. Reported by the user. No Library screenshot was supplied in this feedback.

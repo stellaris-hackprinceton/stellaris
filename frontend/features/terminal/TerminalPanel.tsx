@@ -1,13 +1,13 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { useRef, useState } from 'react'
+import { useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { TerminalSession } from '@/contracts/terminal'
 import { ApiError } from '@/lib/api/http'
 import { useCapabilities, useProject } from '@/lib/queries'
 import { isActiveTerminal, setCurrentTerminal, terminalApi, terminalKey, useCurrentTerminal } from '@/lib/terminal'
 import {
-  Button, CloseIcon, Dialog, EmptyState, ErrorNotice, IconButton, Skeleton, StatusBadge, describeError, errorCode, newCommandKey,
+  Button, CloseIcon, Dialog, EmptyState, ErrorNotice, IconButton, ResizeHandle, Skeleton, StatusBadge, describeError, errorCode, newCommandKey, usePanelSize,
   type StatusTone,
 } from '@/components/ui'
 import styles from './terminal.module.css'
@@ -30,11 +30,18 @@ const uncertain = (error: unknown) => !(error instanceof ApiError) || error.stat
 
 type Props = { project_id: string, open: boolean, onHide: () => void }
 
+const HEIGHT = { initial: 340, min: 160 }
+const subscribeResize = (cb: () => void) => { window.addEventListener('resize', cb); return () => window.removeEventListener('resize', cb) }
+const useWindowHeight = () => useSyncExternalStore(subscribeResize, () => window.innerHeight, () => 900)
+
 export function TerminalPanel({ project_id, open, onHide }: Props) {
   const client = useQueryClient()
   const caps = useCapabilities(), project = useProject(project_id)
   const supported = (caps.data?.features as { terminal?: boolean } | undefined)?.terminal === true
   const archived = project.data?.status === 'archived'
+  // Leave room for the header and some of the page above the terminal.
+  const maxHeight = Math.max(HEIGHT.min, useWindowHeight() - 180)
+  const [height, setHeight, resetHeight] = usePanelSize('stellaris.terminalHeight', HEIGHT.initial, HEIGHT.min, maxHeight)
   const current = useCurrentTerminal(project_id, supported)
   const session = current.data ?? null
   const active = isActiveTerminal(session)
@@ -85,7 +92,9 @@ export function TerminalPanel({ project_id, open, onHide }: Props) {
 
   const status = session ? STATUS[session.status] : null
   return (
-    <section id={TERMINAL_PANEL_ID} className={styles.panel} aria-label="Terminal" hidden={!open}>
+    <section id={TERMINAL_PANEL_ID} className={styles.panel} aria-label="Terminal" hidden={!open} style={{ '--terminal-height': `${height}px` } as CSSProperties}>
+      <ResizeHandle label="Resize terminal" axis="y" direction={-1} value={height} min={HEIGHT.min} max={maxHeight}
+        onChange={setHeight} onReset={resetHeight} className={styles.resize} />
       <div className={styles.bar}>
         <h2 className={styles.title}>Terminal</h2>
         {status && <StatusBadge tone={status.tone}>{status.label}</StatusBadge>}

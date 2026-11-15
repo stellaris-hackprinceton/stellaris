@@ -1,9 +1,9 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ID } from "@/contracts/api";
 import type { WorkspaceFile } from "@/contracts/catalog";
-import { Button, EmptyState, ErrorNotice, Field, Select, Sheet, Skeleton } from "@/components/ui";
+import { Button, EmptyState, ErrorNotice, Field, ResizeHandle, Select, Sheet, Skeleton, usePanelSize } from "@/components/ui";
 import { useCollections, useFiles, useRelations, useTags } from "@/lib/catalog";
 import { useCapabilities } from "@/lib/queries";
 import { MaterialInspector } from "@/features/materials/MaterialInspector";
@@ -36,6 +36,7 @@ export function KnowledgeGraph({ project_id }: { project_id: ID }) {
   const [view, setView] = useState<View>({ k: 1, x: 0, y: 0 });
   const [drag, setDrag] = useState<{ id: number; x: number; y: number; origin: Point } | null>(null);
   const [viewport, setViewport] = useState({ width: 900, height: 520 });
+  const [graphHeight, setGraphHeight, resetGraphHeight] = usePanelSize("stellaris.graphHeight", 560, 320, 1200);
   const graphRef = useRef<SVGSVGElement>(null);
   const graphWrapRef = useRef<HTMLDivElement>(null);
   const filters = useMemo(() => ({ limit: PAGE_SIZE, ...(tag ? { tags: [tag] } : {}), ...(collection ? { collection_id: collection } : {}) }), [tag, collection]);
@@ -139,7 +140,8 @@ export function KnowledgeGraph({ project_id }: { project_id: ID }) {
         <p aria-live="polite">{visible.length} files loaded{files.has_next_page ? " so far" : " (all matching files)"} · {edges.length} links between these files{relations.has_next_page ? " in the loaded relation pages" : " across the loaded relation catalog"}</p>
         <div className={styles.buttons}><Button onClick={() => zoomAt(1.25, viewport.width / 2, viewport.height / 2)}>Zoom in</Button><Button onClick={() => zoomAt(1 / 1.25, viewport.width / 2, viewport.height / 2)}>Zoom out</Button><Button onClick={() => { setView({ k: 1, x: 0, y: 0 }); setFocus(null); }}>Reset view</Button></div>
       </div>
-      <div ref={graphWrapRef} className={styles.graphWrap}>
+      <div ref={graphWrapRef} className={styles.graphWrap} style={{ "--graph-height": `${graphHeight}px` } as CSSProperties}>
+        <ResizeHandle label="Resize graph height" axis="y" value={graphHeight} min={320} max={1200} onChange={setGraphHeight} onReset={resetGraphHeight} className={styles.heightHandle} />
         <svg ref={graphRef} className={styles.graph} viewBox={`0 0 ${viewport.width} ${viewport.height}`} role="group" aria-label="Interactive project knowledge graph" data-highlighting={highlighted ? "true" : undefined} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={() => setDrag(null)} onPointerCancel={() => setDrag(null)}>
           <defs>
             <marker id="graph-arrow" viewBox="0 0 8 8" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" refX="8" refY="4" orient="auto-start-reverse"><path d="M0,0.5 L8,4 L0,7.5 z" className={styles.arrow} /></marker>

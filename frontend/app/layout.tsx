@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { AppProviders } from "@/providers/app-providers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { THEME_INIT_SCRIPT } from "@/components/ui/themeScript";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 const geistSans = Geist({

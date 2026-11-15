@@ -2,7 +2,9 @@
 import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeSanitize from "rehype-sanitize";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import type { ReactNode } from "react";
 import { hrefs } from "@/components/shell/hrefs";
 import styles from "./ui.module.css";
@@ -24,6 +26,31 @@ const isPlainText = (node?: HastNode) => !!node && (node.children ?? []).every((
 const NUMBER = /^(?:[−-]?\d[\d,]*(?:\.\d+)?(?:e[-+]?\d+)?|—|-)$/i;
 const UNCERTAINTY = /^(±\s*\S+)\s*\(([\s\S]+)\)$/;
 const STATUS = /^(valid|missing|rejected):\s*([\s\S]+)$/;
+
+// remark-math marks math as <code class="language-math math-inline|math-display">. Keep those classes
+// through sanitizing so KaTeX, which runs afterwards on the sanitized tree, can typeset them.
+const schema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    code: [...(defaultSchema.attributes?.code ?? []), ["className", /^language-./, "math-inline", "math-display"]],
+  },
+};
+const katexOptions = { throwOnError: false, errorColor: "var(--color-danger)", strict: "ignore" as const };
+
+const FENCED_OR_INLINE_CODE = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g;
+const DISPLAY_MATH = /\\\[([\s\S]+?)\\\]/g; // \[ … \]
+const INLINE_MATH = /\\\(([\s\S]+?)\\\)/g; // \( … \)
+
+/**
+ * Agents often write LaTeX with \( … \) and \[ … \] delimiters, which Markdown reads as escaped
+ * brackets. Rewrite them to $…$ and $$…$$ everywhere except code spans and fenced code blocks.
+ */
+export function normalizeMathDelimiters(markdown: string) {
+  return markdown.split(FENCED_OR_INLINE_CODE).map((part, i) => i % 2 ? part : part
+    .replace(DISPLAY_MATH, (_, tex: string) => `\n$$\n${tex.trim()}\n$$\n`)
+    .replace(INLINE_MATH, (_, tex: string) => `$${tex.trim()}$`)).join("");
+}
 
 // Project file images load; everything else needs an http(s), mailto, same-site or anchor URL.
 function safeUrl(url: string, key: string) {
@@ -73,13 +100,14 @@ function components(projectId?: string): Components {
 
 /**
  * Sanitized GitHub-flavored Markdown. Raw HTML is skipped, links are protocol-limited, and only
- * project file images load. Tables use reader-facing names; the original text stays in a title.
+ * project file images load. LaTeX math is typeset with KaTeX. Tables use reader-facing names; the
+ * original text stays in a title.
  */
 export function MarkdownView({ markdown, className, projectId }: MarkdownViewProps) {
   return (
     <div className={cx(styles.markdown, className)}>
-      <ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} urlTransform={safeUrl} components={components(projectId)}>
-        {markdown}
+      <ReactMarkdown skipHtml remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeSanitize, schema], [rehypeKatex, katexOptions]]} urlTransform={safeUrl} components={components(projectId)}>
+        {normalizeMathDelimiters(markdown)}
       </ReactMarkdown>
     </div>
   );

@@ -106,7 +106,8 @@
 .sortField { display:grid; gap:5px; color:var(--color-text-muted); font-size:13px; }
 .unavailable { padding:16px; border:1px solid var(--color-border); background:var(--color-surface); }
 .browse { display:block; }
-.browseWithInspector { display:grid; grid-template-columns:minmax(640px,1fr) 344px; gap:24px; align-items:start; }
+.browseWithInspector { position:relative; display:grid; grid-template-columns:minmax(560px,1fr) var(--inspector-width, 344px); gap:24px; align-items:start; }
+.inspectorHandle { right:calc(var(--inspector-width, 344px) + 8px); }
 .browseMain { container-type:inline-size; min-width:0; }
 .browseMain .items { max-height:none; overflow:visible; }
 .inspectorColumn { position:sticky; top:0; max-height:calc(100dvh - 96px); overflow:auto; min-width:0; }

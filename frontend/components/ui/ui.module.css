@@ -132,3 +132,8 @@ textarea.input { resize: vertical; min-height: 96px; }
 .errorTone { background: var(--color-danger-surface); }
 .info { background: var(--color-selection); color: var(--color-selection-text); }
 .dialog, .sheet { box-shadow: var(--shadow-overlay); }
+
+/* KaTeX: wide display equations scroll on their own instead of widening the panel. */
+.markdown :global(.katex) { font-size: 1.05em; }
+.markdown :global(.katex-display) { margin: 0.6em 0; padding: 2px 0; overflow-x: auto; overflow-y: hidden; }
+.mdTable :global(.katex) { white-space: nowrap; }

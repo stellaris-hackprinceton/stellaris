@@ -12,6 +12,8 @@ export { ArtifactLink, TimestampLabel } from "./Links";
 export type { ArtifactLinkProps } from "./Links";
 export { MarkdownView } from "./MarkdownView";
 export { ThemeToggle } from "./ThemeToggle";
+export { ResizeHandle, usePanelSize } from "./ResizeHandle";
+export type { ResizeHandleProps } from "./ResizeHandle";
 export { describeResourceId, humanizeName } from "./scienceLabels";
 export { setThemePreference, useThemePreference } from "./theme";
 export type { ThemePreference } from "./theme";

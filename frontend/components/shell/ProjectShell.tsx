@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import type { ID } from "@/contracts/api";
-import { Sheet } from "@/components/ui";
+import { ResizeHandle, Sheet, usePanelSize } from "@/components/ui";
 import { useChatDraft } from "@/features/research/chat/ChatComposer";
 import { ResearchChat } from "@/features/research/chat";
 import { TerminalPanel } from "@/features/terminal";
@@ -22,6 +22,14 @@ export type ProjectShellProps = {
  * One project frame and Assistant draft. The sidebar is CSS-responsive for a stable first paint.
  * From 1360px Assistant docks. Narrower layouts use a sheet, with navigation in a sheet below 768px.
  */
+const SIDEBAR = { initial: 224, min: 184, max: 360 };
+const RAIL = { initial: 360, min: 300, max: 760 };
+/** The work area keeps at least this much width when the Assistant rail grows. */
+const MIN_WORK_WIDTH = 640;
+
+const subscribeResize = (cb: () => void) => { window.addEventListener("resize", cb); return () => window.removeEventListener("resize", cb); };
+const useWindowWidth = () => useSyncExternalStore(subscribeResize, () => window.innerWidth, () => 1440);
+
 export function ProjectShell(props: ProjectShellProps) {
   return <ProjectShellBody key={props.project_id} {...props} />;
 }
@@ -31,6 +39,10 @@ function ProjectShellBody({ project_id, children }: ProjectShellProps) {
   const wide = useMediaQuery("(min-width: 1360px)", false);
   const narrow = useMediaQuery("(max-width: 767px)", false);
   const [railOpen, setRailOpen] = useStoredFlag("stellaris.chatRailOpen", false);
+  const windowWidth = useWindowWidth();
+  const [sidebarWidth, setSidebarWidth, resetSidebar] = usePanelSize("stellaris.sidebarWidth", SIDEBAR.initial, SIDEBAR.min, SIDEBAR.max);
+  const railMax = Math.min(RAIL.max, windowWidth - sidebarWidth - MIN_WORK_WIDTH);
+  const [railWidth, setRailWidth, resetRail] = usePanelSize("stellaris.chatRailWidth", RAIL.initial, RAIL.min, railMax);
   const [chatSheet, setChatSheet] = useState(false);
   const setChatText = chatDraft.setText;
   useEffect(() => {
@@ -63,11 +75,19 @@ function ProjectShellBody({ project_id, children }: ProjectShellProps) {
   const chat = <ResearchChat draft={chatDraft} project_id={project_id} showHeading={wide} />;
 
   return (
-    <div className={styles.shell} data-chat-rail={wide && railOpen ? "open" : "closed"}>
+    <div
+      className={styles.shell}
+      data-chat-rail={wide && railOpen ? "open" : "closed"}
+      style={{ "--sidebar-width": `${sidebarWidth}px`, "--chat-rail-width": `${railWidth}px` } as CSSProperties}
+    >
       <a href="#project-main" className={styles.skipLink}>Skip to content</a>
       <aside className={styles.sidebar}>
         <ProjectNavigation project_id={project_id} />
       </aside>
+      {!narrow && (
+        <ResizeHandle label="Resize sidebar" axis="x" value={sidebarWidth} min={SIDEBAR.min} max={SIDEBAR.max}
+          onChange={setSidebarWidth} onReset={resetSidebar} className={styles.sidebarHandle} />
+      )}
       <div className={styles.main}>
         <ProjectHeader
           project_id={project_id}
@@ -84,7 +104,13 @@ function ProjectShellBody({ project_id, children }: ProjectShellProps) {
         )}
       </div>
       {wide && (
-        <aside className={styles.chatRail} aria-label="Assistant" hidden={!railOpen}>{chat}</aside>
+        <>
+          {railOpen && (
+            <ResizeHandle label="Resize Assistant panel" axis="x" direction={-1} value={railWidth} min={RAIL.min} max={railMax}
+              onChange={setRailWidth} onReset={resetRail} className={styles.railHandle} />
+          )}
+          <aside className={styles.chatRail} aria-label="Assistant" hidden={!railOpen}>{chat}</aside>
+        </>
       )}
       {!wide && (
         <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Assistant" keepMounted>{chat}</Sheet>
