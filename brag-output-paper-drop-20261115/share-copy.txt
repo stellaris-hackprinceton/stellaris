@@ -1,0 +1,4 @@
+Flat, folded, crumpled: we dropped paper from 3 ft 10 in and let Stellaris carry the question from a plan and a drag model to nine uploaded videos and measured fall times. Crumpled sheets landed in about 0.50 s; flat sheets averaged 1.69 s.
+
+Workflow demonstration uses prepared recordings. Built with LangChain Deep Agents on Amazon Bedrock, with analysis code running in an isolated worker.
+Music: "Voxel Revolution" by Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License, http://creativecommons.org/licenses/by/4.0/

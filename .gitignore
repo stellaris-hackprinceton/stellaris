@@ -17,3 +17,5 @@ frontend/.impeccable/
 # Paper-drop Brag video intermediates (frames, proxies, captures), kept apart from the
 # earlier video's brag-output/ folder on the brag branch.
 /brag-output-paper-drop-20261115/work/
+/brag-output-paper-drop-20261115/composition/
+/brag-output-paper-drop-20261115/audio/

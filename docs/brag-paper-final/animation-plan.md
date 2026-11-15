@@ -139,6 +139,8 @@ After selection, detect actual beat and phrase timestamps. Lock major editorial 
 
 ## Selected music
 
+> **Superseded 2026-11-15 by user request:** the final cut uses the earlier video's track from main, "Voxel Revolution" by Kevin MacLeod (CC BY 4.0), and copies that video's intro and ending. "Release to Contact" remains available below.
+
 **"Release to Contact"**, an original instrumental downtempo electronica score composed for this film. It is synthesized entirely by [music/compose_track.py](music/compose_track.py) (no samples or third-party audio), so there is no licence to verify; credit it as original music for Stellaris. 116 BPM, 4/4, one bar = 2.0690 s, D minor moving to an F major resolution. Deliverable: [music/release-to-contact.m4a](music/release-to-contact.m4a) (118.0 s, loudness-normalized to −16 LUFS, −1.5 dBTP). Beat, downbeat, and section times: [music/release-to-contact.cues.json](music/release-to-contact.cues.json).
 
 Arrangement against the scene timeline (music section start → scene start):
