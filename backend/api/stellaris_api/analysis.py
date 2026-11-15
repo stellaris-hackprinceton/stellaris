@@ -56,8 +56,8 @@ PATH_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 WARNING_CODE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 UNITS = {"px", "s", "m", "m/s", "m/s^2", "1", "px/s", "px/s^2"}
 # Script analyses of uploaded tables may keep the source columns' own short unit labels
-# (for example "in", "lb", "kg/m^2", "%"); assumptions must still state them.
-TABULAR_UNIT = re.compile(r"^[A-Za-z0-9%/^*().\-]{1,32}$")
+# (for example "in", "lb", "kg/m^2", "%", "pounds per inch"); assumptions must still state them.
+TABULAR_UNIT = re.compile(r"^(?=.*\S)[A-Za-z0-9%/^*(). \-]{1,40}$")
 METRIC_UNITS = {"m", "m/s", "m/s^2"}
 WORKER_ARTIFACT_ORIGINS = {"derived", "simulated", "generated"}
 RESERVED_OUTPUTS = {"result.json", "provenance.json"}

@@ -704,7 +704,9 @@ def main(path):
                                         aws_access_key_id=access_key, aws_secret_access_key=secret_key,
                                         aws_session_token=session_token or None, max_tokens=max_tokens, temperature=0,
                                         config=BotocoreConfig(connect_timeout=8, read_timeout=45,
-                                                              retries={"mode": "standard", "max_attempts": 2}))
+                                                              # Bedrock occasionally returns transient 5xx errors
+                                                              # mid-conversation; back off and retry before failing.
+                                                              retries={"mode": "standard", "max_attempts": 4}))
         else:
             model = ChatOpenAI(model=model_name, api_key=api_key, timeout=45, max_retries=1,
                                max_tokens=max_tokens, temperature=0, streaming=True)
