@@ -4,7 +4,7 @@ Production status: ready as an edit specification. Physical media is inspected a
 
 This is the canonical final brief for Brag. It supersedes the earlier 114-second [draft](../brag-paper-drop-plan.md). Pair it with [composition-brief.md](composition-brief.md), [asset-manifest.json](asset-manifest.json), and [capture-prompts.md](capture-prompts.md).
 
-Latest creative direction: [animation-plan.md](animation-plan.md) specifies proposed section-specific entrances/exits, beat-sync strategy, soft typing, faded paper accents, and non-corporate electronic music. Its audio/motion directions supersede earlier defaults. Animation and track selection remain proposals for user review before production.
+Latest creative direction: [animation-plan.md](animation-plan.md) specifies proposed section-specific entrances/exits, beat-sync strategy, soft typing, faded paper accents, and non-corporate electronic music. Its audio/motion directions supersede earlier defaults. The default motion family and the original score "Release to Contact" were selected on 2026-11-15.
 
 ## Purpose and narrative
 

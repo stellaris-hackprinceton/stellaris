@@ -13,5 +13,10 @@ export function mimeForFile(mime: string, filename: string): string {
     return "text/javascript";
   }
   if (/\.sh$/i.test(filename) && [...generic, "application/x-sh", "text/x-sh"].includes(base)) return "text/x-shellscript";
+  // Linux/Windows browsers often leave phone video (.MOV in particular) untyped.
+  const binaryGeneric = ["", "application/octet-stream", "application/x-download"];
+  if (/\.mov$/i.test(filename) && binaryGeneric.includes(base)) return "video/quicktime";
+  if (/\.mp4$/i.test(filename) && binaryGeneric.includes(base)) return "video/mp4";
+  if (/\.webm$/i.test(filename) && binaryGeneric.includes(base)) return "video/webm";
   return base;
 }

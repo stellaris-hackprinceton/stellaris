@@ -1,6 +1,6 @@
 # Animation and sound proposal
 
-Status: proposed for user selection. No animation, audio generation, track selection, app requests, or video rendering has started. This document supersedes generic transition and audio defaults in the earlier brief. Keep the 118-second timeline and actual evidence requirements.
+Status: **selected 2026-11-15.** Motion family: the proposed default, precise motion with a few spatial transitions. Music: the original score "Release to Contact" (see [Selected music](#selected-music)). The genuine app session and its successful paper analysis have been recorded; no video rendering has started. This document supersedes generic transition and audio defaults in the earlier brief. Keep the 118-second timeline and actual evidence requirements.
 
 ## Direction
 
@@ -8,7 +8,7 @@ The app workflow leads the film. Each transition should express a change in the 
 
 Use a common motion language across distinct section treatments: smooth acceleration, short travel, decisive settling, no rubbery bounce. Alternate energetic transitions with stable working scenes. Do not move the camera throughout every shot.
 
-Proposed default: **precise motion with a few spatial transitions**. A more restrained alternative replaces the folding and depth moves below with flat masked slides. A more expressive alternative increases depth only in the hook, model-to-physical transition, and close. The actual recordings and figures remain undistorted in every variant.
+Selected: **precise motion with a few spatial transitions** (the proposed default). A more restrained alternative replaces the folding and depth moves below with flat masked slides. A more expressive alternative increases depth only in the hook, model-to-physical transition, and close. The actual recordings and figures remain undistorted in every variant.
 
 ## Section entrances and exits
 
@@ -136,6 +136,27 @@ Alternative styles for selection:
 Exclude generic corporate/business music, ukulele, stock motivational piano, claps-and-whistles, bombastic trailer drops, vocals, and happy-business bundled tracks. No track has been chosen or audited yet. Audition actual excerpts and verify license/attribution before final selection. A track's genre or BPM alone does not establish that it will work.
 
 After selection, detect actual beat and phrase timestamps. Lock major editorial entrances to phrase accents, with smaller caption cues on selected subdivisions. Keep chapter boundaries at the existing seconds unless a later approved timing revision improves the cut. Use an appropriate track start/edit point or adjust motion accents within a section. Do not claim the current integer-second scene starts already coincide with a musical grid.
+
+## Selected music
+
+**"Release to Contact"**, an original instrumental downtempo electronica score composed for this film. It is synthesized entirely by [music/compose_track.py](music/compose_track.py) (no samples or third-party audio), so there is no licence to verify; credit it as original music for Stellaris. 116 BPM, 4/4, one bar = 2.0690 s, D minor moving to an F major resolution. Deliverable: [music/release-to-contact.m4a](music/release-to-contact.m4a) (118.0 s, loudness-normalized to −16 LUFS, −1.5 dBTP). Beat, downbeat, and section times: [music/release-to-contact.cues.json](music/release-to-contact.cues.json).
+
+Arrangement against the scene timeline (music section start → scene start):
+
+| Music section | Starts | Scene | Treatment |
+|---|---|---|---|
+| hook | 0.00 s | Paper hook (0 s) | Pad only |
+| convergence | 4.14 s | Scattered tools (4 s) | Ticking pulse, soft motif |
+| brand | 10.34 s | Brand → app (10 s) | Single tonal accent, bass enters |
+| chat | 12.41 s | Question and chat (13 s) | Kick, bass, hats; no motif, leaving room for typing |
+| sources-plan-simulation | 24.83 s | Sources (25 s) through Simulation | Full groove with motif |
+| physical-build | 57.93 s | Physical drops (59 s) | Modest build: open hats, brighter pad |
+| upload-measurement | 72.41 s | Upload (71 s) and Measurement | Steady groove |
+| interpretation | 93.10 s | Interpretation (93 s) | Drums out, calmer phrase for reading |
+| technical-context | 107.59 s | Technical context (107 s) | Light pulse returns |
+| resolution | 115.86 s | Close (114 s) | F major 9 resolution under the mark; fade over the final 2 s |
+
+Section starts sit on downbeats, so they differ from the integer-second scene cuts by up to about 1.5 s. Following the rule above, shift motion accents within a section to the nearest listed downbeat rather than moving scene boundaries, and never retime physical motion or genuine typing. Regenerate with `python3 docs/brag-paper-final/music/compose_track.py out.wav cues.json` (requires NumPy and SciPy), then apply the same loudness normalization.
 
 ## Sound treatment
 

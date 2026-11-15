@@ -13,3 +13,7 @@ frontend/.impeccable/
 /BACKEND_ACHIEVEMENTS.md
 /REPORT_ANALYSIS_TODO.md
 /WORK_ENERGY_TEST_ISSUES.md
+
+# Paper-drop Brag video intermediates (frames, proxies, captures), kept apart from the
+# earlier video's brag-output/ folder on the brag branch.
+/brag-output-paper-drop-20261115/work/
