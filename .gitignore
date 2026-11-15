@@ -5,3 +5,11 @@
 # Local tools and generated repository graphs.
 /.local/
 /graphify-out/
+
+# Local design-tool config and session notes (not needed to build or run Stellaris).
+.impeccable/
+frontend/.impeccable/
+.graphifyignore
+/BACKEND_ACHIEVEMENTS.md
+/REPORT_ANALYSIS_TODO.md
+/WORK_ENERGY_TEST_ISSUES.md
